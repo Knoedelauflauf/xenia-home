@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Background -->
+  <rect width="256" height="256" fill="#1c1c1c"/>
+
+  <!-- Coffee cup -->
+  <g fill="none" stroke="#e8e4dc" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Cup body -->
+    <path d="M60 110 L60 190 Q60 210 80 210 L150 210 Q170 210 170 190 L170 110"/>
+
+    <!-- Cup rim -->
+    <line x1="50" y1="110" x2="180" y2="110"/>
+
+    <!-- Cup handle -->
+    <path d="M170 130 Q200 130 200 160 Q200 190 170 190"/>
+  </g>
+
+  <!-- Coffee bean on cup -->
+  <g transform="translate(115, 160)">
+    <ellipse cx="0" cy="0" rx="20" ry="28" fill="#d4a574"/>
+    <!-- Bean line/groove -->
+    <path d="M0 -24 Q-6 0 0 24" fill="none" stroke="#1c1c1c" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <!-- Steam waves -->
+  <g fill="none" stroke="#d4a574" stroke-width="5" stroke-linecap="round">
+    <path d="M90 90 Q95 75 90 60 Q85 45 90 30"/>
+    <path d="M115 95 Q120 80 115 65 Q110 50 115 35"/>
+    <path d="M140 90 Q145 75 140 60 Q135 45 140 30"/>
+  </g>
+</svg>
