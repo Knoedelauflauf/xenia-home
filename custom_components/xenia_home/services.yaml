@@ -1,0 +1,18 @@
+execute_script:
+  name: Execute script
+  description: Execute a script on the Xenia espresso machine.
+  fields:
+    script_id:
+      name: Script ID
+      description: The ID of the script to execute.
+      example: 12
+      selector:
+        number:
+          min: 1
+          mode: box
+    script_name:
+      name: Script name
+      description: The name of the script to execute. Ignored if script_id is provided.
+      example: "My Script"
+      selector:
+        text:

@@ -46,8 +46,8 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Xenia event entities."""
-    coordinator = entry.runtime_data
-    async_add_entities([XeniaShotTracker(coordinator, entry)])
+    coordinator = entry.runtime_data.coordinator
+    async_add_entities([XeniaShotTracker(coordinator)])
 
 
 class XeniaShotTracker(XeniaEntity, EventEntity):
@@ -58,14 +58,13 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
     _afterflow_seconds = 2
     _min_shot_seconds = 10
 
-    def __init__(
-        self,
-        coordinator: XeniaDataUpdateCoordinator,
-        entry: XeniaConfigEntry,
-    ) -> None:
+    def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
         """Initialize the shot tracker."""
         super().__init__(coordinator)
-        self._attr_unique_id = f"{XENIA_DOMAIN}_shot_tracker_{entry.data[CONF_HOST]}"
+        self._attr_unique_id = (
+            f"{XENIA_DOMAIN}_shot_tracker_"
+            f"{coordinator.config_entry.data[CONF_HOST]}"
+        )
         self._is_brewing = False
         self._shot_start_time: datetime | None = None
         self._brew_group_temps: list[float] = []

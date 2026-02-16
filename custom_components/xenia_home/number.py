@@ -70,7 +70,7 @@ async def async_setup_entry(
     entry: XeniaConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ):
-    coordinator = entry.runtime_data
+    coordinator = entry.runtime_data.coordinator
     async_add_entities(
         XeniaNumber(coordinator, description) for description in NUMBER_TYPES
     )

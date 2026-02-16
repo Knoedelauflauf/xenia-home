@@ -1,4 +1,20 @@
 {
+  "services": {
+    "execute_script": {
+      "name": "Skript ausführen",
+      "description": "Führt ein Skript auf der Xenia Espressomaschine aus.",
+      "fields": {
+        "script_id": {
+          "name": "Skript-ID",
+          "description": "Die ID des auszuführenden Skripts."
+        },
+        "script_name": {
+          "name": "Skriptname",
+          "description": "Der Name des auszuführenden Skripts. Wird ignoriert, wenn eine Skript-ID angegeben ist."
+        }
+      }
+    }
+  },
   "config": {
     "step": {
       "user": {
@@ -83,6 +99,32 @@
           "steam_on": "Dampfkessel an",
           "steam_off": "Dampfkessel aus"
         }
+      },
+      "script": {
+        "name": "Skript"
+      },
+      "switch_left_short": {
+        "name": "Linker Schalter links kurz"
+      },
+      "switch_left_long": {
+        "name": "Linker Schalter links lang"
+      },
+      "switch_right_left_short": {
+        "name": "Rechter Schalter links kurz"
+      },
+      "switch_right_left_long": {
+        "name": "Rechter Schalter links lang"
+      },
+      "switch_right_right_short": {
+        "name": "Rechter Schalter rechts kurz"
+      },
+      "switch_right_right_long": {
+        "name": "Rechter Schalter rechts lang"
+      }
+    },
+    "button": {
+      "execute_script": {
+        "name": "Skript ausführen"
       }
     },
     "event": {

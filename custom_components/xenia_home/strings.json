@@ -1,4 +1,20 @@
 {
+  "services": {
+    "execute_script": {
+      "name": "Execute script",
+      "description": "Execute a script on the Xenia espresso machine.",
+      "fields": {
+        "script_id": {
+          "name": "Script ID",
+          "description": "The ID of the script to execute."
+        },
+        "script_name": {
+          "name": "Script name",
+          "description": "The name of the script to execute. Ignored if script ID is provided."
+        }
+      }
+    }
+  },
   "config": {
     "step": {
       "user": {
@@ -83,6 +99,32 @@
           "steam_on": "Steam boiler on",
           "steam_off": "Steam boiler off"
         }
+      },
+      "script": {
+        "name": "Script"
+      },
+      "switch_left_short": {
+        "name": "Left switch left short"
+      },
+      "switch_left_long": {
+        "name": "Left switch left long"
+      },
+      "switch_right_left_short": {
+        "name": "Right switch left short"
+      },
+      "switch_right_left_long": {
+        "name": "Right switch left long"
+      },
+      "switch_right_right_short": {
+        "name": "Right switch right short"
+      },
+      "switch_right_right_long": {
+        "name": "Right switch right long"
+      }
+    },
+    "button": {
+      "execute_script": {
+        "name": "Execute script"
       }
     },
     "event": {

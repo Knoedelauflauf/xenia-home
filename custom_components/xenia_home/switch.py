@@ -18,25 +18,24 @@ from .xenia import MachineStatus, SteamBoilerStatus
 async def async_setup_entry(
     hass: HomeAssistant, entry: XeniaConfigEntry, async_add_entities
 ):
-    coordinator = entry.runtime_data
-
-    power_switch = XeniaPowerSwitch(coordinator, entry)
-    eco_switch = XeniaEcoSwitch(coordinator, entry)
-    steam_boiler_switch = XeniaSteamBoilerSwitch(coordinator, entry)
-
-    async_add_entities([power_switch, eco_switch, steam_boiler_switch], True)
+    coordinator = entry.runtime_data.coordinator
+    async_add_entities(
+        [
+            XeniaPowerSwitch(coordinator),
+            XeniaEcoSwitch(coordinator),
+            XeniaSteamBoilerSwitch(coordinator),
+        ],
+        True,
+    )
 
 
 class XeniaPowerSwitch(XeniaEntity, SwitchEntity):
-    def __init__(
-        self,
-        coordinator: XeniaDataUpdateCoordinator,
-        entry: XeniaConfigEntry,
-    ) -> None:
+    def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
         super().__init__(coordinator)
-        self._entry_id = entry.entry_id
         self._attr_translation_key = "power"
-        self._attr_unique_id = f"{XENIA_DOMAIN}_xenia_power_{self.coordinator.config_entry.data[CONF_HOST]}"
+        self._attr_unique_id = (
+            f"{XENIA_DOMAIN}_power_{coordinator.config_entry.data[CONF_HOST]}"
+        )
         self._attr_icon = "mdi:coffee-maker"
 
     @property
@@ -64,16 +63,11 @@ class XeniaPowerSwitch(XeniaEntity, SwitchEntity):
 
 
 class XeniaEcoSwitch(XeniaEntity, SwitchEntity):
-    def __init__(
-        self,
-        coordinator: XeniaDataUpdateCoordinator,
-        entry: XeniaConfigEntry,
-    ) -> None:
+    def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
         super().__init__(coordinator)
-        self._entry_id = entry.entry_id
         self._attr_translation_key = "eco_mode"
         self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_eco_mode_{self.coordinator.config_entry.data[CONF_HOST]}"
+            f"{XENIA_DOMAIN}_eco_mode_{coordinator.config_entry.data[CONF_HOST]}"
         )
         self._attr_icon = "mdi:sprout"
 
@@ -108,15 +102,13 @@ class XeniaEcoSwitch(XeniaEntity, SwitchEntity):
 
 
 class XeniaSteamBoilerSwitch(XeniaEntity, SwitchEntity):
-    def __init__(
-        self,
-        coordinator: XeniaDataUpdateCoordinator,
-        entry: XeniaConfigEntry,
-    ) -> None:
+    def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
         super().__init__(coordinator)
-        self._entry_id = entry.entry_id
         self._attr_translation_key = "steam_boiler_power"
-        self._attr_unique_id = f"{XENIA_DOMAIN}_steam_boiler_power_{self.coordinator.config_entry.data[CONF_HOST]}"
+        self._attr_unique_id = (
+            f"{XENIA_DOMAIN}_steam_boiler_power_"
+            f"{coordinator.config_entry.data[CONF_HOST]}"
+        )
         self._attr_icon = "mdi:kettle-steam"
 
     @property

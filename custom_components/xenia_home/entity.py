@@ -5,7 +5,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import XENIA_DOMAIN
-from .coordinator import XeniaDataUpdateCoordinator
+from .coordinator import XeniaDataUpdateCoordinator, XeniaRuntimeData
 
 
 class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
@@ -18,9 +18,14 @@ class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
         super().__init__(coordinator)
 
     @property
+    def runtime_data(self) -> XeniaRuntimeData:
+        """Return the runtime data."""
+        return self.coordinator.config_entry.runtime_data
+
+    @property
     def device_info(self) -> DeviceInfo:
         """Return device information about this Xenia espresso machine."""
-        machine = self.coordinator.machine_data
+        machine = self.runtime_data.config_coordinator.data.machine
         fw_version = machine.fw_version()
         esp_fw_version = machine.esp_fw_version()
         sw_version = (
@@ -29,7 +34,9 @@ class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
             else None
         )
         return DeviceInfo(
-            identifiers={(XENIA_DOMAIN, self.coordinator.config_entry.data[CONF_HOST])},
+            identifiers={
+                (XENIA_DOMAIN, self.coordinator.config_entry.data[CONF_HOST])
+            },
             name="Xenia Espresso Machine",
             manufacturer="Xenia Espresso GmbH",
             model="DBL",

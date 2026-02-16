@@ -122,7 +122,7 @@ async def async_setup_entry(
     entry: XeniaConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ):
-    coordinator = entry.runtime_data
+    coordinator = entry.runtime_data.coordinator
     async_add_entities(
         XeniaSensor(coordinator, description) for description in SENSOR_TYPES
     )
@@ -137,7 +137,7 @@ class XeniaSensor(XeniaEntity, SensorEntity):
         super().__init__(coordinator)
         self.entity_description = entity_description
         self._attr_unique_id = (
-            f"{self.coordinator.config_entry.data[CONF_HOST]}_{entity_description.key}"
+            f"{coordinator.config_entry.data[CONF_HOST]}_{entity_description.key}"
         )
 
     @property

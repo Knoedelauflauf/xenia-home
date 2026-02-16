@@ -259,3 +259,44 @@ class Xenia:
 
     async def set_bb_set_temp(self, value: float) -> None:
         await self._inc_dec_bb(value)
+
+    async def get_scripts(self) -> dict[int, str]:
+        """Get available scripts as {id: title} dict."""
+        url = f"http://{self._host}/api/v2/scripts/list"
+        async with self._session.get(url, timeout=10) as resp:
+            resp.raise_for_status()
+            data = await resp.json()
+        index_list = data.get("index_list", [])
+        title_list = data.get("title_list", [])
+        return dict(zip(index_list, title_list, strict=False))
+
+    async def execute_script(self, script_id: int) -> None:
+        """Execute a script by ID."""
+        url = f"http://{self._host}/api/v2/scripts/execute"
+        data = f'{{"ID":{script_id}}}'
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        async with self._session.post(
+            url, data=data, headers=headers, timeout=5
+        ) as resp:
+            resp.raise_for_status()
+
+    async def get_switches(self) -> dict[str, int]:
+        """Get switch-to-script mappings."""
+        url = f"http://{self._host}/api/v2/switches"
+        async with self._session.get(url, timeout=10) as resp:
+            resp.raise_for_status()
+            return await resp.json()
+
+    async def set_switch(self, switch_key: str, script_id: int) -> None:
+        """Set a switch to trigger a specific script."""
+        # Fetch current switches, update the one key, and send all back
+        current = await self.get_switches()
+        current[switch_key] = script_id
+        url = f"http://{self._host}/api/v2/switches"
+        # Convert all values to strings as per API format
+        data = "{" + ",".join(f'"{k}":"{v}"' for k, v in current.items()) + "}"
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        async with self._session.post(
+            url, data=data, headers=headers, timeout=5
+        ) as resp:
+            resp.raise_for_status()
