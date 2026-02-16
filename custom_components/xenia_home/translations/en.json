@@ -18,7 +18,6 @@
     },
     "error": {
       "cannot_connect": "Failed to connect to the espresso machine. Please check the host address and ensure the device is powered on and accessible on your network.",
-      "unsupported_machine_type": "Unsupported machine type. This integration currently supports DBL only.",
       "unknown": "An unexpected error occurred"
     },
     "abort": {

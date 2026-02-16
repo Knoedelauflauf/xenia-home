@@ -21,7 +21,6 @@ DATA_SCHEMA_USER = vol.Schema(
 
 class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
     VERSION = 1
-    _supported_machine_type = 3
 
     def __init__(self) -> None:
         self._entry: ConfigEntry | None = None
@@ -36,12 +35,6 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
         try:
             if not await asyncio.wait_for(xenia.device_connected(), timeout=8):
                 return "cannot_connect"
-            machine = await asyncio.wait_for(xenia.get_machine(), timeout=8)
-            if (
-                machine.ma_type is not None
-                and machine.ma_type != self._supported_machine_type
-            ):
-                return "unsupported_machine_type"
             return None
         except (TimeoutError, ClientError, OSError):
             return "cannot_connect"
