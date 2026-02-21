@@ -29,12 +29,12 @@ from .coordinator import (
 from .entity import XeniaEntity
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class XeniaEntityDescriptionMixinSensor:
     value_fn: Callable[[XeniaCoordinatorData], StateType]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class XeniaSensorEntityDescription(
     SensorEntityDescription, XeniaEntityDescriptionMixinSensor
 ):
@@ -135,7 +135,7 @@ class XeniaSensor(XeniaEntity, SensorEntity):
         entity_description: XeniaSensorEntityDescription,
     ) -> None:
         super().__init__(coordinator)
-        self.entity_description = entity_description
+        self.entity_description: XeniaSensorEntityDescription = entity_description
         self._attr_unique_id = (
             f"{coordinator.config_entry.data[CONF_HOST]}_{entity_description.key}"
         )

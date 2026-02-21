@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final
 
 from homeassistant.components.number import (
     NumberDeviceClass,
@@ -22,13 +22,13 @@ from .coordinator import (
 from .entity import XeniaEntity
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class XeniaEntityDescriptionMixinNumber:
     value_fn: Callable[[XeniaCoordinatorData], StateType]
-    set_fn: Callable[[XeniaDataUpdateCoordinator, float], None]
+    set_fn: Callable[[XeniaDataUpdateCoordinator, float], Coroutine[Any, Any, None]]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class XeniaNumberEntityDescription(
     NumberEntityDescription, XeniaEntityDescriptionMixinNumber
 ):
@@ -83,17 +83,17 @@ class XeniaNumber(XeniaEntity, NumberEntity):
         entity_description: XeniaNumberEntityDescription,
     ) -> None:
         super().__init__(coordinator)
-        self.entity_description = entity_description
+        self.entity_description: XeniaNumberEntityDescription = entity_description
         self._attr_unique_id = (
-            f"{self.coordinator.config_entry.data[CONF_HOST]}_{entity_description.key}"
+            f"{coordinator.config_entry.data[CONF_HOST]}_{entity_description.key}"
         )
-        self._attr_native_min_value = entity_description.native_min_value
-        self._attr_native_max_value = entity_description.native_max_value
-        self._attr_native_step = entity_description.native_step
+        self._attr_native_min_value = entity_description.native_min_value or 0.0
+        self._attr_native_max_value = entity_description.native_max_value or 100.0
+        self._attr_native_step = entity_description.native_step or 1.0
 
     @property
-    def native_value(self) -> StateType:
-        return self.entity_description.value_fn(self.coordinator.data)
+    def native_value(self) -> float | None:
+        return self.entity_description.value_fn(self.coordinator.data)  # type: ignore[return-value]
 
     @property
     def entity_category(self) -> EntityCategory | None:

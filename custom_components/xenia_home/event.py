@@ -62,8 +62,7 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
         """Initialize the shot tracker."""
         super().__init__(coordinator)
         self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_shot_tracker_"
-            f"{coordinator.config_entry.data[CONF_HOST]}"
+            f"{XENIA_DOMAIN}_shot_tracker_{coordinator.config_entry.data[CONF_HOST]}"
         )
         self._is_brewing = False
         self._shot_start_time: datetime | None = None

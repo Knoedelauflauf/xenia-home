@@ -137,6 +137,9 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# Local Home Assistant test instance
+config/
+
 # Environments
 .env
 .envrc

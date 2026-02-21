@@ -1,9 +1,8 @@
-import asyncio
 from dataclasses import dataclass, field
 from datetime import timedelta
 import logging
 
-from aiohttp import ClientSession
+from aiohttp import ClientError
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -53,10 +52,12 @@ type XeniaConfigEntry = ConfigEntry[XeniaRuntimeData]
 class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
     """Xenia device data update coordinator for fast polling."""
 
+    config_entry: XeniaConfigEntry
+
     def __init__(
         self,
         hass: HomeAssistant,
-        config_entry: ConfigEntry,
+        config_entry: XeniaConfigEntry,
         xenia: Xenia,
     ) -> None:
         """Initialize the Xenia device coordinator."""
@@ -76,22 +77,22 @@ class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
     async def _async_update_data(self) -> XeniaCoordinatorData:
         try:
             overview = await self.xenia.get_overview()
-            await asyncio.sleep(0.5)
             overview_single = await self.xenia.get_overview_single()
-            return XeniaCoordinatorData(overview, overview_single)
-        except Exception as err:
+        except (ClientError, OSError, TimeoutError) as err:
             raise UpdateFailed(f"Xenia fetch failed: {err}") from err
+        return XeniaCoordinatorData(overview, overview_single)
 
 
 class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
     """Xenia coordinator for config/slow data (scripts, switches, machine info)."""
 
+    config_entry: XeniaConfigEntry
     selected_script_id: int | None = None
 
     def __init__(
         self,
         hass: HomeAssistant,
-        config_entry: ConfigEntry,
+        config_entry: XeniaConfigEntry,
         xenia: Xenia,
     ) -> None:
         """Initialize the Xenia config coordinator."""
@@ -109,12 +110,8 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
         try:
             machine = await self.xenia.get_machine()
             user_scripts = await self.xenia.get_scripts()
-            scripts = {**BUILTIN_SCRIPTS, **user_scripts}
             switches = await self.xenia.get_switches()
-            return XeniaConfigData(
-                machine=machine,
-                scripts=scripts,
-                switches=switches,
-            )
-        except Exception as err:
+        except (ClientError, OSError, TimeoutError) as err:
             raise UpdateFailed(f"Xenia config fetch failed: {err}") from err
+        scripts = {**BUILTIN_SCRIPTS, **user_scripts}
+        return XeniaConfigData(machine=machine, scripts=scripts, switches=switches)

@@ -30,8 +30,7 @@ class XeniaExecuteScriptButton(XeniaEntity, ButtonEntity):
         """Initialize the button."""
         super().__init__(coordinator)
         self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_execute_script_"
-            f"{coordinator.config_entry.data[CONF_HOST]}"
+            f"{XENIA_DOMAIN}_execute_script_{coordinator.config_entry.data[CONF_HOST]}"
         )
 
     async def async_press(self) -> None:

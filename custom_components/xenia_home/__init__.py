@@ -82,5 +82,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> boo
 
 async def async_unload_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> bool:
     """Unload a config entry."""
-    hass.services.async_remove(XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT)
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    # Only remove the service when no more entries remain loaded
+    if unload_ok and not hass.config_entries.async_entries(XENIA_DOMAIN):
+        hass.services.async_remove(XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT)
+    return unload_ok

@@ -13,6 +13,6 @@ class PowerOnBehavior(str, Enum):
     # REMEMBER_LAST = "remember_last"
 
 
-POWER_ON_BEHAVIOR_OPTIONS: list[PowerOnBehavior] = [e.value for e in PowerOnBehavior]
+POWER_ON_BEHAVIOR_OPTIONS: list[str] = [e.value for e in PowerOnBehavior]
 
 DEFAULT_POWER_ON_BEHAVIOR = PowerOnBehavior.STEAM_OFF

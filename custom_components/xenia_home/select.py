@@ -18,7 +18,7 @@ from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
 from .entity import XeniaEntity
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SwitchDescription:
     """Description of a physical switch on the machine."""
 
@@ -121,7 +121,7 @@ class ScriptSelect(XeniaEntity, SelectEntity):
     def options(self) -> list[str]:
         """Return the list of available scripts."""
         scripts = self.runtime_data.config_coordinator.data.scripts
-        return [title for title in scripts.values()]
+        return list(scripts.values())
 
     @property
     def current_option(self) -> str | None:
@@ -159,9 +159,7 @@ class SwitchConfigSelect(XeniaEntity, SelectEntity):
         super().__init__(coordinator)
         self._switch_key = description.key
         self._attr_translation_key = description.translation_key
-        self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_{description.key}_{coordinator.config_entry.data[CONF_HOST]}"
-        )
+        self._attr_unique_id = f"{XENIA_DOMAIN}_{description.key}_{coordinator.config_entry.data[CONF_HOST]}"
 
     @property
     def options(self) -> list[str]:
