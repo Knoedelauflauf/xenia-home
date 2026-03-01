@@ -142,7 +142,14 @@ class XeniaSensor(XeniaEntity, SensorEntity):
 
     @property
     def native_value(self) -> StateType:
-        return self.entity_description.value_fn(self.coordinator.data)
+        """Return the sensor value, or None for zeroed cumulative counters."""
+        value = self.entity_description.value_fn(self.coordinator.data)
+        if (
+            self.entity_description.state_class == SensorStateClass.TOTAL_INCREASING
+            and not value
+        ):
+            return None
+        return value
 
     @property
     def entity_category(self) -> EntityCategory | None:
