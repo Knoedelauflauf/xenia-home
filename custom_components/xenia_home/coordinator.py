@@ -67,10 +67,6 @@ class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
             update_interval=timedelta(seconds=1),
             config_entry=config_entry,
         )
-        self.data = XeniaCoordinatorData(
-            XeniaOverviewData.from_dict({}),
-            XeniaOverviewSingleData.from_dict({}),
-        )
         self.xenia = xenia
 
     async def _async_update_data(self) -> XeniaCoordinatorData:
@@ -102,7 +98,6 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
             update_interval=timedelta(hours=1),
             config_entry=config_entry,
         )
-        self.data = XeniaConfigData(machine=XeniaMachineData.from_dict({}))
         self.xenia = xenia
 
     async def _async_update_data(self) -> XeniaConfigData:
