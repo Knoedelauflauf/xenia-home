@@ -138,6 +138,44 @@ async def test_async_something():
     assert result is not None
 ```
 
+## Local Home Assistant instance
+
+To manually test the integration against a real machine, run HA in Docker:
+
+```bash
+# Create config directory and symlink the integration
+mkdir -p config/custom_components
+ln -s ../../custom_components/xenia_home config/custom_components/xenia_home
+
+# Start HA (use --network host so the container can reach the machine on your LAN)
+docker run -d --name hass-dev \
+  --network host \
+  -v $(pwd)/config:/config \
+  -v $(pwd)/custom_components/xenia_home:/config/custom_components/xenia_home \
+  ghcr.io/home-assistant/home-assistant:2026.2
+```
+
+HA is then available at `http://localhost:8123`. The integration code is mounted as a volume — after code changes, restart the container:
+
+```bash
+docker restart hass-dev
+```
+
+Enable debug logging by adding this to `config/configuration.yaml`:
+
+```yaml
+logger:
+  default: warning
+  logs:
+    custom_components.xenia_home: debug
+```
+
+To stop and remove the container:
+
+```bash
+docker stop hass-dev && docker rm hass-dev
+```
+
 ## Coverage
 
 Target coverage is 90%+. The following areas are excluded because they require the full Home Assistant test harness:

@@ -4,7 +4,7 @@ This is a custom Home Assistant integration for Xenia Espresso Machines. These i
 
 ## Project Overview
 
-- **Domain**: `espresso_machine`
+- **Domain**: `xenia_home`
 - **Integration Type**: Device (local polling)
 - **IoT Class**: Local polling
 - **Platforms**: sensor, binary_sensor, number, select, switch, event
@@ -41,7 +41,7 @@ This is a custom Home Assistant integration for Xenia Espresso Machines. These i
 
 ### File Structure
 ```
-custom_components/espresso_machine/
+custom_components/xenia_home/
 ├── __init__.py          # Entry point with async_setup_entry
 ├── manifest.json        # Integration metadata
 ├── const.py            # Domain and constants

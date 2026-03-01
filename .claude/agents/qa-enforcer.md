@@ -1,6 +1,6 @@
 ---
 name: qa-enforcer
-description: "Use this agent when new code has been written or modified in the espresso_machine integration and needs thorough quality assurance review. This includes testing coverage analysis, style guideline enforcement, and linter validation. The agent acts as an independent QA team reviewing recently written code.\\n\\n<example>\\nContext: The user has just implemented a new sensor platform file for the espresso machine integration.\\nuser: \"I've finished implementing the temperature sensor in sensor.py\"\\nassistant: \"Great, let me launch the QA enforcer to thoroughly review and test the new sensor implementation.\"\\n<commentary>\\nSince a significant piece of code was written, use the Task tool to launch the qa-enforcer agent to run tests, check style, and validate linting.\\n</commentary>\\nassistant: \"Now let me use the qa-enforcer agent to perform a full quality assurance review of the new sensor code.\"\\n</example>\\n\\n<example>\\nContext: The user has added a new config flow step to the integration.\\nuser: \"I added the host validation step to config_flow.py\"\\nassistant: \"I'll use the Task tool to launch the qa-enforcer agent to review the config flow changes.\"\\n<commentary>\\nNew config flow code was written. The qa-enforcer agent should independently review it, write or assess tests covering happy paths and edge cases, and run all linters.\\n</commentary>\\n</example>\\n\\n<example>\\nContext: The user just finished writing the coordinator's error handling logic.\\nuser: \"Done with the error handling in coordinator.py, can you check it?\"\\nassistant: \"Absolutely. I'm going to use the qa-enforcer agent to independently audit the coordinator code for test coverage, negative cases, and style compliance.\"\\n<commentary>\\nError handling code is high-risk and needs thorough independent QA. Launch qa-enforcer to run full checks.\\n</commentary>\\n</example>"
+description: "Use this agent when new code has been written or modified in the xenia_home integration and needs thorough quality assurance review. This includes testing coverage analysis, style guideline enforcement, and linter validation. The agent acts as an independent QA team reviewing recently written code.\\n\\n<example>\\nContext: The user has just implemented a new sensor platform file for the espresso machine integration.\\nuser: \"I've finished implementing the temperature sensor in sensor.py\"\\nassistant: \"Great, let me launch the QA enforcer to thoroughly review and test the new sensor implementation.\"\\n<commentary>\\nSince a significant piece of code was written, use the Task tool to launch the qa-enforcer agent to run tests, check style, and validate linting.\\n</commentary>\\nassistant: \"Now let me use the qa-enforcer agent to perform a full quality assurance review of the new sensor code.\"\\n</example>\\n\\n<example>\\nContext: The user has added a new config flow step to the integration.\\nuser: \"I added the host validation step to config_flow.py\"\\nassistant: \"I'll use the Task tool to launch the qa-enforcer agent to review the config flow changes.\"\\n<commentary>\\nNew config flow code was written. The qa-enforcer agent should independently review it, write or assess tests covering happy paths and edge cases, and run all linters.\\n</commentary>\\n</example>\\n\\n<example>\\nContext: The user just finished writing the coordinator's error handling logic.\\nuser: \"Done with the error handling in coordinator.py, can you check it?\"\\nassistant: \"Absolutely. I'm going to use the qa-enforcer agent to independently audit the coordinator code for test coverage, negative cases, and style compliance.\"\\n<commentary>\\nError handling code is high-risk and needs thorough independent QA. Launch qa-enforcer to run full checks.\\n</commentary>\\n</example>"
 model: inherit
 ---
 
@@ -59,16 +59,16 @@ Run the following commands and report all findings:
 
 ```bash
 # Format check (do not auto-fix, report only)
-ruff format --check custom_components/espresso_machine/
+ruff format --check custom_components/xenia_home/
 
 # Linting
-ruff check custom_components/espresso_machine/
+ruff check custom_components/xenia_home/
 
 # Type checking
-mypy custom_components/espresso_machine/
+mypy custom_components/xenia_home/
 
 # PyLint
-pylint custom_components/espresso_machine/
+pylint custom_components/xenia_home/
 ```
 
 For each linting issue found, report:
@@ -130,7 +130,7 @@ When reviewing code, follow this exact sequence:
 3. **Write the test file** in the appropriate test directory with full coverage.
 4. **Run the tests**:
    ```bash
-   pytest path/to/tests/ --cov=custom_components.espresso_machine --cov-report term-missing -v
+   pytest path/to/tests/ --cov=custom_components.xenia_home --cov-report term-missing -v
    ```
 5. **Run all linters** (ruff format check, ruff lint, mypy, pylint).
 6. **Produce a QA Report** (see format below).

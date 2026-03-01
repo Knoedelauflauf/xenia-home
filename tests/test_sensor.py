@@ -115,10 +115,25 @@ def test_sensor_operating_hours_divides_by_60() -> None:
     assert sensor.native_value == pytest.approx(2.0)
 
 
-def test_sensor_operating_hours_zero_input_returns_zero() -> None:
+def test_sensor_operating_hours_zero_input_returns_none() -> None:
+    """Zero operating hours is implausible — TOTAL_INCREASING returns None."""
     coord = _make_coordinator({"MA_OPERATING_HOURS": 0})
     sensor = _make_sensor(coord, "operating_hours")
-    assert sensor.native_value == pytest.approx(0.0)
+    assert sensor.native_value is None
+
+
+def test_sensor_total_energy_zero_returns_none() -> None:
+    """Zero energy is implausible — TOTAL_INCREASING returns None."""
+    coord = _make_coordinator({"MA_ENERGY_TOTAL_KWH": 0})
+    sensor = _make_sensor(coord, "total_energy")
+    assert sensor.native_value is None
+
+
+def test_sensor_extractions_zero_returns_none() -> None:
+    """Zero extractions is implausible — TOTAL_INCREASING returns None."""
+    coord = _make_coordinator({"MA_EXTRACTIONS": 0})
+    sensor = _make_sensor(coord, "extractions")
+    assert sensor.native_value is None
 
 
 def test_sensor_native_value_defaults_to_zero_on_missing_field() -> None:
