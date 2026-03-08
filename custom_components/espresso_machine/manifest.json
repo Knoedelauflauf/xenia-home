@@ -3,7 +3,7 @@
   "name": "Xenia Espresso Machine (Unofficial)",
   "documentation": "https://github.com/Knoedelauflauf/espresso_machine",
   "issue_tracker": "https://github.com/Knoedelauflauf/espresso_machine/issues",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "requirements": [],
   "dependencies": [],
   "codeowners": ["@knoedelauflauf"],
