@@ -287,6 +287,49 @@ class Xenia:
             resp.raise_for_status()
             return await resp.json()
 
+    async def read_script(self, script_id: int) -> dict[str, str]:
+        """Read a script's content by ID.
+
+        Returns dict with 'Content' (instruction) and 'Title' keys.
+        """
+        url = f"http://{self._host}/api/v2/scripts/read"
+        file_name = f"{script_id:03d}"
+        data = f'{{"FILE_NAME":"{file_name}"}}'
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        async with self._session.post(
+            url, data=data, headers=headers, timeout=ClientTimeout(total=10)
+        ) as resp:
+            resp.raise_for_status()
+            return await resp.json()
+
+    async def create_script(self, name: str, instruction: str) -> None:
+        """Create a new script on the machine."""
+        url = f"http://{self._host}/api/v2/scripts/create"
+        payload = (
+            '{"script_id":null,"Edit":"Disabled","switch":null,'
+            f'"script":"none","name":"{name}","instruction":"{instruction}"}}'
+        )
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        async with self._session.post(
+            url, data=payload, headers=headers, timeout=ClientTimeout(total=5)
+        ) as resp:
+            resp.raise_for_status()
+
+    async def update_script(
+        self, script_id: int, name: str, instruction: str
+    ) -> None:
+        """Update an existing script on the machine."""
+        url = f"http://{self._host}/api/v2/scripts/create"
+        payload = (
+            f'{{"script_id":{script_id},"Edit":"Enabled","switch":null,'
+            f'"script":"none","name":"{name}","instruction":"{instruction}"}}'
+        )
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        async with self._session.post(
+            url, data=payload, headers=headers, timeout=ClientTimeout(total=5)
+        ) as resp:
+            resp.raise_for_status()
+
     async def set_switch(self, switch_key: str, script_id: int) -> None:
         """Set a switch to trigger a specific script."""
         # Fetch current switches, update the one key, and send all back

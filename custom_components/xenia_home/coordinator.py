@@ -8,6 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .const import CONF_MANAGED_SCRIPT_ID, CONF_WEIGHT_MANAGEMENT_ENABLED
 from .xenia import Xenia, XeniaMachineData, XeniaOverviewData, XeniaOverviewSingleData
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,6 +37,8 @@ class XeniaConfigData:
     machine: XeniaMachineData
     scripts: dict[int, str] = field(default_factory=dict)
     switches: dict[str, int] = field(default_factory=dict)
+    managed_script_instruction: str | None = None
+    managed_script_name: str | None = None
 
 
 @dataclass
@@ -99,6 +102,7 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
             update_interval=timedelta(hours=1),
             config_entry=config_entry,
         )
+        self.config_entry = config_entry
         self.xenia = xenia
 
     async def _async_update_data(self) -> XeniaConfigData:
@@ -109,4 +113,24 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
         except (ClientError, OSError, TimeoutError) as err:
             raise UpdateFailed(f"Xenia config fetch failed: {err}") from err
         scripts = {**BUILTIN_SCRIPTS, **user_scripts}
-        return XeniaConfigData(machine=machine, scripts=scripts, switches=switches)
+
+        managed_instruction: str | None = None
+        managed_name: str | None = None
+        options = self.config_entry.options
+        if options.get(CONF_WEIGHT_MANAGEMENT_ENABLED):
+            script_id = options.get(CONF_MANAGED_SCRIPT_ID)
+            if script_id is not None:
+                try:
+                    script_data = await self.xenia.read_script(int(script_id))
+                    managed_instruction = script_data.get("Content")
+                    managed_name = script_data.get("Title")
+                except (ClientError, OSError, TimeoutError) as err:
+                    _LOGGER.warning("Failed to read managed script %s: %s", script_id, err)
+
+        return XeniaConfigData(
+            machine=machine,
+            scripts=scripts,
+            switches=switches,
+            managed_script_instruction=managed_instruction,
+            managed_script_name=managed_name,
+        )

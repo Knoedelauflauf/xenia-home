@@ -36,9 +36,10 @@ def _make_hass() -> MagicMock:
     return hass
 
 
-def _make_config_entry(entry_id: str = "test_entry") -> MagicMock:
+def _make_config_entry(entry_id: str = "test_entry", **options) -> MagicMock:
     entry = MagicMock()
     entry.entry_id = entry_id
+    entry.options = options
     return entry
 
 

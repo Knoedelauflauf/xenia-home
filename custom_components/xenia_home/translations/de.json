@@ -41,6 +41,26 @@
       "reconfigure_successful": "Neukonfiguration erfolgreich"
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Xenia Gewichtssteuerung",
+        "data": {
+          "weight_management_enabled": "Gewichtssteuerung aktivieren"
+        }
+      },
+      "select_script": {
+        "title": "Verwaltetes Skript auswählen",
+        "description": "Wähle ein vorhandenes Skript mit Zielgewicht oder erstelle ein neues",
+        "data": {
+          "managed_script_id": "Skript"
+        }
+      }
+    },
+    "abort": {
+      "cannot_connect": "Verbindung zur Espressomaschine fehlgeschlagen"
+    }
+  },
   "entity": {
     "sensor": {
       "brew_group_temperature": {
@@ -74,6 +94,9 @@
       },
       "brew_boiler_set_temperature": {
         "name": "Brühkessel-Solltemperatur"
+      },
+      "script_weight_target": {
+        "name": "Skript-Zielgewicht"
       }
     },
     "binary_sensor": {
