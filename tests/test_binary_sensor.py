@@ -29,7 +29,9 @@ def _make_coordinator(water_tank_level: int = 1) -> MagicMock:
     overview_single = XeniaOverviewSingleData.from_dict(
         {"PU_SENS_WATER_TANK_LEVEL": water_tank_level}
     )
-    coord.data = XeniaCoordinatorData(overview=overview, overview_single=overview_single)
+    coord.data = XeniaCoordinatorData(
+        overview=overview, overview_single=overview_single
+    )
     return coord
 
 
@@ -81,10 +83,10 @@ def test_water_tank_sensor_device_class_is_problem() -> None:
 @pytest.mark.parametrize(
     "level, expected_is_on",
     [
-        (1, False),   # water present — no problem
-        (2, True),    # tank empty — problem active
-        (0, False),   # unexpected value — should not be treated as empty
-        (3, False),   # unexpected value — should not be treated as empty
+        (1, False),  # water present — no problem
+        (2, True),  # tank empty — problem active
+        (0, False),  # unexpected value — should not be treated as empty
+        (3, False),  # unexpected value — should not be treated as empty
         (99, False),  # completely unknown level
     ],
 )

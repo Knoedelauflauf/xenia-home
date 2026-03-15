@@ -125,7 +125,9 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
                     managed_instruction = script_data.get("Content")
                     managed_name = script_data.get("Title")
                 except (ClientError, OSError, TimeoutError) as err:
-                    _LOGGER.warning("Failed to read managed script %s: %s", script_id, err)
+                    _LOGGER.warning(
+                        "Failed to read managed script %s: %s", script_id, err
+                    )
 
         return XeniaConfigData(
             machine=machine,

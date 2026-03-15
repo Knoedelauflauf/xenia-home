@@ -20,7 +20,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import (
     CONF_MANAGED_SCRIPT_ID,
     CONF_WEIGHT_MANAGEMENT_ENABLED,
-    XENIA_DOMAIN,
 )
 from .coordinator import (
     XeniaConfigCoordinator,
@@ -28,7 +27,7 @@ from .coordinator import (
     XeniaCoordinatorData,
     XeniaDataUpdateCoordinator,
 )
-from .entity import XeniaEntity
+from .entity import XeniaEntity, build_device_info
 from .script_parser import get_weight_target, set_weight_target
 
 _LOGGER = logging.getLogger(__name__)
@@ -160,21 +159,10 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
 
     @property
     def device_info(self) -> DeviceInfo:
+        """Return device information about this Xenia espresso machine."""
+        host = self.coordinator.config_entry.data[CONF_HOST]
         machine = self.coordinator.data.machine
-        fw_version = machine.fw_version()
-        esp_fw_version = machine.esp_fw_version()
-        sw_version = (
-            f"{fw_version}/{esp_fw_version}" if fw_version and esp_fw_version else None
-        )
-        return DeviceInfo(
-            identifiers={
-                (XENIA_DOMAIN, self.coordinator.config_entry.data[CONF_HOST])
-            },
-            name="Xenia Espresso Machine",
-            manufacturer="Xenia Espresso GmbH",
-            model="DBL",
-            sw_version=sw_version,
-        )
+        return build_device_info(host, machine)
 
     async def async_set_native_value(self, value: float) -> None:
         options = self.coordinator.config_entry.options

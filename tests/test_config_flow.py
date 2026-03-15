@@ -1,4 +1,4 @@
-"""Tests for config_flow.py — XeniaConfigFlow."""
+"""Tests for config_flow.py — XeniaConfigFlow and XeniaOptionsFlow."""
 
 from __future__ import annotations
 
@@ -6,8 +6,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from custom_components.xenia_home.config_flow import XeniaConfigFlow
-from custom_components.xenia_home.const import DEFAULT_HOST, XENIA_DOMAIN
+from custom_components.xenia_home.config_flow import (
+    CREATE_NEW_SCRIPT,
+    XeniaConfigFlow,
+    XeniaOptionsFlow,
+)
+from custom_components.xenia_home.const import (
+    CONF_MANAGED_SCRIPT_ID,
+    CONF_WEIGHT_MANAGEMENT_ENABLED,
+    DEFAULT_HOST,
+    DEFAULT_SCRIPT_NAME,
+    XENIA_DOMAIN,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -45,13 +55,13 @@ def _make_flow() -> XeniaConfigFlow:
 @pytest.mark.asyncio
 async def test_async_test_connection_returns_none_when_connected() -> None:
     flow = _make_flow()
-    with patch(
-        "custom_components.xenia_home.config_flow.Xenia"
-    ) as mock_xenia_cls, patch(
-        "custom_components.xenia_home.config_flow.async_get_clientsession",
-        return_value=MagicMock(),
-    ), patch(
-        "asyncio.wait_for", new_callable=AsyncMock, return_value=True
+    with (
+        patch("custom_components.xenia_home.config_flow.Xenia"),
+        patch(
+            "custom_components.xenia_home.config_flow.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch("asyncio.wait_for", new_callable=AsyncMock, return_value=True),
     ):
         result = await flow._async_test_connection(flow.hass, "xenia.local")
 
@@ -59,15 +69,17 @@ async def test_async_test_connection_returns_none_when_connected() -> None:
 
 
 @pytest.mark.asyncio
-async def test_async_test_connection_returns_cannot_connect_when_not_connected() -> None:
+async def test_async_test_connection_returns_cannot_connect_when_not_connected() -> (
+    None
+):
     flow = _make_flow()
-    with patch(
-        "custom_components.xenia_home.config_flow.Xenia"
-    ) as mock_xenia_cls, patch(
-        "custom_components.xenia_home.config_flow.async_get_clientsession",
-        return_value=MagicMock(),
-    ), patch(
-        "asyncio.wait_for", new_callable=AsyncMock, return_value=False
+    with (
+        patch("custom_components.xenia_home.config_flow.Xenia"),
+        patch(
+            "custom_components.xenia_home.config_flow.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch("asyncio.wait_for", new_callable=AsyncMock, return_value=False),
     ):
         result = await flow._async_test_connection(flow.hass, "xenia.local")
 
@@ -77,15 +89,17 @@ async def test_async_test_connection_returns_cannot_connect_when_not_connected()
 @pytest.mark.asyncio
 async def test_async_test_connection_returns_cannot_connect_on_timeout() -> None:
     flow = _make_flow()
-    with patch(
-        "custom_components.xenia_home.config_flow.Xenia"
-    ) as mock_xenia_cls, patch(
-        "custom_components.xenia_home.config_flow.async_get_clientsession",
-        return_value=MagicMock(),
-    ), patch(
-        "asyncio.wait_for",
-        new_callable=AsyncMock,
-        side_effect=TimeoutError("timeout"),
+    with (
+        patch("custom_components.xenia_home.config_flow.Xenia"),
+        patch(
+            "custom_components.xenia_home.config_flow.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "asyncio.wait_for",
+            new_callable=AsyncMock,
+            side_effect=TimeoutError("timeout"),
+        ),
     ):
         result = await flow._async_test_connection(flow.hass, "xenia.local")
 
@@ -95,15 +109,17 @@ async def test_async_test_connection_returns_cannot_connect_on_timeout() -> None
 @pytest.mark.asyncio
 async def test_async_test_connection_returns_cannot_connect_on_os_error() -> None:
     flow = _make_flow()
-    with patch(
-        "custom_components.xenia_home.config_flow.Xenia"
-    ) as mock_xenia_cls, patch(
-        "custom_components.xenia_home.config_flow.async_get_clientsession",
-        return_value=MagicMock(),
-    ), patch(
-        "asyncio.wait_for",
-        new_callable=AsyncMock,
-        side_effect=OSError("connection refused"),
+    with (
+        patch("custom_components.xenia_home.config_flow.Xenia"),
+        patch(
+            "custom_components.xenia_home.config_flow.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "asyncio.wait_for",
+            new_callable=AsyncMock,
+            side_effect=OSError("connection refused"),
+        ),
     ):
         result = await flow._async_test_connection(flow.hass, "xenia.local")
 
@@ -115,15 +131,17 @@ async def test_async_test_connection_returns_cannot_connect_on_client_error() ->
     from aiohttp import ClientError
 
     flow = _make_flow()
-    with patch(
-        "custom_components.xenia_home.config_flow.Xenia"
-    ) as mock_xenia_cls, patch(
-        "custom_components.xenia_home.config_flow.async_get_clientsession",
-        return_value=MagicMock(),
-    ), patch(
-        "asyncio.wait_for",
-        new_callable=AsyncMock,
-        side_effect=ClientError("client error"),
+    with (
+        patch("custom_components.xenia_home.config_flow.Xenia"),
+        patch(
+            "custom_components.xenia_home.config_flow.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "asyncio.wait_for",
+            new_callable=AsyncMock,
+            side_effect=ClientError("client error"),
+        ),
     ):
         result = await flow._async_test_connection(flow.hass, "xenia.local")
 
@@ -138,7 +156,7 @@ async def test_async_test_connection_returns_cannot_connect_on_client_error() ->
 @pytest.mark.asyncio
 async def test_step_user_shows_form_when_no_input() -> None:
     flow = _make_flow()
-    result = await flow.async_step_user(user_input=None)
+    await flow.async_step_user(user_input=None)
     flow.async_show_form.assert_called_once()
     assert flow.async_show_form.call_args[1]["step_id"] == "user"
 
@@ -154,7 +172,7 @@ async def test_step_user_creates_entry_on_success() -> None:
     with patch.object(
         flow, "_async_test_connection", new_callable=AsyncMock, return_value=None
     ):
-        result = await flow.async_step_user(user_input={"host": "xenia.local"})
+        await flow.async_step_user(user_input={"host": "xenia.local"})
 
     flow.async_create_entry.assert_called_once()
     call_kwargs = flow.async_create_entry.call_args[1]
@@ -199,7 +217,7 @@ async def test_step_user_shows_form_with_error_on_cannot_connect() -> None:
         new_callable=AsyncMock,
         return_value="cannot_connect",
     ):
-        result = await flow.async_step_user(user_input={"host": "bad.host"})
+        await flow.async_step_user(user_input={"host": "bad.host"})
 
     flow.async_show_form.assert_called_once()
     errors = flow.async_show_form.call_args[1]["errors"]
@@ -302,7 +320,7 @@ async def test_reconfigure_confirm_shows_form_when_no_input() -> None:
     flow = _make_flow()
     flow._host = "xenia.local"
     flow._name = "My Machine"
-    result = await flow.async_step_reconfigure_confirm(user_input=None)
+    await flow.async_step_reconfigure_confirm(user_input=None)
     flow.async_show_form.assert_called_once()
     assert flow.async_show_form.call_args[1]["step_id"] == "reconfigure_confirm"
 
@@ -442,3 +460,209 @@ async def test_update_entry_stores_correct_host_in_data() -> None:
 
     call_kwargs = flow.hass.config_entries.async_update_entry.call_args[1]
     assert call_kwargs["data"]["host"] == "final.host"
+
+
+# ===========================================================================
+# XeniaOptionsFlow — helpers
+# ===========================================================================
+
+
+def _make_options_flow(
+    current_options: dict | None = None,
+) -> XeniaOptionsFlow:
+    """Build a XeniaOptionsFlow with mocked internals."""
+    flow = XeniaOptionsFlow()
+    flow.hass = _make_hass()
+
+    # OptionsFlow.config_entry is a property that looks up the entry via handler
+    mock_entry = MagicMock()
+    mock_entry.data = {"host": "xenia.local"}
+    mock_entry.options = current_options or {}
+    mock_entry.domain = XENIA_DOMAIN
+    flow.handler = "test_entry_id"
+    flow.hass.config_entries.async_get_known_entry = MagicMock(return_value=mock_entry)
+
+    flow.async_create_entry = MagicMock(return_value={"type": "create_entry"})
+    flow.async_show_form = MagicMock(return_value={"type": "form"})
+    flow.async_abort = MagicMock(return_value={"type": "abort"})
+    return flow
+
+
+# ===========================================================================
+# XeniaOptionsFlow — async_step_init
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_options_init_shows_form_when_no_input() -> None:
+    flow = _make_options_flow()
+    await flow.async_step_init(user_input=None)
+    flow.async_show_form.assert_called_once()
+    assert flow.async_show_form.call_args[1]["step_id"] == "init"
+
+
+@pytest.mark.asyncio
+async def test_options_init_disabling_creates_entry_with_disabled() -> None:
+    flow = _make_options_flow(
+        current_options={
+            CONF_WEIGHT_MANAGEMENT_ENABLED: True,
+            CONF_MANAGED_SCRIPT_ID: 17,
+        }
+    )
+    await flow.async_step_init(user_input={CONF_WEIGHT_MANAGEMENT_ENABLED: False})
+    flow.async_create_entry.assert_called_once()
+    entry_data = flow.async_create_entry.call_args[1]["data"]
+    assert entry_data[CONF_WEIGHT_MANAGEMENT_ENABLED] is False
+    assert entry_data[CONF_MANAGED_SCRIPT_ID] is None
+
+
+@pytest.mark.asyncio
+async def test_options_init_enabling_proceeds_to_script_selection() -> None:
+    flow = _make_options_flow()
+    # When enabling, it should call async_step_select_script (which shows a form)
+    with patch.object(
+        flow,
+        "async_step_select_script",
+        new_callable=AsyncMock,
+        return_value={"type": "form"},
+    ) as mock_select:
+        await flow.async_step_init(user_input={CONF_WEIGHT_MANAGEMENT_ENABLED: True})
+    mock_select.assert_called_once()
+
+
+# ===========================================================================
+# XeniaOptionsFlow — async_step_select_script
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_options_select_script_shows_scripts_with_weight_command() -> None:
+    flow = _make_options_flow()
+    mock_xenia = MagicMock()
+    mock_xenia.get_scripts = AsyncMock(return_value={10: "WithWeight", 20: "NoWeight"})
+    # Script 10 has weight command, script 20 does not
+    mock_xenia.read_script = AsyncMock(
+        side_effect=lambda sid: (
+            {"Content": "1;13;27 45;7;", "Title": "WithWeight"}
+            if sid == 10
+            else {"Content": "1;13;7;", "Title": "NoWeight"}
+        )
+    )
+    with (
+        patch(
+            "custom_components.xenia_home.config_flow.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.xenia_home.config_flow.Xenia",
+            return_value=mock_xenia,
+        ),
+    ):
+        await flow.async_step_select_script(user_input=None)
+
+    flow.async_show_form.assert_called_once()
+    assert flow.async_show_form.call_args[1]["step_id"] == "select_script"
+
+
+@pytest.mark.asyncio
+async def test_options_select_script_stores_selected_id() -> None:
+    flow = _make_options_flow()
+    await flow.async_step_select_script(user_input={CONF_MANAGED_SCRIPT_ID: "17"})
+    flow.async_create_entry.assert_called_once()
+    entry_data = flow.async_create_entry.call_args[1]["data"]
+    assert entry_data[CONF_MANAGED_SCRIPT_ID] == 17
+    assert entry_data[CONF_WEIGHT_MANAGEMENT_ENABLED] is True
+
+
+@pytest.mark.asyncio
+async def test_options_select_script_create_new_calls_api() -> None:
+    flow = _make_options_flow()
+    mock_xenia = MagicMock()
+    mock_xenia.create_script = AsyncMock()
+    mock_xenia.get_scripts = AsyncMock(return_value={25: DEFAULT_SCRIPT_NAME})
+    with (
+        patch(
+            "custom_components.xenia_home.config_flow.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.xenia_home.config_flow.Xenia",
+            return_value=mock_xenia,
+        ),
+    ):
+        await flow.async_step_select_script(
+            user_input={CONF_MANAGED_SCRIPT_ID: CREATE_NEW_SCRIPT}
+        )
+
+    mock_xenia.create_script.assert_called_once()
+    flow.async_create_entry.assert_called_once()
+    entry_data = flow.async_create_entry.call_args[1]["data"]
+    assert entry_data[CONF_MANAGED_SCRIPT_ID] == 25
+    assert entry_data[CONF_WEIGHT_MANAGEMENT_ENABLED] is True
+
+
+@pytest.mark.asyncio
+async def test_options_select_script_aborts_on_connection_error() -> None:
+    flow = _make_options_flow()
+    mock_xenia = MagicMock()
+    mock_xenia.get_scripts = AsyncMock(side_effect=OSError("connection refused"))
+    with (
+        patch(
+            "custom_components.xenia_home.config_flow.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.xenia_home.config_flow.Xenia",
+            return_value=mock_xenia,
+        ),
+    ):
+        await flow.async_step_select_script(user_input=None)
+
+    flow.async_abort.assert_called_once_with(reason="cannot_connect")
+
+
+@pytest.mark.asyncio
+async def test_options_create_new_aborts_when_script_not_found() -> None:
+    """If the newly created script cannot be found by name, abort."""
+    flow = _make_options_flow()
+    mock_xenia = MagicMock()
+    mock_xenia.create_script = AsyncMock()
+    # Script list doesn't contain the expected name
+    mock_xenia.get_scripts = AsyncMock(return_value={10: "SomeOtherScript"})
+    with (
+        patch(
+            "custom_components.xenia_home.config_flow.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.xenia_home.config_flow.Xenia",
+            return_value=mock_xenia,
+        ),
+    ):
+        await flow.async_step_select_script(
+            user_input={CONF_MANAGED_SCRIPT_ID: CREATE_NEW_SCRIPT}
+        )
+
+    flow.async_abort.assert_called_once_with(reason="cannot_connect")
+
+
+@pytest.mark.asyncio
+async def test_options_create_new_aborts_on_api_error() -> None:
+    flow = _make_options_flow()
+    mock_xenia = MagicMock()
+    mock_xenia.create_script = AsyncMock(side_effect=TimeoutError("timeout"))
+    with (
+        patch(
+            "custom_components.xenia_home.config_flow.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.xenia_home.config_flow.Xenia",
+            return_value=mock_xenia,
+        ),
+    ):
+        await flow.async_step_select_script(
+            user_input={CONF_MANAGED_SCRIPT_ID: CREATE_NEW_SCRIPT}
+        )
+
+    flow.async_abort.assert_called_once_with(reason="cannot_connect")

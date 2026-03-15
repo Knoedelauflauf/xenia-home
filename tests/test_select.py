@@ -119,7 +119,9 @@ def test_power_on_behavior_select_current_option_defaults_to_steam_off() -> None
 
 
 def test_power_on_behavior_select_current_option_returns_saved_value() -> None:
-    coord = _make_coordinator(options={CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_ON})
+    coord = _make_coordinator(
+        options={CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_ON}
+    )
     with patch(
         "custom_components.xenia_home.entity.XeniaEntity.__init__", return_value=None
     ):
@@ -308,7 +310,9 @@ async def test_script_select_async_select_option_unknown_title_does_not_crash() 
 
 def test_switch_config_select_unique_id_includes_switch_key() -> None:
     coord = _make_coordinator()
-    desc = SwitchDescription(key="SWITCH_SET_LEFT_LEFT_0", translation_key="switch_left_short")
+    desc = SwitchDescription(
+        key="SWITCH_SET_LEFT_LEFT_0", translation_key="switch_left_short"
+    )
     with patch(
         "custom_components.xenia_home.entity.XeniaEntity.__init__", return_value=None
     ):
@@ -415,7 +419,9 @@ async def test_switch_config_select_async_select_option_calls_set_switch() -> No
 
 
 @pytest.mark.asyncio
-async def test_switch_config_select_async_select_option_unknown_defaults_to_zero() -> None:
+async def test_switch_config_select_async_select_option_unknown_defaults_to_zero() -> (
+    None
+):
     """If the selected title does not match any script, script_id defaults to 0."""
     coord = _make_coordinator(
         scripts={0: "None", 1: "Espresso"},

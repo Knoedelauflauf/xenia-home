@@ -209,9 +209,7 @@ class XeniaOptionsFlow(OptionsFlow):
 
         schema = vol.Schema(
             {
-                vol.Required(
-                    CONF_MANAGED_SCRIPT_ID, default=default
-                ): vol.In(options),
+                vol.Required(CONF_MANAGED_SCRIPT_ID, default=default): vol.In(options),
             }
         )
         return self.async_show_form(step_id="select_script", data_schema=schema)
@@ -237,7 +235,9 @@ class XeniaOptionsFlow(OptionsFlow):
                 break
 
         if new_id is None:
-            _LOGGER.error("Created script '%s' but could not find it", DEFAULT_SCRIPT_NAME)
+            _LOGGER.error(
+                "Created script '%s' but could not find it", DEFAULT_SCRIPT_NAME
+            )
             return self.async_abort(reason="cannot_connect")
 
         return self.async_create_entry(

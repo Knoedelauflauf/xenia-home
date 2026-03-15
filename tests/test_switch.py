@@ -8,7 +8,6 @@ import pytest
 
 from custom_components.xenia_home.const import (
     CONF_POWER_ON_BEHAVIOR,
-    DEFAULT_POWER_ON_BEHAVIOR,
     XENIA_DOMAIN,
     PowerOnBehavior,
 )
@@ -124,7 +123,9 @@ def test_power_switch_is_on_for_status(
 
 @pytest.mark.asyncio
 async def test_power_switch_turn_on_steam_on_calls_machine_turn_on() -> None:
-    coord = _make_coordinator(options={CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_ON})
+    coord = _make_coordinator(
+        options={CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_ON}
+    )
     sw = _make_power_switch(coord)
     await sw.async_turn_on()
     coord.xenia.machine_turn_on.assert_called_once()
@@ -135,7 +136,9 @@ async def test_power_switch_turn_on_steam_on_calls_machine_turn_on() -> None:
 
 @pytest.mark.asyncio
 async def test_power_switch_turn_on_steam_off_calls_machine_turn_on_false() -> None:
-    coord = _make_coordinator(options={CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_OFF})
+    coord = _make_coordinator(
+        options={CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_OFF}
+    )
     sw = _make_power_switch(coord)
     await sw.async_turn_on()
     coord.xenia.machine_turn_on.assert_called_once_with(False)
@@ -152,7 +155,9 @@ async def test_power_switch_turn_on_default_behavior_is_steam_off() -> None:
 
 @pytest.mark.asyncio
 async def test_power_switch_turn_on_refreshes_coordinator() -> None:
-    coord = _make_coordinator(options={CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_OFF})
+    coord = _make_coordinator(
+        options={CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_OFF}
+    )
     sw = _make_power_switch(coord)
     await sw.async_turn_on()
     coord.async_request_refresh.assert_called_once()

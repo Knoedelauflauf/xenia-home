@@ -315,9 +315,7 @@ class Xenia:
         ) as resp:
             resp.raise_for_status()
 
-    async def update_script(
-        self, script_id: int, name: str, instruction: str
-    ) -> None:
+    async def update_script(self, script_id: int, name: str, instruction: str) -> None:
         """Update an existing script on the machine."""
         url = f"http://{self._host}/api/v2/scripts/create"
         payload = (

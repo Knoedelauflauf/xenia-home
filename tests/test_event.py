@@ -39,7 +39,9 @@ def _make_coordinator(ma_status: MachineStatus = MachineStatus.ON) -> MagicMock:
         }
     )
     overview_single = XeniaOverviewSingleData.from_dict({})
-    coord.data = XeniaCoordinatorData(overview=overview, overview_single=overview_single)
+    coord.data = XeniaCoordinatorData(
+        overview=overview, overview_single=overview_single
+    )
     return coord
 
 
@@ -337,7 +339,9 @@ def test_complete_shot_tracking_fires_event_for_long_enough_shot() -> None:
     assert call_args[0][0] == "shot_completed"
 
 
-def test_complete_shot_tracking_uses_brew_end_time_for_duration_when_available() -> None:
+def test_complete_shot_tracking_uses_brew_end_time_for_duration_when_available() -> (
+    None
+):
     coord = _make_coordinator()
     tracker = _make_tracker(coord)
     tracker._trigger_event = MagicMock()
@@ -385,7 +389,9 @@ def test_handle_update_starts_tracking_when_brewing_begins() -> None:
 
     # Simulate transition to BREWING
     coord.data = XeniaCoordinatorData(
-        overview=XeniaOverviewData.from_dict({"MA_STATUS": MachineStatus.BREWING.value}),
+        overview=XeniaOverviewData.from_dict(
+            {"MA_STATUS": MachineStatus.BREWING.value}
+        ),
         overview_single=XeniaOverviewSingleData.from_dict({}),
     )
     tracker._handle_coordinator_update()
@@ -402,7 +408,9 @@ def test_handle_update_collects_data_while_brewing() -> None:
     tracker._shot_start_time = datetime.now()
 
     coord.data = XeniaCoordinatorData(
-        overview=XeniaOverviewData.from_dict({"MA_STATUS": MachineStatus.BREWING.value}),
+        overview=XeniaOverviewData.from_dict(
+            {"MA_STATUS": MachineStatus.BREWING.value}
+        ),
         overview_single=XeniaOverviewSingleData.from_dict({}),
     )
     tracker._handle_coordinator_update()
@@ -461,12 +469,73 @@ def test_handle_update_cancels_afterflow_when_new_brew_starts() -> None:
 
     # Transition directly to brewing again
     coord.data = XeniaCoordinatorData(
-        overview=XeniaOverviewData.from_dict({"MA_STATUS": MachineStatus.BREWING.value}),
+        overview=XeniaOverviewData.from_dict(
+            {"MA_STATUS": MachineStatus.BREWING.value}
+        ),
         overview_single=XeniaOverviewSingleData.from_dict({}),
     )
     tracker._handle_coordinator_update()
 
     assert tracker._afterflow_until is None
+
+
+def test_afterflow_ends_early_on_scale_auto_tare() -> None:
+    """Scale sending 0g during afterflow should complete the shot immediately."""
+    coord = _make_coordinator(MachineStatus.ON)
+    tracker = _make_tracker(coord)
+    tracker.async_write_ha_state = MagicMock()
+    tracker._trigger_event = MagicMock()
+    tracker._is_brewing = False
+    tracker._shot_start_time = datetime.now() - timedelta(seconds=30)
+    tracker._timestamps = list(range(20))
+    tracker._brew_group_temps = [93.0] * 20
+    tracker._brew_boiler_temps = [130.0] * 20
+    tracker._pump_pressures = [9.0] * 20
+    tracker._flow_rates = [5.0] * 20
+    tracker._weights = [float(i) for i in range(20)]  # last value is 19.0
+    tracker._afterflow_until = datetime.now() + timedelta(seconds=5)
+    tracker._brew_end_time = datetime.now()
+
+    # Scale reports 0g (auto-tare)
+    coord.data = XeniaCoordinatorData(
+        overview=XeniaOverviewData.from_dict(
+            {"MA_STATUS": MachineStatus.ON.value, "SCALE_WEIGHT": 0.0}
+        ),
+        overview_single=XeniaOverviewSingleData.from_dict({}),
+    )
+    tracker._handle_coordinator_update()
+
+    # Shot should be completed, 0g not in weights
+    tracker._trigger_event.assert_called_once()
+    assert tracker._weights[-1] == 19.0
+
+
+def test_zero_weight_during_brewing_is_recorded() -> None:
+    """0g during active brewing should be recorded normally."""
+    coord = _make_coordinator(MachineStatus.BREWING)
+    tracker = _make_tracker(coord)
+    tracker.async_write_ha_state = MagicMock()
+    tracker._is_brewing = True
+    tracker._shot_start_time = datetime.now() - timedelta(seconds=5)
+    tracker._timestamps = [0.0, 1.0]
+    tracker._brew_group_temps = [93.0, 93.0]
+    tracker._brew_boiler_temps = [130.0, 130.0]
+    tracker._pump_pressures = [9.0, 9.0]
+    tracker._flow_rates = [5.0, 5.0]
+    tracker._weights = [10.0, 15.0]
+
+    # Scale reports 0g while still brewing
+    coord.data = XeniaCoordinatorData(
+        overview=XeniaOverviewData.from_dict(
+            {"MA_STATUS": MachineStatus.BREWING.value, "SCALE_WEIGHT": 0.0}
+        ),
+        overview_single=XeniaOverviewSingleData.from_dict({}),
+    )
+    tracker._handle_coordinator_update()
+
+    # 0g should be recorded
+    assert tracker._weights[-1] == 0.0
+    assert len(tracker._weights) == 3
 
 
 def test_handle_update_writes_ha_state_every_call() -> None:

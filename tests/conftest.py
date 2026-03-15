@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Generator
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -13,8 +12,6 @@ from custom_components.xenia_home.coordinator import (
     XeniaCoordinatorData,
 )
 from custom_components.xenia_home.xenia import (
-    MachineStatus,
-    SteamBoilerStatus,
     XeniaMachineData,
     XeniaOverviewData,
     XeniaOverviewSingleData,
@@ -116,7 +113,13 @@ def config_data(machine_data: XeniaMachineData) -> XeniaConfigData:
     """Return a populated XeniaConfigData with scripts and switches."""
     return XeniaConfigData(
         machine=machine_data,
-        scripts={0: "None", 1: "Espresso", 2: "Espresso endless", 10: "MyShot", 20: "Lungo"},
+        scripts={
+            0: "None",
+            1: "Espresso",
+            2: "Espresso endless",
+            10: "MyShot",
+            20: "Lungo",
+        },
         switches={"SWITCH_SET_LEFT_LEFT_0": 1, "SWITCH_SET_LEFT_LEFT_1": 2},
     )
 

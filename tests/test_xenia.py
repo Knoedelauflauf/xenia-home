@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from aiohttp import ClientResponseError, ClientSession, RequestInfo
@@ -34,7 +33,7 @@ from custom_components.xenia_home.xenia import (
         ("0", 0),
         (0, 0),
         (3.9, 3),
-        ("3.0", None),       # float string cannot be cast to int directly
+        ("3.0", None),  # float string cannot be cast to int directly
         (None, None),
         ("", None),
         ("abc", None),
@@ -101,7 +100,9 @@ def test_machine_status_unknown_value_raises() -> None:
         (99, SteamBoilerStatus.UNKNOWN),
     ],
 )
-def test_steam_boiler_status_known_values(value: int, expected: SteamBoilerStatus) -> None:
+def test_steam_boiler_status_known_values(
+    value: int, expected: SteamBoilerStatus
+) -> None:
     assert SteamBoilerStatus(value) == expected
 
 
@@ -942,3 +943,164 @@ async def test_set_switch_raises_on_get_http_error() -> None:
     xenia = Xenia("xenia.local", session)
     with pytest.raises(ClientResponseError):
         await xenia.set_switch("KEY", 5)
+
+
+# ===========================================================================
+# Xenia.read_script
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_read_script_returns_content_and_title() -> None:
+    payload = {"Content": "1;13;3 70 5000;27 45;17;7;", "Title": "My Shot"}
+    session = MagicMock(spec=ClientSession)
+    session.post = MagicMock(return_value=_make_mock_response(payload))
+    xenia = Xenia("xenia.local", session)
+    result = await xenia.read_script(17)
+    assert result["Content"] == "1;13;3 70 5000;27 45;17;7;"
+    assert result["Title"] == "My Shot"
+
+
+@pytest.mark.asyncio
+async def test_read_script_sends_zero_padded_id() -> None:
+    session = MagicMock(spec=ClientSession)
+    session.post = MagicMock(return_value=_make_mock_response({}))
+    xenia = Xenia("xenia.local", session)
+    await xenia.read_script(5)
+    call_data = session.post.call_args[1]["data"]
+    assert "005" in call_data
+
+
+@pytest.mark.asyncio
+async def test_read_script_pads_three_digit_id() -> None:
+    session = MagicMock(spec=ClientSession)
+    session.post = MagicMock(return_value=_make_mock_response({}))
+    xenia = Xenia("xenia.local", session)
+    await xenia.read_script(123)
+    call_data = session.post.call_args[1]["data"]
+    assert "123" in call_data
+
+
+@pytest.mark.asyncio
+async def test_read_script_uses_correct_url() -> None:
+    session = MagicMock(spec=ClientSession)
+    session.post = MagicMock(return_value=_make_mock_response({}))
+    xenia = Xenia("myhost", session)
+    await xenia.read_script(1)
+    call_url = session.post.call_args[0][0]
+    assert call_url == "http://myhost/api/v2/scripts/read"
+
+
+@pytest.mark.asyncio
+async def test_read_script_raises_on_http_error() -> None:
+    session = MagicMock(spec=ClientSession)
+    session.post = MagicMock(return_value=_make_error_response(500))
+    xenia = Xenia("xenia.local", session)
+    with pytest.raises(ClientResponseError):
+        await xenia.read_script(10)
+
+
+# ===========================================================================
+# Xenia.create_script
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_create_script_sends_name_and_instruction() -> None:
+    session = MagicMock(spec=ClientSession)
+    resp = AsyncMock()
+    resp.raise_for_status = MagicMock()
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=resp)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+    session.post = MagicMock(return_value=ctx)
+    xenia = Xenia("xenia.local", session)
+    await xenia.create_script("My Espresso", "1;13;27 40;7;")
+    call_data = session.post.call_args[1]["data"]
+    assert "My Espresso" in call_data
+    assert "1;13;27 40;7;" in call_data
+
+
+@pytest.mark.asyncio
+async def test_create_script_uses_correct_url() -> None:
+    session = MagicMock(spec=ClientSession)
+    resp = AsyncMock()
+    resp.raise_for_status = MagicMock()
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=resp)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+    session.post = MagicMock(return_value=ctx)
+    xenia = Xenia("myhost", session)
+    await xenia.create_script("Test", "1;7;")
+    call_url = session.post.call_args[0][0]
+    assert call_url == "http://myhost/api/v2/scripts/create"
+
+
+@pytest.mark.asyncio
+async def test_create_script_raises_on_http_error() -> None:
+    session = MagicMock(spec=ClientSession)
+    session.post = MagicMock(return_value=_make_error_response(500))
+    xenia = Xenia("xenia.local", session)
+    with pytest.raises(ClientResponseError):
+        await xenia.create_script("Test", "1;7;")
+
+
+# ===========================================================================
+# Xenia.update_script
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_update_script_sends_script_id_name_and_instruction() -> None:
+    session = MagicMock(spec=ClientSession)
+    resp = AsyncMock()
+    resp.raise_for_status = MagicMock()
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=resp)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+    session.post = MagicMock(return_value=ctx)
+    xenia = Xenia("xenia.local", session)
+    await xenia.update_script(17, "Updated Shot", "1;13;27 50;7;")
+    call_data = session.post.call_args[1]["data"]
+    assert "17" in call_data
+    assert "Updated Shot" in call_data
+    assert "1;13;27 50;7;" in call_data
+
+
+@pytest.mark.asyncio
+async def test_update_script_uses_edit_enabled() -> None:
+    session = MagicMock(spec=ClientSession)
+    resp = AsyncMock()
+    resp.raise_for_status = MagicMock()
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=resp)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+    session.post = MagicMock(return_value=ctx)
+    xenia = Xenia("xenia.local", session)
+    await xenia.update_script(5, "Name", "1;7;")
+    call_data = session.post.call_args[1]["data"]
+    assert "Enabled" in call_data
+
+
+@pytest.mark.asyncio
+async def test_update_script_uses_same_url_as_create() -> None:
+    session = MagicMock(spec=ClientSession)
+    resp = AsyncMock()
+    resp.raise_for_status = MagicMock()
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=resp)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+    session.post = MagicMock(return_value=ctx)
+    xenia = Xenia("myhost", session)
+    await xenia.update_script(1, "Name", "1;7;")
+    call_url = session.post.call_args[0][0]
+    assert call_url == "http://myhost/api/v2/scripts/create"
+
+
+@pytest.mark.asyncio
+async def test_update_script_raises_on_http_error() -> None:
+    session = MagicMock(spec=ClientSession)
+    session.post = MagicMock(return_value=_make_error_response(500))
+    xenia = Xenia("xenia.local", session)
+    with pytest.raises(ClientResponseError):
+        await xenia.update_script(10, "Name", "1;7;")

@@ -88,7 +88,9 @@ def test_coordinator_data_stores_overview_and_single(
     overview_data: XeniaOverviewData,
     overview_single_data: XeniaOverviewSingleData,
 ) -> None:
-    data = XeniaCoordinatorData(overview=overview_data, overview_single=overview_single_data)
+    data = XeniaCoordinatorData(
+        overview=overview_data, overview_single=overview_single_data
+    )
     assert data.overview is overview_data
     assert data.overview_single is overview_single_data
 
@@ -156,7 +158,9 @@ def test_data_update_coordinator_stores_xenia_client() -> None:
     entry = _make_config_entry()
     xenia = _make_xenia_mock()
 
-    with patch("homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"):
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
         coordinator = XeniaDataUpdateCoordinator(hass, entry, xenia)
 
     assert coordinator.xenia is xenia
@@ -173,11 +177,12 @@ async def test_data_coordinator_update_returns_coordinator_data() -> None:
     entry = _make_config_entry()
     xenia = _make_xenia_mock()
 
-    with patch("homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"):
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
         coordinator = XeniaDataUpdateCoordinator(hass, entry, xenia)
 
-    with patch("asyncio.sleep", new_callable=AsyncMock):
-        result = await coordinator._async_update_data()
+    result = await coordinator._async_update_data()
 
     assert isinstance(result, XeniaCoordinatorData)
     assert result.overview.ma_status.value == 1
@@ -189,11 +194,12 @@ async def test_data_coordinator_update_calls_both_endpoints() -> None:
     entry = _make_config_entry()
     xenia = _make_xenia_mock()
 
-    with patch("homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"):
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
         coordinator = XeniaDataUpdateCoordinator(hass, entry, xenia)
 
-    with patch("asyncio.sleep", new_callable=AsyncMock):
-        await coordinator._async_update_data()
+    await coordinator._async_update_data()
 
     xenia.get_overview.assert_called_once()
     xenia.get_overview_single.assert_called_once()
@@ -206,27 +212,31 @@ async def test_data_coordinator_update_raises_update_failed_on_exception() -> No
     xenia = _make_xenia_mock()
     xenia.get_overview = AsyncMock(side_effect=OSError("network error"))
 
-    with patch("homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"):
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
         coordinator = XeniaDataUpdateCoordinator(hass, entry, xenia)
 
     with pytest.raises(UpdateFailed, match="Xenia fetch failed"):
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            await coordinator._async_update_data()
+        await coordinator._async_update_data()
 
 
 @pytest.mark.asyncio
-async def test_data_coordinator_update_raises_update_failed_on_single_exception() -> None:
+async def test_data_coordinator_update_raises_update_failed_on_single_exception() -> (
+    None
+):
     hass = _make_hass()
     entry = _make_config_entry()
     xenia = _make_xenia_mock()
     xenia.get_overview_single = AsyncMock(side_effect=TimeoutError("timeout"))
 
-    with patch("homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"):
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
         coordinator = XeniaDataUpdateCoordinator(hass, entry, xenia)
 
     with pytest.raises(UpdateFailed, match="Xenia fetch failed"):
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            await coordinator._async_update_data()
+        await coordinator._async_update_data()
 
 
 # ===========================================================================
@@ -239,7 +249,9 @@ def test_config_coordinator_stores_xenia_client() -> None:
     entry = _make_config_entry()
     xenia = _make_xenia_mock()
 
-    with patch("homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"):
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
         coordinator = XeniaConfigCoordinator(hass, entry, xenia)
 
     assert coordinator.xenia is xenia
@@ -250,7 +262,9 @@ def test_config_coordinator_selected_script_id_starts_none() -> None:
     entry = _make_config_entry()
     xenia = _make_xenia_mock()
 
-    with patch("homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"):
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
         coordinator = XeniaConfigCoordinator(hass, entry, xenia)
 
     assert coordinator.selected_script_id is None
@@ -267,7 +281,9 @@ async def test_config_coordinator_update_returns_config_data() -> None:
     entry = _make_config_entry()
     xenia = _make_xenia_mock()
 
-    with patch("homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"):
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
         coordinator = XeniaConfigCoordinator(hass, entry, xenia)
 
     result = await coordinator._async_update_data()
@@ -283,7 +299,9 @@ async def test_config_coordinator_update_merges_builtin_scripts() -> None:
     xenia = _make_xenia_mock()
     xenia.get_scripts = AsyncMock(return_value={10: "MyShot"})
 
-    with patch("homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"):
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
         coordinator = XeniaConfigCoordinator(hass, entry, xenia)
 
     result = await coordinator._async_update_data()
@@ -305,7 +323,9 @@ async def test_config_coordinator_update_user_scripts_override_builtin() -> None
     xenia = _make_xenia_mock()
     xenia.get_scripts = AsyncMock(return_value={1: "Custom Espresso"})
 
-    with patch("homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"):
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
         coordinator = XeniaConfigCoordinator(hass, entry, xenia)
 
     result = await coordinator._async_update_data()
@@ -318,7 +338,9 @@ async def test_config_coordinator_update_stores_switches() -> None:
     entry = _make_config_entry()
     xenia = _make_xenia_mock()
 
-    with patch("homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"):
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
         coordinator = XeniaConfigCoordinator(hass, entry, xenia)
 
     result = await coordinator._async_update_data()
@@ -326,13 +348,17 @@ async def test_config_coordinator_update_stores_switches() -> None:
 
 
 @pytest.mark.asyncio
-async def test_config_coordinator_update_raises_update_failed_on_machine_error() -> None:
+async def test_config_coordinator_update_raises_update_failed_on_machine_error() -> (
+    None
+):
     hass = _make_hass()
     entry = _make_config_entry()
     xenia = _make_xenia_mock()
     xenia.get_machine = AsyncMock(side_effect=OSError("unreachable"))
 
-    with patch("homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"):
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
         coordinator = XeniaConfigCoordinator(hass, entry, xenia)
 
     with pytest.raises(UpdateFailed, match="Xenia config fetch failed"):
@@ -340,13 +366,17 @@ async def test_config_coordinator_update_raises_update_failed_on_machine_error()
 
 
 @pytest.mark.asyncio
-async def test_config_coordinator_update_raises_update_failed_on_scripts_error() -> None:
+async def test_config_coordinator_update_raises_update_failed_on_scripts_error() -> (
+    None
+):
     hass = _make_hass()
     entry = _make_config_entry()
     xenia = _make_xenia_mock()
     xenia.get_scripts = AsyncMock(side_effect=TimeoutError("timeout"))
 
-    with patch("homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"):
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
         coordinator = XeniaConfigCoordinator(hass, entry, xenia)
 
     with pytest.raises(UpdateFailed, match="Xenia config fetch failed"):
@@ -354,14 +384,97 @@ async def test_config_coordinator_update_raises_update_failed_on_scripts_error()
 
 
 @pytest.mark.asyncio
-async def test_config_coordinator_update_raises_update_failed_on_switches_error() -> None:
+async def test_config_coordinator_update_raises_update_failed_on_switches_error() -> (
+    None
+):
     hass = _make_hass()
     entry = _make_config_entry()
     xenia = _make_xenia_mock()
     xenia.get_switches = AsyncMock(side_effect=ConnectionError("refused"))
 
-    with patch("homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"):
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
         coordinator = XeniaConfigCoordinator(hass, entry, xenia)
 
     with pytest.raises(UpdateFailed, match="Xenia config fetch failed"):
         await coordinator._async_update_data()
+
+
+# ===========================================================================
+# XeniaConfigCoordinator — managed script reading
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_config_coordinator_reads_managed_script_when_enabled() -> None:
+    hass = _make_hass()
+    entry = _make_config_entry(weight_management_enabled=True, managed_script_id=17)
+    xenia = _make_xenia_mock()
+    xenia.read_script = AsyncMock(
+        return_value={"Content": "1;13;27 45;7;", "Title": "My Shot"}
+    )
+
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
+        coordinator = XeniaConfigCoordinator(hass, entry, xenia)
+
+    result = await coordinator._async_update_data()
+    assert result.managed_script_instruction == "1;13;27 45;7;"
+    assert result.managed_script_name == "My Shot"
+
+
+@pytest.mark.asyncio
+async def test_config_coordinator_skips_managed_script_when_disabled() -> None:
+    hass = _make_hass()
+    entry = _make_config_entry(weight_management_enabled=False)
+    xenia = _make_xenia_mock()
+    xenia.read_script = AsyncMock()
+
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
+        coordinator = XeniaConfigCoordinator(hass, entry, xenia)
+
+    result = await coordinator._async_update_data()
+    assert result.managed_script_instruction is None
+    assert result.managed_script_name is None
+    xenia.read_script.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_config_coordinator_skips_managed_script_when_no_script_id() -> None:
+    hass = _make_hass()
+    entry = _make_config_entry(weight_management_enabled=True)
+    xenia = _make_xenia_mock()
+    xenia.read_script = AsyncMock()
+
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
+        coordinator = XeniaConfigCoordinator(hass, entry, xenia)
+
+    result = await coordinator._async_update_data()
+    assert result.managed_script_instruction is None
+    xenia.read_script.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_config_coordinator_handles_managed_script_read_failure() -> None:
+    """When reading the managed script fails, the update should still succeed."""
+    hass = _make_hass()
+    entry = _make_config_entry(weight_management_enabled=True, managed_script_id=17)
+    xenia = _make_xenia_mock()
+    xenia.read_script = AsyncMock(side_effect=OSError("connection refused"))
+
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
+        coordinator = XeniaConfigCoordinator(hass, entry, xenia)
+
+    result = await coordinator._async_update_data()
+    # Update succeeds but managed instruction is None
+    assert isinstance(result, XeniaConfigData)
+    assert result.managed_script_instruction is None
+    assert result.machine is not None

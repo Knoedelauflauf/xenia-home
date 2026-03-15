@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.exceptions import ServiceValidationError
@@ -16,8 +16,6 @@ from custom_components.xenia_home import (
 )
 from custom_components.xenia_home.coordinator import (
     XeniaConfigData,
-    XeniaCoordinatorData,
-    XeniaRuntimeData,
 )
 from custom_components.xenia_home.xenia import (
     XeniaMachineData,
@@ -46,9 +44,7 @@ def _make_xenia_mock() -> MagicMock:
     return xenia
 
 
-def _make_config_coordinator_mock(
-    scripts: dict | None = None
-) -> MagicMock:
+def _make_config_coordinator_mock(scripts: dict | None = None) -> MagicMock:
     """Build a mock config coordinator with given scripts."""
     coord = MagicMock()
     coord.data = XeniaConfigData(
@@ -152,9 +148,7 @@ async def test_execute_script_no_id_no_name_raises_validation_error() -> None:
 @pytest.mark.asyncio
 async def test_execute_script_unknown_name_raises_validation_error() -> None:
     xenia = _make_xenia_mock()
-    config_coordinator = _make_config_coordinator_mock(
-        scripts={1: "Espresso"}
-    )
+    config_coordinator = _make_config_coordinator_mock(scripts={1: "Espresso"})
 
     async def _handle(call: MagicMock) -> None:
         script_id = call.data.get(ATTR_SCRIPT_ID)
@@ -246,16 +240,17 @@ async def test_async_setup_entry_returns_true() -> None:
     entry = MagicMock()
     entry.data = {"host": "xenia.local"}
 
-    with patch(
-        "custom_components.xenia_home.Xenia"
-    ) as MockXenia, patch(
-        "custom_components.xenia_home.async_get_clientsession",
-        return_value=MagicMock(),
-    ), patch(
-        "custom_components.xenia_home.XeniaDataUpdateCoordinator"
-    ) as MockDataCoord, patch(
-        "custom_components.xenia_home.XeniaConfigCoordinator"
-    ) as MockConfigCoord:
+    with (
+        patch("custom_components.xenia_home.Xenia"),
+        patch(
+            "custom_components.xenia_home.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.xenia_home.XeniaDataUpdateCoordinator"
+        ) as MockDataCoord,
+        patch("custom_components.xenia_home.XeniaConfigCoordinator") as MockConfigCoord,
+    ):
         mock_coord = MagicMock()
         mock_coord.async_config_entry_first_refresh = AsyncMock()
         MockDataCoord.return_value = mock_coord
@@ -281,16 +276,17 @@ async def test_async_setup_entry_registers_service() -> None:
     entry = MagicMock()
     entry.data = {"host": "xenia.local"}
 
-    with patch(
-        "custom_components.xenia_home.Xenia"
-    ) as MockXenia, patch(
-        "custom_components.xenia_home.async_get_clientsession",
-        return_value=MagicMock(),
-    ), patch(
-        "custom_components.xenia_home.XeniaDataUpdateCoordinator"
-    ) as MockDataCoord, patch(
-        "custom_components.xenia_home.XeniaConfigCoordinator"
-    ) as MockConfigCoord:
+    with (
+        patch("custom_components.xenia_home.Xenia"),
+        patch(
+            "custom_components.xenia_home.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.xenia_home.XeniaDataUpdateCoordinator"
+        ) as MockDataCoord,
+        patch("custom_components.xenia_home.XeniaConfigCoordinator") as MockConfigCoord,
+    ):
         mock_coord = MagicMock()
         mock_coord.async_config_entry_first_refresh = AsyncMock()
         MockDataCoord.return_value = mock_coord
@@ -319,16 +315,17 @@ async def test_async_setup_entry_sets_runtime_data() -> None:
     entry.data = {"host": "xenia.local"}
     entry.runtime_data = None
 
-    with patch(
-        "custom_components.xenia_home.Xenia"
-    ) as MockXenia, patch(
-        "custom_components.xenia_home.async_get_clientsession",
-        return_value=MagicMock(),
-    ), patch(
-        "custom_components.xenia_home.XeniaDataUpdateCoordinator"
-    ) as MockDataCoord, patch(
-        "custom_components.xenia_home.XeniaConfigCoordinator"
-    ) as MockConfigCoord:
+    with (
+        patch("custom_components.xenia_home.Xenia"),
+        patch(
+            "custom_components.xenia_home.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.xenia_home.XeniaDataUpdateCoordinator"
+        ) as MockDataCoord,
+        patch("custom_components.xenia_home.XeniaConfigCoordinator") as MockConfigCoord,
+    ):
         mock_coord = MagicMock()
         mock_coord.async_config_entry_first_refresh = AsyncMock()
         MockDataCoord.return_value = mock_coord

@@ -21,6 +21,9 @@ Once installed, use Add Integration → Xenia Espresso Machine.
 - Power on/off, ECO mode, steam boiler control
 - Temperature setpoints (brew group & brew boiler)
 - Sensors: temperatures, pressures, energy, extraction counter, operating hours
+- Water tank level monitoring
+- Script execution (service call by ID or name)
+- Physical switch configuration (map each switch position to a script)
 - Shot tracking with temperature, pressure, flow rate, and weight data
 - Script weight management: adjust the brew weight target directly from Home Assistant
 

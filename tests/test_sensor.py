@@ -29,7 +29,9 @@ def _make_coordinator(overview_payload: dict | None = None) -> MagicMock:
 
     overview = XeniaOverviewData.from_dict(overview_payload or {})
     overview_single = XeniaOverviewSingleData.from_dict({})
-    coord.data = XeniaCoordinatorData(overview=overview, overview_single=overview_single)
+    coord.data = XeniaCoordinatorData(
+        overview=overview, overview_single=overview_single
+    )
     return coord
 
 

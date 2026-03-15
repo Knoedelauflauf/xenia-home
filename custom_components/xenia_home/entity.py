@@ -6,6 +6,23 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import XENIA_DOMAIN
 from .coordinator import XeniaDataUpdateCoordinator, XeniaRuntimeData
+from .xenia import XeniaMachineData
+
+
+def build_device_info(host: str, machine: XeniaMachineData) -> DeviceInfo:
+    """Build device info for a Xenia espresso machine."""
+    fw_version = machine.fw_version()
+    esp_fw_version = machine.esp_fw_version()
+    sw_version = (
+        f"{fw_version}/{esp_fw_version}" if fw_version and esp_fw_version else None
+    )
+    return DeviceInfo(
+        identifiers={(XENIA_DOMAIN, host)},
+        name="Xenia Espresso Machine",
+        manufacturer="Xenia Espresso GmbH",
+        model="DBL",
+        sw_version=sw_version,
+    )
 
 
 class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
@@ -25,16 +42,6 @@ class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device information about this Xenia espresso machine."""
+        host = self.coordinator.config_entry.data[CONF_HOST]
         machine = self.runtime_data.config_coordinator.data.machine
-        fw_version = machine.fw_version()
-        esp_fw_version = machine.esp_fw_version()
-        sw_version = (
-            f"{fw_version}/{esp_fw_version}" if fw_version and esp_fw_version else None
-        )
-        return DeviceInfo(
-            identifiers={(XENIA_DOMAIN, self.coordinator.config_entry.data[CONF_HOST])},
-            name="Xenia Espresso Machine",
-            manufacturer="Xenia Espresso GmbH",
-            model="DBL",
-            sw_version=sw_version,
-        )
+        return build_device_info(host, machine)
