@@ -18,9 +18,15 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .const import (
     CONF_MANAGED_SCRIPT_ID,
     CONF_WEIGHT_MANAGEMENT_ENABLED,
+    CONF_WEIGHT_MAX,
+    CONF_WEIGHT_MIN,
+    CONF_WEIGHT_STEP,
     DEFAULT_HOST,
     DEFAULT_SCRIPT_INSTRUCTION,
     DEFAULT_SCRIPT_NAME,
+    DEFAULT_WEIGHT_MAX,
+    DEFAULT_WEIGHT_MIN,
+    DEFAULT_WEIGHT_STEP,
     XENIA_DOMAIN,
 )
 from .script_parser import COMMAND_WEIGHT_TARGET, parse_instruction
@@ -169,13 +175,8 @@ class XeniaOptionsFlow(OptionsFlow):
             selected = user_input[CONF_MANAGED_SCRIPT_ID]
             if selected == CREATE_NEW_SCRIPT:
                 return await self._create_new_script()
-            return self.async_create_entry(
-                data={
-                    **self.config_entry.options,
-                    CONF_WEIGHT_MANAGEMENT_ENABLED: True,
-                    CONF_MANAGED_SCRIPT_ID: int(selected),
-                },
-            )
+            self._managed_script_id = int(selected)
+            return await self.async_step_configure_weight()
 
         # Build list of scripts that contain a weight command
         host = self.config_entry.data[CONF_HOST]
@@ -214,6 +215,37 @@ class XeniaOptionsFlow(OptionsFlow):
         )
         return self.async_show_form(step_id="select_script", data_schema=schema)
 
+    async def async_step_configure_weight(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Configure weight target min, max, and step size."""
+        if user_input is not None:
+            return self.async_create_entry(
+                data={
+                    **self.config_entry.options,
+                    CONF_WEIGHT_MANAGEMENT_ENABLED: True,
+                    CONF_MANAGED_SCRIPT_ID: self._managed_script_id,
+                    CONF_WEIGHT_MIN: user_input[CONF_WEIGHT_MIN],
+                    CONF_WEIGHT_MAX: user_input[CONF_WEIGHT_MAX],
+                    CONF_WEIGHT_STEP: user_input[CONF_WEIGHT_STEP],
+                },
+            )
+
+        current_min = self.config_entry.options.get(CONF_WEIGHT_MIN, DEFAULT_WEIGHT_MIN)
+        current_max = self.config_entry.options.get(CONF_WEIGHT_MAX, DEFAULT_WEIGHT_MAX)
+        current_step = self.config_entry.options.get(
+            CONF_WEIGHT_STEP, DEFAULT_WEIGHT_STEP
+        )
+
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_WEIGHT_MIN, default=current_min): vol.Coerce(float),
+                vol.Required(CONF_WEIGHT_MAX, default=current_max): vol.Coerce(float),
+                vol.Required(CONF_WEIGHT_STEP, default=current_step): vol.Coerce(float),
+            }
+        )
+        return self.async_show_form(step_id="configure_weight", data_schema=schema)
+
     async def _create_new_script(self) -> ConfigFlowResult:
         """Create a new script on the machine and store its ID."""
         host = self.config_entry.data[CONF_HOST]
@@ -240,10 +272,5 @@ class XeniaOptionsFlow(OptionsFlow):
             )
             return self.async_abort(reason="cannot_connect")
 
-        return self.async_create_entry(
-            data={
-                **self.config_entry.options,
-                CONF_WEIGHT_MANAGEMENT_ENABLED: True,
-                CONF_MANAGED_SCRIPT_ID: new_id,
-            },
-        )
+        self._managed_script_id = new_id
+        return await self.async_step_configure_weight()

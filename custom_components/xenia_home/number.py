@@ -20,6 +20,12 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import (
     CONF_MANAGED_SCRIPT_ID,
     CONF_WEIGHT_MANAGEMENT_ENABLED,
+    CONF_WEIGHT_MAX,
+    CONF_WEIGHT_MIN,
+    CONF_WEIGHT_STEP,
+    DEFAULT_WEIGHT_MAX,
+    DEFAULT_WEIGHT_MIN,
+    DEFAULT_WEIGHT_STEP,
 )
 from .coordinator import (
     XeniaConfigCoordinator,
@@ -133,15 +139,16 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
     _attr_device_class = NumberDeviceClass.WEIGHT
     _attr_native_unit_of_measurement = UnitOfMass.GRAMS
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_native_min_value = 1.0
-    _attr_native_max_value = 200.0
-    _attr_native_step = 0.5
 
     def __init__(self, coordinator: XeniaConfigCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = (
             f"{coordinator.config_entry.data[CONF_HOST]}_script_weight_target"
         )
+        options = coordinator.config_entry.options
+        self._attr_native_min_value = options.get(CONF_WEIGHT_MIN, DEFAULT_WEIGHT_MIN)
+        self._attr_native_max_value = options.get(CONF_WEIGHT_MAX, DEFAULT_WEIGHT_MAX)
+        self._attr_native_step = options.get(CONF_WEIGHT_STEP, DEFAULT_WEIGHT_STEP)
 
     @property
     def native_value(self) -> float | None:

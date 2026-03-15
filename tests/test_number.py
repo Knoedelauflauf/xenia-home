@@ -372,3 +372,48 @@ async def test_weight_number_set_preserves_other_commands() -> None:
     # Other commands should still be there
     assert "3 70 5000" in written_instruction
     assert "27 42" in written_instruction
+
+
+# ===========================================================================
+# XeniaWeightNumber — min/max/step from options
+# ===========================================================================
+
+
+def test_weight_number_uses_defaults_when_no_options_set() -> None:
+    coord = _make_config_coordinator(
+        options={"weight_management_enabled": True, "managed_script_id": 17}
+    )
+    number = _make_weight_number(coord)
+    assert number._attr_native_min_value == 25.0
+    assert number._attr_native_max_value == 50.0
+    assert number._attr_native_step == 0.5
+
+
+def test_weight_number_reads_min_max_step_from_options() -> None:
+    coord = _make_config_coordinator(
+        options={
+            "weight_management_enabled": True,
+            "managed_script_id": 17,
+            "weight_min": 10.0,
+            "weight_max": 60.0,
+            "weight_step": 0.1,
+        }
+    )
+    number = _make_weight_number(coord)
+    assert number._attr_native_min_value == 10.0
+    assert number._attr_native_max_value == 60.0
+    assert number._attr_native_step == 0.1
+
+
+def test_weight_number_partial_options_uses_defaults_for_missing() -> None:
+    coord = _make_config_coordinator(
+        options={
+            "weight_management_enabled": True,
+            "managed_script_id": 17,
+            "weight_min": 15.0,
+        }
+    )
+    number = _make_weight_number(coord)
+    assert number._attr_native_min_value == 15.0
+    assert number._attr_native_max_value == 50.0  # default
+    assert number._attr_native_step == 0.5  # default

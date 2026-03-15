@@ -55,6 +55,15 @@
         "data": {
           "managed_script_id": "Script"
         }
+      },
+      "configure_weight": {
+        "title": "Weight target settings",
+        "description": "Configure the range and step size for the weight target slider",
+        "data": {
+          "weight_min": "Minimum weight (g)",
+          "weight_max": "Maximum weight (g)",
+          "weight_step": "Step size (g)"
+        }
       }
     },
     "abort": {

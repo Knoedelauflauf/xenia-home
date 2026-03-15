@@ -14,8 +14,14 @@ from custom_components.xenia_home.config_flow import (
 from custom_components.xenia_home.const import (
     CONF_MANAGED_SCRIPT_ID,
     CONF_WEIGHT_MANAGEMENT_ENABLED,
+    CONF_WEIGHT_MAX,
+    CONF_WEIGHT_MIN,
+    CONF_WEIGHT_STEP,
     DEFAULT_HOST,
     DEFAULT_SCRIPT_NAME,
+    DEFAULT_WEIGHT_MAX,
+    DEFAULT_WEIGHT_MIN,
+    DEFAULT_WEIGHT_STEP,
     XENIA_DOMAIN,
 )
 
@@ -565,13 +571,13 @@ async def test_options_select_script_shows_scripts_with_weight_command() -> None
 
 
 @pytest.mark.asyncio
-async def test_options_select_script_stores_selected_id() -> None:
+async def test_options_select_script_proceeds_to_configure_weight() -> None:
     flow = _make_options_flow()
     await flow.async_step_select_script(user_input={CONF_MANAGED_SCRIPT_ID: "17"})
-    flow.async_create_entry.assert_called_once()
-    entry_data = flow.async_create_entry.call_args[1]["data"]
-    assert entry_data[CONF_MANAGED_SCRIPT_ID] == 17
-    assert entry_data[CONF_WEIGHT_MANAGEMENT_ENABLED] is True
+    # Should store the script id and show the configure_weight form
+    assert flow._managed_script_id == 17
+    flow.async_show_form.assert_called_once()
+    assert flow.async_show_form.call_args[1]["step_id"] == "configure_weight"
 
 
 @pytest.mark.asyncio
@@ -595,10 +601,10 @@ async def test_options_select_script_create_new_calls_api() -> None:
         )
 
     mock_xenia.create_script.assert_called_once()
-    flow.async_create_entry.assert_called_once()
-    entry_data = flow.async_create_entry.call_args[1]["data"]
-    assert entry_data[CONF_MANAGED_SCRIPT_ID] == 25
-    assert entry_data[CONF_WEIGHT_MANAGEMENT_ENABLED] is True
+    # Should proceed to configure_weight step instead of creating entry directly
+    assert flow._managed_script_id == 25
+    flow.async_show_form.assert_called_once()
+    assert flow.async_show_form.call_args[1]["step_id"] == "configure_weight"
 
 
 @pytest.mark.asyncio
@@ -666,3 +672,115 @@ async def test_options_create_new_aborts_on_api_error() -> None:
         )
 
     flow.async_abort.assert_called_once_with(reason="cannot_connect")
+
+
+# ===========================================================================
+# XeniaOptionsFlow — async_step_configure_weight
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_options_configure_weight_shows_form_when_no_input() -> None:
+    flow = _make_options_flow()
+    flow._managed_script_id = 17
+    await flow.async_step_configure_weight(user_input=None)
+    flow.async_show_form.assert_called_once()
+    assert flow.async_show_form.call_args[1]["step_id"] == "configure_weight"
+
+
+@pytest.mark.asyncio
+async def test_options_configure_weight_uses_defaults_for_new_setup() -> None:
+    flow = _make_options_flow()
+    flow._managed_script_id = 17
+    await flow.async_step_configure_weight(user_input=None)
+    schema = flow.async_show_form.call_args[1]["data_schema"]
+    # Check defaults are set in schema
+    schema_dict = schema.schema
+    for key, validator in schema_dict.items():
+        if key == CONF_WEIGHT_MIN:
+            assert key.default() == DEFAULT_WEIGHT_MIN
+        elif key == CONF_WEIGHT_MAX:
+            assert key.default() == DEFAULT_WEIGHT_MAX
+        elif key == CONF_WEIGHT_STEP:
+            assert key.default() == DEFAULT_WEIGHT_STEP
+
+
+@pytest.mark.asyncio
+async def test_options_configure_weight_pre_populates_from_existing_options() -> None:
+    flow = _make_options_flow(
+        current_options={
+            CONF_WEIGHT_MANAGEMENT_ENABLED: True,
+            CONF_MANAGED_SCRIPT_ID: 17,
+            CONF_WEIGHT_MIN: 10.0,
+            CONF_WEIGHT_MAX: 60.0,
+            CONF_WEIGHT_STEP: 0.1,
+        }
+    )
+    flow._managed_script_id = 17
+    await flow.async_step_configure_weight(user_input=None)
+    schema = flow.async_show_form.call_args[1]["data_schema"]
+    schema_dict = schema.schema
+    for key, validator in schema_dict.items():
+        if key == CONF_WEIGHT_MIN:
+            assert key.default() == 10.0
+        elif key == CONF_WEIGHT_MAX:
+            assert key.default() == 60.0
+        elif key == CONF_WEIGHT_STEP:
+            assert key.default() == 0.1
+
+
+@pytest.mark.asyncio
+async def test_options_configure_weight_creates_entry_with_all_values() -> None:
+    flow = _make_options_flow()
+    flow._managed_script_id = 17
+    await flow.async_step_configure_weight(
+        user_input={
+            CONF_WEIGHT_MIN: 20.0,
+            CONF_WEIGHT_MAX: 45.0,
+            CONF_WEIGHT_STEP: 0.1,
+        }
+    )
+    flow.async_create_entry.assert_called_once()
+    entry_data = flow.async_create_entry.call_args[1]["data"]
+    assert entry_data[CONF_WEIGHT_MANAGEMENT_ENABLED] is True
+    assert entry_data[CONF_MANAGED_SCRIPT_ID] == 17
+    assert entry_data[CONF_WEIGHT_MIN] == 20.0
+    assert entry_data[CONF_WEIGHT_MAX] == 45.0
+    assert entry_data[CONF_WEIGHT_STEP] == 0.1
+
+
+@pytest.mark.asyncio
+async def test_options_full_flow_init_to_configure_weight() -> None:
+    """End-to-end: enable weight → select script → configure weight → entry."""
+    flow = _make_options_flow()
+    mock_xenia = MagicMock()
+    mock_xenia.get_scripts = AsyncMock(return_value={10: "Shot"})
+    mock_xenia.read_script = AsyncMock(
+        return_value={"Content": "1;13;27 45;7;", "Title": "Shot"}
+    )
+    with (
+        patch(
+            "custom_components.xenia_home.config_flow.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.xenia_home.config_flow.Xenia",
+            return_value=mock_xenia,
+        ),
+    ):
+        # Step 1: enable weight management
+        await flow.async_step_init(user_input={CONF_WEIGHT_MANAGEMENT_ENABLED: True})
+        # Step 2: select a script (shows configure_weight form)
+        await flow.async_step_select_script(user_input={CONF_MANAGED_SCRIPT_ID: "10"})
+    # Step 3: configure weight
+    await flow.async_step_configure_weight(
+        user_input={
+            CONF_WEIGHT_MIN: 25.0,
+            CONF_WEIGHT_MAX: 50.0,
+            CONF_WEIGHT_STEP: 0.5,
+        }
+    )
+    flow.async_create_entry.assert_called_once()
+    entry_data = flow.async_create_entry.call_args[1]["data"]
+    assert entry_data[CONF_MANAGED_SCRIPT_ID] == 10
+    assert entry_data[CONF_WEIGHT_MIN] == 25.0

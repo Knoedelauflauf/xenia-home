@@ -55,6 +55,15 @@
         "data": {
           "managed_script_id": "Skript"
         }
+      },
+      "configure_weight": {
+        "title": "Zielgewicht-Einstellungen",
+        "description": "Konfiguriere den Bereich und die Schrittweite für den Zielgewicht-Schieberegler",
+        "data": {
+          "weight_min": "Mindestgewicht (g)",
+          "weight_max": "Maximalgewicht (g)",
+          "weight_step": "Schrittweite (g)"
+        }
       }
     },
     "abort": {
