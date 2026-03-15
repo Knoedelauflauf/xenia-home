@@ -62,8 +62,7 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
         """Initialize the shot tracker."""
         super().__init__(coordinator)
         self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_shot_tracker_"
-            f"{coordinator.config_entry.data[CONF_HOST]}"
+            f"{XENIA_DOMAIN}_shot_tracker_{coordinator.config_entry.data[CONF_HOST]}"
         )
         self._is_brewing = False
         self._shot_start_time: datetime | None = None
@@ -100,7 +99,10 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
             self._collect_shot_data()
         elif self._afterflow_until is not None:
             self._collect_shot_data()
-            if datetime.now() >= self._afterflow_until:
+            if (
+                self._afterflow_until is not None
+                and datetime.now() >= self._afterflow_until
+            ):
                 self._complete_shot_tracking()
 
         self._is_brewing = is_currently_brewing
@@ -139,6 +141,18 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
             return
 
         data = self.coordinator.data
+        weight = data.overview.scale_weight
+
+        # Scale auto-tare sends 0g after the brew — end afterflow early
+        if (
+            weight == 0
+            and self._weights
+            and self._weights[-1] > 0
+            and self._afterflow_until is not None
+        ):
+            self._complete_shot_tracking()
+            return
+
         elapsed = (datetime.now() - self._shot_start_time).total_seconds()
         if not self._is_brewing and self._afterflow_until is not None:
             self._afterflow_samples += 1
@@ -147,7 +161,7 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
         self._brew_boiler_temps.append(data.overview.bb_sens_temp_a)
         self._pump_pressures.append(data.overview.pu_sens_press)
         self._flow_rates.append(data.overview.pu_sens_flow_meter_ml)
-        self._weights.append(data.overview.scale_weight)
+        self._weights.append(weight)
         self._timestamps.append(elapsed)
 
     def _complete_shot_tracking(self) -> None:

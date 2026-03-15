@@ -41,6 +41,26 @@
       "reconfigure_successful": "Reconfiguration successful"
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Xenia Weight Management",
+        "data": {
+          "weight_management_enabled": "Enable weight management"
+        }
+      },
+      "select_script": {
+        "title": "Select managed script",
+        "description": "Select an existing script with a weight target or create a new one",
+        "data": {
+          "managed_script_id": "Script"
+        }
+      }
+    },
+    "abort": {
+      "cannot_connect": "Failed to connect to the espresso machine"
+    }
+  },
   "entity": {
     "sensor": {
       "brew_group_temperature": {
@@ -74,6 +94,9 @@
       },
       "brew_boiler_set_temperature": {
         "name": "Brewboiler set temperature"
+      },
+      "script_weight_target": {
+        "name": "Script weight target"
       }
     },
     "binary_sensor": {

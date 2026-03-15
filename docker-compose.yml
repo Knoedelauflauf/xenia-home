@@ -1,0 +1,9 @@
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:dev
+    container_name: xenia-ha-test
+    volumes:
+      - ./config:/config
+      - ./custom_components/xenia_home:/config/custom_components/xenia_home:ro
+    network_mode: host
+    restart: unless-stopped

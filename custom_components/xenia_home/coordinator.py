@@ -1,14 +1,14 @@
-import asyncio
 from dataclasses import dataclass, field
 from datetime import timedelta
 import logging
 
-from aiohttp import ClientSession
+from aiohttp import ClientError
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .const import CONF_MANAGED_SCRIPT_ID, CONF_WEIGHT_MANAGEMENT_ENABLED
 from .xenia import Xenia, XeniaMachineData, XeniaOverviewData, XeniaOverviewSingleData
 
 _LOGGER = logging.getLogger(__name__)
@@ -37,6 +37,8 @@ class XeniaConfigData:
     machine: XeniaMachineData
     scripts: dict[int, str] = field(default_factory=dict)
     switches: dict[str, int] = field(default_factory=dict)
+    managed_script_instruction: str | None = None
+    managed_script_name: str | None = None
 
 
 @dataclass
@@ -53,10 +55,12 @@ type XeniaConfigEntry = ConfigEntry[XeniaRuntimeData]
 class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
     """Xenia device data update coordinator for fast polling."""
 
+    config_entry: XeniaConfigEntry
+
     def __init__(
         self,
         hass: HomeAssistant,
-        config_entry: ConfigEntry,
+        config_entry: XeniaConfigEntry,
         xenia: Xenia,
     ) -> None:
         """Initialize the Xenia device coordinator."""
@@ -72,22 +76,22 @@ class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
     async def _async_update_data(self) -> XeniaCoordinatorData:
         try:
             overview = await self.xenia.get_overview()
-            await asyncio.sleep(0.5)
             overview_single = await self.xenia.get_overview_single()
-            return XeniaCoordinatorData(overview, overview_single)
-        except Exception as err:
+        except (ClientError, OSError, TimeoutError) as err:
             raise UpdateFailed(f"Xenia fetch failed: {err}") from err
+        return XeniaCoordinatorData(overview, overview_single)
 
 
 class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
     """Xenia coordinator for config/slow data (scripts, switches, machine info)."""
 
+    config_entry: XeniaConfigEntry
     selected_script_id: int | None = None
 
     def __init__(
         self,
         hass: HomeAssistant,
-        config_entry: ConfigEntry,
+        config_entry: XeniaConfigEntry,
         xenia: Xenia,
     ) -> None:
         """Initialize the Xenia config coordinator."""
@@ -98,18 +102,37 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
             update_interval=timedelta(hours=1),
             config_entry=config_entry,
         )
+        self.config_entry = config_entry
         self.xenia = xenia
 
     async def _async_update_data(self) -> XeniaConfigData:
         try:
             machine = await self.xenia.get_machine()
             user_scripts = await self.xenia.get_scripts()
-            scripts = {**BUILTIN_SCRIPTS, **user_scripts}
             switches = await self.xenia.get_switches()
-            return XeniaConfigData(
-                machine=machine,
-                scripts=scripts,
-                switches=switches,
-            )
-        except Exception as err:
+        except (ClientError, OSError, TimeoutError) as err:
             raise UpdateFailed(f"Xenia config fetch failed: {err}") from err
+        scripts = {**BUILTIN_SCRIPTS, **user_scripts}
+
+        managed_instruction: str | None = None
+        managed_name: str | None = None
+        options = self.config_entry.options
+        if options.get(CONF_WEIGHT_MANAGEMENT_ENABLED):
+            script_id = options.get(CONF_MANAGED_SCRIPT_ID)
+            if script_id is not None:
+                try:
+                    script_data = await self.xenia.read_script(int(script_id))
+                    managed_instruction = script_data.get("Content")
+                    managed_name = script_data.get("Title")
+                except (ClientError, OSError, TimeoutError) as err:
+                    _LOGGER.warning(
+                        "Failed to read managed script %s: %s", script_id, err
+                    )
+
+        return XeniaConfigData(
+            machine=machine,
+            scripts=scripts,
+            switches=switches,
+            managed_script_instruction=managed_instruction,
+            managed_script_name=managed_name,
+        )

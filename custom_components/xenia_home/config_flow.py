@@ -1,16 +1,32 @@
 import asyncio
+import logging
 from typing import Any
 
 from aiohttp import ClientError
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import CONF_HOST
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DEFAULT_HOST, XENIA_DOMAIN
+from .const import (
+    CONF_MANAGED_SCRIPT_ID,
+    CONF_WEIGHT_MANAGEMENT_ENABLED,
+    DEFAULT_HOST,
+    DEFAULT_SCRIPT_INSTRUCTION,
+    DEFAULT_SCRIPT_NAME,
+    XENIA_DOMAIN,
+)
+from .script_parser import COMMAND_WEIGHT_TARGET, parse_instruction
 from .xenia import Xenia
+
+_LOGGER = logging.getLogger(__name__)
 
 DATA_SCHEMA_USER = vol.Schema(
     {
@@ -19,8 +35,16 @@ DATA_SCHEMA_USER = vol.Schema(
 )
 
 
+CREATE_NEW_SCRIPT = "__create_new__"
+
+
 class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        return XeniaOptionsFlow()
 
     def __init__(self) -> None:
         self._entry: ConfigEntry | None = None
@@ -110,4 +134,116 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
             data_schema=schema,
             description_placeholders={"name": self._name or self._host},
             errors=errors,
+        )
+
+
+class XeniaOptionsFlow(OptionsFlow):
+    """Options flow for Xenia weight management."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            if not user_input.get(CONF_WEIGHT_MANAGEMENT_ENABLED):
+                # Disable weight management
+                return self.async_create_entry(
+                    data={
+                        **self.config_entry.options,
+                        CONF_WEIGHT_MANAGEMENT_ENABLED: False,
+                        CONF_MANAGED_SCRIPT_ID: None,
+                    },
+                )
+            # Enabled — proceed to script selection
+            return await self.async_step_select_script()
+
+        current = self.config_entry.options.get(CONF_WEIGHT_MANAGEMENT_ENABLED, False)
+        schema = vol.Schema(
+            {vol.Required(CONF_WEIGHT_MANAGEMENT_ENABLED, default=current): bool}
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)
+
+    async def async_step_select_script(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            selected = user_input[CONF_MANAGED_SCRIPT_ID]
+            if selected == CREATE_NEW_SCRIPT:
+                return await self._create_new_script()
+            return self.async_create_entry(
+                data={
+                    **self.config_entry.options,
+                    CONF_WEIGHT_MANAGEMENT_ENABLED: True,
+                    CONF_MANAGED_SCRIPT_ID: int(selected),
+                },
+            )
+
+        # Build list of scripts that contain a weight command
+        host = self.config_entry.data[CONF_HOST]
+        session = async_get_clientsession(self.hass)
+        xenia = Xenia(host, session)
+
+        try:
+            all_scripts = await xenia.get_scripts()
+        except (ClientError, OSError, TimeoutError):
+            return self.async_abort(reason="cannot_connect")
+
+        weight_scripts: dict[str, str] = {}
+        for script_id, title in all_scripts.items():
+            try:
+                script_data = await xenia.read_script(script_id)
+                instruction = script_data.get("Content", "")
+                parsed = parse_instruction(instruction)
+                if parsed.has_command(COMMAND_WEIGHT_TARGET):
+                    weight_scripts[str(script_id)] = title
+            except (ClientError, OSError, TimeoutError):
+                _LOGGER.debug("Could not read script %s, skipping", script_id)
+
+        options: dict[str, str] = {}
+        # Pre-select current managed script if set
+        current_id = self.config_entry.options.get(CONF_MANAGED_SCRIPT_ID)
+        for sid, title in weight_scripts.items():
+            options[sid] = title
+        options[CREATE_NEW_SCRIPT] = DEFAULT_SCRIPT_NAME + " (create new)"
+
+        default = str(current_id) if current_id and str(current_id) in options else None
+
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_MANAGED_SCRIPT_ID, default=default): vol.In(options),
+            }
+        )
+        return self.async_show_form(step_id="select_script", data_schema=schema)
+
+    async def _create_new_script(self) -> ConfigFlowResult:
+        """Create a new script on the machine and store its ID."""
+        host = self.config_entry.data[CONF_HOST]
+        session = async_get_clientsession(self.hass)
+        xenia = Xenia(host, session)
+
+        try:
+            await xenia.create_script(DEFAULT_SCRIPT_NAME, DEFAULT_SCRIPT_INSTRUCTION)
+            # Re-fetch script list to find the newly created script
+            scripts = await xenia.get_scripts()
+        except (ClientError, OSError, TimeoutError):
+            return self.async_abort(reason="cannot_connect")
+
+        # Find the new script by name
+        new_id: int | None = None
+        for sid, title in scripts.items():
+            if title == DEFAULT_SCRIPT_NAME:
+                new_id = sid
+                break
+
+        if new_id is None:
+            _LOGGER.error(
+                "Created script '%s' but could not find it", DEFAULT_SCRIPT_NAME
+            )
+            return self.async_abort(reason="cannot_connect")
+
+        return self.async_create_entry(
+            data={
+                **self.config_entry.options,
+                CONF_WEIGHT_MANAGEMENT_ENABLED: True,
+                CONF_MANAGED_SCRIPT_ID: new_id,
+            },
         )

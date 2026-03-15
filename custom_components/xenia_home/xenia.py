@@ -3,7 +3,7 @@ from enum import IntEnum
 import logging
 from typing import Any
 
-from aiohttp import ClientSession
+from aiohttp import ClientError, ClientSession, ClientTimeout
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -172,7 +172,7 @@ class Xenia:
             json_data = await self._get_overview_raw()
             if "MA_STATUS" in json_data:
                 return True
-        except Exception as e:
+        except (ClientError, OSError, TimeoutError) as e:
             _LOGGER.info("Connection test failed: %s", e)
             return False
         return False
@@ -197,7 +197,7 @@ class Xenia:
 
     async def _get_overview_raw(self) -> dict[str, Any]:
         url = f"http://{self._host}/api/v2/overview"
-        async with self._session.get(url, timeout=10) as resp:
+        async with self._session.get(url, timeout=ClientTimeout(total=10)) as resp:
             resp.raise_for_status()
             return await resp.json()
 
@@ -206,13 +206,13 @@ class Xenia:
 
     async def get_overview_single(self) -> XeniaOverviewSingleData:
         url = f"http://{self._host}/api/v2/overview_single"
-        async with self._session.get(url, timeout=10) as resp:
+        async with self._session.get(url, timeout=ClientTimeout(total=10)) as resp:
             resp.raise_for_status()
             return XeniaOverviewSingleData.from_dict(await resp.json())
 
     async def get_machine(self) -> XeniaMachineData:
         url = f"http://{self._host}/api/v2/machine"
-        async with self._session.get(url, timeout=10) as resp:
+        async with self._session.get(url, timeout=ClientTimeout(total=10)) as resp:
             resp.raise_for_status()
             return XeniaMachineData.from_dict(await resp.json())
 
@@ -221,7 +221,7 @@ class Xenia:
         data = f'{{"action":"{int(action)}"}}'
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         async with self._session.post(
-            url, data=data, headers=headers, timeout=5
+            url, data=data, headers=headers, timeout=ClientTimeout(total=5)
         ) as resp:
             resp.raise_for_status()
 
@@ -230,7 +230,7 @@ class Xenia:
         data = f'{{"TOGGLE":{str(action).lower()}}}'
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         async with self._session.post(
-            url, data=data, headers=headers, timeout=5
+            url, data=data, headers=headers, timeout=ClientTimeout(total=5)
         ) as resp:
             resp.raise_for_status()
 
@@ -239,7 +239,7 @@ class Xenia:
         data = f'{{"BG_SET_TEMP":"{value}", "BB_SET_TEMP":"{value}"}}'
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         async with self._session.post(
-            url, data=data, headers=headers, timeout=5
+            url, data=data, headers=headers, timeout=ClientTimeout(total=5)
         ) as resp:
             resp.raise_for_status()
             return await resp.json()
@@ -249,7 +249,7 @@ class Xenia:
         data = f'{{"BB_SET_TEMP":"{value}"}}'
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         async with self._session.post(
-            url, data=data, headers=headers, timeout=5
+            url, data=data, headers=headers, timeout=ClientTimeout(total=5)
         ) as resp:
             resp.raise_for_status()
             return await resp.json()
@@ -263,7 +263,7 @@ class Xenia:
     async def get_scripts(self) -> dict[int, str]:
         """Get available scripts as {id: title} dict."""
         url = f"http://{self._host}/api/v2/scripts/list"
-        async with self._session.get(url, timeout=10) as resp:
+        async with self._session.get(url, timeout=ClientTimeout(total=10)) as resp:
             resp.raise_for_status()
             data = await resp.json()
         index_list = data.get("index_list", [])
@@ -276,16 +276,57 @@ class Xenia:
         data = f'{{"ID":{script_id}}}'
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         async with self._session.post(
-            url, data=data, headers=headers, timeout=5
+            url, data=data, headers=headers, timeout=ClientTimeout(total=5)
         ) as resp:
             resp.raise_for_status()
 
     async def get_switches(self) -> dict[str, int]:
         """Get switch-to-script mappings."""
         url = f"http://{self._host}/api/v2/switches"
-        async with self._session.get(url, timeout=10) as resp:
+        async with self._session.get(url, timeout=ClientTimeout(total=10)) as resp:
             resp.raise_for_status()
             return await resp.json()
+
+    async def read_script(self, script_id: int) -> dict[str, str]:
+        """Read a script's content by ID.
+
+        Returns dict with 'Content' (instruction) and 'Title' keys.
+        """
+        url = f"http://{self._host}/api/v2/scripts/read"
+        file_name = f"{script_id:03d}"
+        data = f'{{"FILE_NAME":"{file_name}"}}'
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        async with self._session.post(
+            url, data=data, headers=headers, timeout=ClientTimeout(total=10)
+        ) as resp:
+            resp.raise_for_status()
+            return await resp.json()
+
+    async def create_script(self, name: str, instruction: str) -> None:
+        """Create a new script on the machine."""
+        url = f"http://{self._host}/api/v2/scripts/create"
+        payload = (
+            '{"script_id":null,"Edit":"Disabled","switch":null,'
+            f'"script":"none","name":"{name}","instruction":"{instruction}"}}'
+        )
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        async with self._session.post(
+            url, data=payload, headers=headers, timeout=ClientTimeout(total=5)
+        ) as resp:
+            resp.raise_for_status()
+
+    async def update_script(self, script_id: int, name: str, instruction: str) -> None:
+        """Update an existing script on the machine."""
+        url = f"http://{self._host}/api/v2/scripts/create"
+        payload = (
+            f'{{"script_id":{script_id},"Edit":"Enabled","switch":null,'
+            f'"script":"none","name":"{name}","instruction":"{instruction}"}}'
+        )
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        async with self._session.post(
+            url, data=payload, headers=headers, timeout=ClientTimeout(total=5)
+        ) as resp:
+            resp.raise_for_status()
 
     async def set_switch(self, switch_key: str, script_id: int) -> None:
         """Set a switch to trigger a specific script."""
@@ -297,6 +338,6 @@ class Xenia:
         data = "{" + ",".join(f'"{k}":"{v}"' for k, v in current.items()) + "}"
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         async with self._session.post(
-            url, data=data, headers=headers, timeout=5
+            url, data=data, headers=headers, timeout=ClientTimeout(total=5)
         ) as resp:
             resp.raise_for_status()

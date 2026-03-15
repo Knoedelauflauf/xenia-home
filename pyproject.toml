@@ -1,0 +1,24 @@
+[project]
+name = "xenia-home"
+version = "0.4.1"
+description = "Home Assistant custom integration for Xenia espresso machines"
+requires-python = ">=3.13.2"
+
+[dependency-groups]
+dev = [
+    "homeassistant>=2026.2",
+    "aioresponses>=0.7.8",
+    "mypy>=1.19",
+    "pylint>=4.0",
+    "pytest>=9.0",
+    "pytest-asyncio>=1.3",
+    "pytest-cov>=7.0",
+    "ruff>=0.15",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

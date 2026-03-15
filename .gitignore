@@ -137,6 +137,9 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# Local Home Assistant test instance
+config/
+
 # Environments
 .env
 .envrc
@@ -190,6 +193,10 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file. However, if you prefer, 
 #  you could uncomment the following to ignore the entire vscode folder
 # .vscode/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
 
 # Ruff stuff:
 .ruff_cache/
