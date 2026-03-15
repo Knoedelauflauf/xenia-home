@@ -7,7 +7,7 @@ This is a custom Home Assistant integration for Xenia Espresso Machines. These i
 - **Domain**: `xenia_home`
 - **Integration Type**: Device (local polling)
 - **IoT Class**: Local polling
-- **Platforms**: sensor, binary_sensor, number, select, switch, event
+- **Platforms**: sensor, binary_sensor, number, select, switch, button, event
 - **Codeowners**: @knoedelauflauf
 
 ## Python Requirements
@@ -23,7 +23,7 @@ This is a custom Home Assistant integration for Xenia Espresso Machines. These i
 ## Code Quality Standards
 
 - **Formatting**: Ruff
-- **Linting**: PyLint and Ruff
+- **Linting**: Ruff
 - **Type Checking**: MyPy
 - **Testing**: pytest with plain functions and fixtures
 - **Language**: American English for all code, comments, and documentation (use sentence case, including titles)
@@ -45,35 +45,40 @@ custom_components/xenia_home/
 ├── __init__.py          # Entry point with async_setup_entry
 ├── manifest.json        # Integration metadata
 ├── const.py            # Domain and constants
-├── config_flow.py      # UI configuration flow
-├── coordinator.py      # Data update coordinator
-├── entity.py          # Base entity class
+├── config_flow.py      # UI configuration and options flow
+├── coordinator.py      # Data update coordinators (fast + config)
+├── entity.py          # Base entity class and shared helpers
 ├── xenia.py           # Device API client
+├── script_parser.py   # Script instruction parser
 ├── sensor.py          # Sensor platform
 ├── binary_sensor.py   # Binary sensor platform
-├── number.py          # Number platform
+├── number.py          # Number platform (temperatures + weight target)
 ├── select.py          # Select platform
 ├── switch.py          # Switch platform
-├── event.py           # Event platform
+├── button.py          # Button platform (script execution)
+├── event.py           # Event platform (shot tracking)
 ├── strings.json       # User-facing text and translations
 └── services.yaml      # Service definitions
 ```
 
 ### Key Modules
-- **xenia.py**: Device communication logic
-- **coordinator.py**: Centralized data fetching using `DataUpdateCoordinator`
-- **entity.py**: Base entity definitions to reduce duplication
-- **config_flow.py**: Configuration flow for UI-based setup
+- **xenia.py**: Device communication logic (HTTP API client)
+- **coordinator.py**: Dual coordinator pattern — fast (1s) and config (1h)
+- **entity.py**: Base entity definitions and shared `build_device_info()` helper
+- **config_flow.py**: Configuration flow for UI-based setup and options flow for weight management
+- **script_parser.py**: Pure Python parser for machine script instructions
 
 ### Runtime Data Storage
-Use `ConfigEntry.runtime_data` to store the coordinator:
+Use `ConfigEntry.runtime_data` to store both coordinators:
 ```python
-type XeniaConfigEntry = ConfigEntry[XeniaDataUpdateCoordinator]
+type XeniaConfigEntry = ConfigEntry[XeniaRuntimeData]
 
 async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> bool:
-    coordinator = XeniaDataUpdateCoordinator(hass, entry)
+    coordinator = XeniaDataUpdateCoordinator(hass, entry, xenia)
+    config_coordinator = XeniaConfigCoordinator(hass, entry, xenia)
     await coordinator.async_config_entry_first_refresh()
-    entry.runtime_data = coordinator
+    await config_coordinator.async_config_entry_first_refresh()
+    entry.runtime_data = XeniaRuntimeData(coordinator, config_coordinator)
 ```
 
 ## Async Programming
@@ -85,24 +90,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> boo
   - No blocking calls
   - Use `async_get_clientsession(hass)` for HTTP requests
 
-### Data Update Coordinator
-Standard pattern for efficient data management:
-```python
-class XeniaDataUpdateCoordinator(DataUpdateCoordinator):
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        super().__init__(
-            hass,
-            logger=LOGGER,
-            name=XENIA_DOMAIN,
-            update_interval=timedelta(seconds=30),
-            config_entry=entry,
-        )
+### Data Update Coordinators
+The integration uses two coordinators:
+- **`XeniaDataUpdateCoordinator`** — polls every 1 second for live sensor data
+- **`XeniaConfigCoordinator`** — polls every 1 hour for config data (scripts, switches, firmware, managed script)
 
-    async def _async_update_data(self):
-        try:
-            return await self.client.fetch_data()
-        except ApiError as err:
-            raise UpdateFailed(f"API communication error: {err}") from err
+```python
+async def _async_update_data(self):
+    try:
+        data = await self.xenia.get_overview()
+    except (ClientError, OSError, TimeoutError) as err:
+        raise UpdateFailed(f"Xenia fetch failed: {err}") from err
+    return data
 ```
 
 ## Configuration Flow
@@ -232,9 +231,6 @@ uv run ruff check custom_components/xenia_home/
 
 # Run MyPy type checking
 uv run mypy custom_components/xenia_home/
-
-# Run PyLint
-uv run pylint custom_components/xenia_home/
 ```
 
 ## Common Anti-Patterns to Avoid

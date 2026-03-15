@@ -25,15 +25,16 @@ uv run pytest tests/test_xenia.py::test_get_overview_success
 | `conftest.py` | Shared fixtures and API response payloads |
 | `test_xenia.py` | `Xenia` API client methods |
 | `test_coordinator.py` | `XeniaDataUpdateCoordinator` and `XeniaConfigCoordinator` |
-| `test_config_flow.py` | Config flow — happy path and all error cases |
+| `test_config_flow.py` | Config flow and options flow (weight management) |
 | `test_init.py` | Integration setup, teardown, and `execute_script` service |
 | `test_sensor.py` | Sensor entity values and state |
 | `test_binary_sensor.py` | Binary sensor (water tank empty) |
-| `test_number.py` | Number entities (set temperature) |
+| `test_number.py` | Number entities (temperatures and weight target) |
 | `test_select.py` | Select entities (power on behavior, script, switch config) |
 | `test_switch.py` | Switch entities (power, eco, steam boiler) |
 | `test_button.py` | Execute script button |
-| `test_event.py` | Shot tracker event entity |
+| `test_event.py` | Shot tracker event entity (including auto-tare handling) |
+| `test_script_parser.py` | Script instruction parser and weight target helpers |
 
 ## Writing tests
 
@@ -140,25 +141,16 @@ async def test_async_something():
 
 ## Local Home Assistant instance
 
-To manually test the integration against a real machine, run HA in Docker:
+To manually test the integration against a real machine, use the included `docker-compose.yml`:
 
 ```bash
-# Create config directory and symlink the integration
-mkdir -p config/custom_components
-ln -s ../../custom_components/xenia_home config/custom_components/xenia_home
-
-# Start HA (use --network host so the container can reach the machine on your LAN)
-docker run -d --name hass-dev \
-  --network host \
-  -v $(pwd)/config:/config \
-  -v $(pwd)/custom_components/xenia_home:/config/custom_components/xenia_home \
-  ghcr.io/home-assistant/home-assistant:2026.2
+docker compose up -d
 ```
 
-HA is then available at `http://localhost:8123`. The integration code is mounted as a volume — after code changes, restart the container:
+HA is then available at `http://localhost:8123`. The integration code is mounted as a read-only volume. After code changes, restart the container:
 
 ```bash
-docker restart hass-dev
+docker compose restart
 ```
 
 Enable debug logging by adding this to `config/configuration.yaml`:
@@ -173,7 +165,7 @@ logger:
 To stop and remove the container:
 
 ```bash
-docker stop hass-dev && docker rm hass-dev
+docker compose down
 ```
 
 ## Coverage

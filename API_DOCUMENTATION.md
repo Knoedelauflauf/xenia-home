@@ -45,8 +45,10 @@ Comprehensive overview of all real-time sensor data.
 | `PU_SENS_PRESS`           | float  | Pump pressure (bar)                  |
 | `PU_LEVEL_PW_CONTROL`     | uint16 | Pump PWM control                     |
 | `PU_SET_LEVEL_PW_CONTROL` | uint16 | Pump target PWM                      |
+| `PU_SENS_FLOW_METER_ML`   | float  | Flow meter reading (ml)              |
 | `SB_SENS_PRESS`           | float  | Steam boiler pressure (bar)          |
 | `SB_STATUS`               | uint8  | Steam boiler status (see enum below) |
+| `SCALE_WEIGHT`            | float  | Scale weight (grams)                 |
 
 ---
 
@@ -142,6 +144,176 @@ Sets only the brew boiler temperature.
 ```json
 {"BB_SET_TEMP": "93.0"}
 ```
+
+---
+
+### `/api/v2/machine`
+
+Returns machine hardware and firmware information.
+
+**Method:** GET
+
+**Response Parameters:**
+
+| Parameter          | Type | Description            |
+| ------------------ | ---- | ---------------------- |
+| `MA_TYPE`          | int  | Machine type           |
+| `FW_VERSION_MAJOR` | int  | Firmware major version |
+| `FW_VERSION_MINOR` | int  | Firmware minor version |
+| `ESP_FW_MAJOR`     | int  | ESP firmware major     |
+| `ESP_FW_MINOR`     | int  | ESP firmware minor     |
+
+---
+
+### `/api/v2/scripts/list`
+
+Returns all user-defined scripts.
+
+**Method:** GET
+
+**Response:**
+```json
+{
+  "index_list": [10, 20],
+  "title_list": ["MyShot", "Lungo"]
+}
+```
+
+---
+
+### `/api/v2/scripts/read`
+
+Reads a script's content by ID.
+
+**Method:** POST
+**Content-Type:** `application/x-www-form-urlencoded`
+
+**Body:**
+```json
+{"FILE_NAME": "010"}
+```
+
+The file name is the script ID zero-padded to 3 digits.
+
+**Response:**
+```json
+{
+  "Content": "1;13;3 70 5000;27 45;17;7;",
+  "Title": "MyShot"
+}
+```
+
+The `Content` field contains semicolon-separated script commands (see script instruction format below).
+
+---
+
+### `/api/v2/scripts/create`
+
+Creates or updates a script.
+
+**Method:** POST
+**Content-Type:** `application/x-www-form-urlencoded`
+
+**Create new script:**
+```json
+{
+  "script_id": null,
+  "Edit": "Disabled",
+  "switch": null,
+  "script": "none",
+  "name": "My Script",
+  "instruction": "1;13;27 40;7;"
+}
+```
+
+**Update existing script:**
+```json
+{
+  "script_id": 10,
+  "Edit": "Enabled",
+  "switch": null,
+  "script": "none",
+  "name": "My Script",
+  "instruction": "1;13;27 45;7;"
+}
+```
+
+---
+
+### `/api/v2/scripts/execute`
+
+Executes a script by ID.
+
+**Method:** POST
+**Content-Type:** `application/x-www-form-urlencoded`
+
+**Body:**
+```json
+{"ID": 10}
+```
+
+---
+
+### `/api/v2/switches`
+
+**GET** — Returns switch-to-script mappings.
+
+**Response:**
+```json
+{
+  "SWITCH_SET_LEFT_LEFT_0": 1,
+  "SWITCH_SET_LEFT_LEFT_1": 2
+}
+```
+
+**POST** — Updates all switch mappings. Send the full set of switch assignments.
+
+**Content-Type:** `application/x-www-form-urlencoded`
+
+**Body:**
+```json
+{
+  "SWITCH_SET_LEFT_LEFT_0": "10",
+  "SWITCH_SET_LEFT_LEFT_1": "2"
+}
+```
+
+---
+
+## Script instruction format
+
+Scripts are stored as semicolon-separated commands. Each command starts with a command ID followed by optional arguments separated by spaces.
+
+Example: `1;13;3 70 5000;27 45;17;7;`
+
+Every script starts with command `1` (script start) and ends with command `7` (script end).
+
+| Command ID | Description (DE)              | Description (EN)             | Arguments                    |
+| ---------- | ----------------------------- | ---------------------------- | ---------------------------- |
+| 1          | Script start                  | Script start                 | none                         |
+| 2          | Pumpe an                      | Pump on                      | none                         |
+| 3          | Leistung Pumpe %              | Pump power %                 | power (%), duration (ms)     |
+| 4          | Pumpendruck bar               | Pump pressure bar            | pressure (mbar), duration (ms) |
+| 5          | Waage, Flussrate              | Scale, flow rate             | rate (ml/s), duration (ms)   |
+| 6          | Pumpe aus                     | Pump off                     | none                         |
+| 7          | Script end                    | Script end                   | none                         |
+| 8          | Leistung Brühboiler %         | Brew boiler power %          | percent                      |
+| 9          | Leistung Brühgruppe %         | Brew group power %           | percent                      |
+| 12         | Warten                        | Wait                         | duration (ms)                |
+| 13         | Bezugsventil öffnen           | Open brew valve              | none                         |
+| 14         | Bezugsventil schließen        | Close brew valve             | none                         |
+| 15         | Ablassventil öffnen           | Open drain valve             | none                         |
+| 16         | Ablassventil schließen        | Close drain valve            | none                         |
+| 17         | Entleeren & Beenden           | Drain and finish             | none                         |
+| 20         | Signalton                     | Signal tone                  | count, duration (ms)         |
+| 25         | Warten Solltemperatur °C      | Wait for target temperature  | temperature (°C)             |
+| 27         | Waage, Gewicht                | Scale, weight target         | weight (g)                   |
+| 28         | Eco-Modus aktivieren          | Activate ECO mode            | none                         |
+| 29         | Brühdruckbegrenzung           | Brew pressure limit          | pressure (bar)               |
+| 30         | Begrenzung Flussrate          | Flow rate limit              | rate (ml/s)                  |
+| 31         | Solltemperatur wiederherstellen | Restore target temperature  | none                         |
+
+A script can contain multiple weight target commands (command 27), for example a preinfusion target and a final brew target.
 
 ---
 

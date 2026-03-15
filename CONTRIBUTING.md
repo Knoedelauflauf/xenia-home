@@ -142,4 +142,3 @@ Use sentence case for all labels and messages.
 - [ ] New entities have translations in both `strings.json` and `de.json`
 - [ ] New API methods use `ClientTimeout`
 - [ ] No `assert coordinator.config_entry is not None` — use coordinator class attribute typing instead
-- [ ] `CHANGELOG.md` updated under a new version heading
