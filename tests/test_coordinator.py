@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
+from custom_components.xenia_home.const import (
+    CONF_POLL_ACTIVE,
+    CONF_POLL_BREWING,
+    CONF_POLL_IDLE,
+    CONF_POLL_READY,
+    CONF_READY_THRESHOLD,
+)
 from custom_components.xenia_home.coordinator import (
     BUILTIN_SCRIPTS,
     XeniaConfigCoordinator,
@@ -16,6 +24,7 @@ from custom_components.xenia_home.coordinator import (
     XeniaRuntimeData,
 )
 from custom_components.xenia_home.xenia import (
+    MachineStatus,
     XeniaMachineData,
     XeniaOverviewData,
     XeniaOverviewSingleData,
@@ -478,3 +487,205 @@ async def test_config_coordinator_handles_managed_script_read_failure() -> None:
     assert isinstance(result, XeniaConfigData)
     assert result.managed_script_instruction is None
     assert result.machine is not None
+
+
+# ===========================================================================
+# Dynamic polling intervals
+# ===========================================================================
+
+
+def _make_data_coordinator(
+    overview_dict: dict | None = None,
+    overview_single_dict: dict | None = None,
+    **options,
+) -> XeniaDataUpdateCoordinator:
+    """Build a XeniaDataUpdateCoordinator with mocked internals."""
+    hass = _make_hass()
+    entry = _make_config_entry(**options)
+    xenia = _make_xenia_mock()
+
+    if overview_dict is not None:
+        xenia.get_overview = AsyncMock(
+            return_value=XeniaOverviewData.from_dict(overview_dict)
+        )
+    if overview_single_dict is not None:
+        xenia.get_overview_single = AsyncMock(
+            return_value=XeniaOverviewSingleData.from_dict(overview_single_dict)
+        )
+
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
+        coordinator = XeniaDataUpdateCoordinator(hass, entry, xenia)
+        coordinator.update_interval = timedelta(seconds=1)
+
+    return coordinator
+
+
+@pytest.mark.asyncio
+async def test_polling_interval_brewing_state() -> None:
+    """Brewing status should use the brewing interval."""
+    coordinator = _make_data_coordinator(
+        overview_dict={"MA_STATUS": MachineStatus.BREWING},
+    )
+    await coordinator._async_update_data()
+    assert coordinator.update_interval == timedelta(seconds=1)
+
+
+@pytest.mark.asyncio
+async def test_polling_interval_draining_state() -> None:
+    """Draining status should use the brewing interval."""
+    coordinator = _make_data_coordinator(
+        overview_dict={"MA_STATUS": MachineStatus.DRAINING},
+    )
+    await coordinator._async_update_data()
+    assert coordinator.update_interval == timedelta(seconds=1)
+
+
+@pytest.mark.asyncio
+async def test_polling_interval_idle_eco() -> None:
+    """ECO status should use the idle interval."""
+    coordinator = _make_data_coordinator(
+        overview_dict={"MA_STATUS": MachineStatus.ECO},
+    )
+    await coordinator._async_update_data()
+    assert coordinator.update_interval == timedelta(seconds=1)
+
+
+@pytest.mark.asyncio
+async def test_polling_interval_idle_off() -> None:
+    """OFF status should use the idle interval."""
+    coordinator = _make_data_coordinator(
+        overview_dict={"MA_STATUS": MachineStatus.OFF},
+    )
+    await coordinator._async_update_data()
+    assert coordinator.update_interval == timedelta(seconds=1)
+
+
+@pytest.mark.asyncio
+async def test_polling_interval_ready_when_temps_within_threshold() -> None:
+    """ON with temps within threshold should use the ready interval."""
+    coordinator = _make_data_coordinator(
+        overview_dict={
+            "MA_STATUS": MachineStatus.ON,
+            "BG_SENS_TEMP_A": 93.0,
+            "BB_SENS_TEMP_A": 130.0,
+        },
+        overview_single_dict={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
+    )
+    await coordinator._async_update_data()
+    assert coordinator.update_interval == timedelta(seconds=1)
+
+
+@pytest.mark.asyncio
+async def test_polling_interval_active_when_temps_outside_threshold() -> None:
+    """ON with temps outside threshold should use the active interval."""
+    coordinator = _make_data_coordinator(
+        overview_dict={
+            "MA_STATUS": MachineStatus.ON,
+            "BG_SENS_TEMP_A": 50.0,
+            "BB_SENS_TEMP_A": 100.0,
+        },
+        overview_single_dict={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
+    )
+    await coordinator._async_update_data()
+    assert coordinator.update_interval == timedelta(seconds=1)
+
+
+@pytest.mark.asyncio
+async def test_polling_interval_custom_brewing() -> None:
+    """Custom brewing interval from options should be used."""
+    coordinator = _make_data_coordinator(
+        overview_dict={"MA_STATUS": MachineStatus.BREWING},
+        **{CONF_POLL_BREWING: 0.5},
+    )
+    await coordinator._async_update_data()
+    assert coordinator.update_interval == timedelta(seconds=0.5)
+
+
+@pytest.mark.asyncio
+async def test_polling_interval_custom_idle() -> None:
+    """Custom idle interval from options should be used."""
+    coordinator = _make_data_coordinator(
+        overview_dict={"MA_STATUS": MachineStatus.ECO},
+        **{CONF_POLL_IDLE: 10.0},
+    )
+    await coordinator._async_update_data()
+    assert coordinator.update_interval == timedelta(seconds=10.0)
+
+
+@pytest.mark.asyncio
+async def test_polling_interval_custom_ready() -> None:
+    """Custom ready interval from options should be used."""
+    coordinator = _make_data_coordinator(
+        overview_dict={
+            "MA_STATUS": MachineStatus.ON,
+            "BG_SENS_TEMP_A": 93.0,
+            "BB_SENS_TEMP_A": 130.0,
+        },
+        overview_single_dict={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
+        **{CONF_POLL_READY: 5.0},
+    )
+    await coordinator._async_update_data()
+    assert coordinator.update_interval == timedelta(seconds=5.0)
+
+
+@pytest.mark.asyncio
+async def test_polling_interval_custom_active() -> None:
+    """Custom active interval from options should be used."""
+    coordinator = _make_data_coordinator(
+        overview_dict={
+            "MA_STATUS": MachineStatus.ON,
+            "BG_SENS_TEMP_A": 50.0,
+            "BB_SENS_TEMP_A": 100.0,
+        },
+        overview_single_dict={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
+        **{CONF_POLL_ACTIVE: 3.0},
+    )
+    await coordinator._async_update_data()
+    assert coordinator.update_interval == timedelta(seconds=3.0)
+
+
+@pytest.mark.asyncio
+async def test_polling_interval_custom_threshold() -> None:
+    """Custom threshold should affect ready vs active classification."""
+    # With default threshold (2.0) this would be active, but with 50.0 it should be ready
+    coordinator = _make_data_coordinator(
+        overview_dict={
+            "MA_STATUS": MachineStatus.ON,
+            "BG_SENS_TEMP_A": 50.0,
+            "BB_SENS_TEMP_A": 100.0,
+        },
+        overview_single_dict={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
+        **{CONF_READY_THRESHOLD: 50.0, CONF_POLL_READY: 5.0, CONF_POLL_ACTIVE: 2.0},
+    )
+    await coordinator._async_update_data()
+    assert coordinator.update_interval == timedelta(seconds=5.0)
+
+
+@pytest.mark.asyncio
+async def test_polling_interval_unknown_status_uses_idle() -> None:
+    """UNKNOWN status should use the idle interval."""
+    coordinator = _make_data_coordinator(
+        overview_dict={"MA_STATUS": MachineStatus.UNKNOWN},
+        **{CONF_POLL_IDLE: 15.0},
+    )
+    await coordinator._async_update_data()
+    assert coordinator.update_interval == timedelta(seconds=15.0)
+
+
+@pytest.mark.asyncio
+async def test_polling_interval_zero_threshold_requires_exact_match() -> None:
+    """Threshold of 0.0 means temps must match exactly for ready state."""
+    # Temps differ by 0.5 — with threshold 0 this should be active
+    coordinator = _make_data_coordinator(
+        overview_dict={
+            "MA_STATUS": MachineStatus.ON,
+            "BG_SENS_TEMP_A": 93.0,
+            "BB_SENS_TEMP_A": 130.0,
+        },
+        overview_single_dict={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
+        **{CONF_READY_THRESHOLD: 0.0, CONF_POLL_READY: 5.0, CONF_POLL_ACTIVE: 2.0},
+    )
+    await coordinator._async_update_data()
+    assert coordinator.update_interval == timedelta(seconds=2.0)

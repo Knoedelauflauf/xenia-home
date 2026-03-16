@@ -12,12 +12,23 @@ from custom_components.xenia_home.config_flow import (
     XeniaOptionsFlow,
 )
 from custom_components.xenia_home.const import (
+    CONF_CONFIGURE_POLLING,
     CONF_MANAGED_SCRIPT_ID,
+    CONF_POLL_ACTIVE,
+    CONF_POLL_BREWING,
+    CONF_POLL_IDLE,
+    CONF_POLL_READY,
+    CONF_READY_THRESHOLD,
     CONF_WEIGHT_MANAGEMENT_ENABLED,
     CONF_WEIGHT_MAX,
     CONF_WEIGHT_MIN,
     CONF_WEIGHT_STEP,
     DEFAULT_HOST,
+    DEFAULT_POLL_ACTIVE,
+    DEFAULT_POLL_BREWING,
+    DEFAULT_POLL_IDLE,
+    DEFAULT_POLL_READY,
+    DEFAULT_READY_THRESHOLD,
     DEFAULT_SCRIPT_NAME,
     DEFAULT_WEIGHT_MAX,
     DEFAULT_WEIGHT_MIN,
@@ -515,7 +526,12 @@ async def test_options_init_disabling_creates_entry_with_disabled() -> None:
             CONF_MANAGED_SCRIPT_ID: 17,
         }
     )
-    await flow.async_step_init(user_input={CONF_WEIGHT_MANAGEMENT_ENABLED: False})
+    await flow.async_step_init(
+        user_input={
+            CONF_WEIGHT_MANAGEMENT_ENABLED: False,
+            CONF_CONFIGURE_POLLING: False,
+        }
+    )
     flow.async_create_entry.assert_called_once()
     entry_data = flow.async_create_entry.call_args[1]["data"]
     assert entry_data[CONF_WEIGHT_MANAGEMENT_ENABLED] is False
@@ -532,7 +548,12 @@ async def test_options_init_enabling_proceeds_to_script_selection() -> None:
         new_callable=AsyncMock,
         return_value={"type": "form"},
     ) as mock_select:
-        await flow.async_step_init(user_input={CONF_WEIGHT_MANAGEMENT_ENABLED: True})
+        await flow.async_step_init(
+            user_input={
+                CONF_WEIGHT_MANAGEMENT_ENABLED: True,
+                CONF_CONFIGURE_POLLING: False,
+            }
+        )
     mock_select.assert_called_once()
 
 
@@ -769,7 +790,12 @@ async def test_options_full_flow_init_to_configure_weight() -> None:
         ),
     ):
         # Step 1: enable weight management
-        await flow.async_step_init(user_input={CONF_WEIGHT_MANAGEMENT_ENABLED: True})
+        await flow.async_step_init(
+            user_input={
+                CONF_WEIGHT_MANAGEMENT_ENABLED: True,
+                CONF_CONFIGURE_POLLING: False,
+            }
+        )
         # Step 2: select a script (shows configure_weight form)
         await flow.async_step_select_script(user_input={CONF_MANAGED_SCRIPT_ID: "10"})
     # Step 3: configure weight
@@ -784,3 +810,328 @@ async def test_options_full_flow_init_to_configure_weight() -> None:
     entry_data = flow.async_create_entry.call_args[1]["data"]
     assert entry_data[CONF_MANAGED_SCRIPT_ID] == 10
     assert entry_data[CONF_WEIGHT_MIN] == 25.0
+    # Polling keys should not be present
+    assert CONF_POLL_BREWING not in entry_data
+
+
+# ===========================================================================
+# XeniaOptionsFlow — init shows configure_polling field
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_options_init_shows_configure_polling_field() -> None:
+    flow = _make_options_flow()
+    await flow.async_step_init(user_input=None)
+    flow.async_show_form.assert_called_once()
+    schema = flow.async_show_form.call_args[1]["data_schema"]
+    schema_keys = [str(k) for k in schema.schema]
+    assert CONF_CONFIGURE_POLLING in schema_keys
+
+
+@pytest.mark.asyncio
+async def test_options_init_polling_default_true_when_polling_options_exist() -> None:
+    """If polling options already exist, the toggle defaults to True."""
+    flow = _make_options_flow(current_options={CONF_POLL_BREWING: 2.0})
+    await flow.async_step_init(user_input=None)
+    schema = flow.async_show_form.call_args[1]["data_schema"]
+    for key in schema.schema:
+        if str(key) == CONF_CONFIGURE_POLLING:
+            assert key.default() is True
+
+
+# ===========================================================================
+# XeniaOptionsFlow — configure_polling=False skips polling step
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_options_init_polling_false_skips_polling_step() -> None:
+    """When both weight and polling are disabled, entry is created directly."""
+    flow = _make_options_flow()
+    await flow.async_step_init(
+        user_input={
+            CONF_WEIGHT_MANAGEMENT_ENABLED: False,
+            CONF_CONFIGURE_POLLING: False,
+        }
+    )
+    flow.async_create_entry.assert_called_once()
+
+
+# ===========================================================================
+# XeniaOptionsFlow — configure_polling=True shows polling form
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_options_init_polling_true_without_weight_shows_polling_form() -> None:
+    """Disable weight + enable polling → go to polling step."""
+    flow = _make_options_flow()
+    await flow.async_step_init(
+        user_input={CONF_WEIGHT_MANAGEMENT_ENABLED: False, CONF_CONFIGURE_POLLING: True}
+    )
+    # Should show the configure_polling form (not create entry)
+    flow.async_create_entry.assert_not_called()
+    flow.async_show_form.assert_called_once()
+    assert flow.async_show_form.call_args[1]["step_id"] == "configure_polling"
+
+
+# ===========================================================================
+# XeniaOptionsFlow — async_step_configure_polling
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_options_configure_polling_shows_form_when_no_input() -> None:
+    flow = _make_options_flow()
+    flow._configure_polling = True
+    await flow.async_step_configure_polling(user_input=None)
+    flow.async_show_form.assert_called_once()
+    assert flow.async_show_form.call_args[1]["step_id"] == "configure_polling"
+
+
+@pytest.mark.asyncio
+async def test_options_configure_polling_uses_defaults() -> None:
+    flow = _make_options_flow()
+    await flow.async_step_configure_polling(user_input=None)
+    schema = flow.async_show_form.call_args[1]["data_schema"]
+    for key in schema.schema:
+        match str(key):
+            case "poll_interval_brewing":
+                assert key.default() == DEFAULT_POLL_BREWING
+            case "poll_interval_active":
+                assert key.default() == DEFAULT_POLL_ACTIVE
+            case "poll_interval_ready":
+                assert key.default() == DEFAULT_POLL_READY
+            case "poll_interval_idle":
+                assert key.default() == DEFAULT_POLL_IDLE
+            case "ready_threshold":
+                assert key.default() == DEFAULT_READY_THRESHOLD
+
+
+@pytest.mark.asyncio
+async def test_options_configure_polling_pre_populates_from_existing() -> None:
+    flow = _make_options_flow(
+        current_options={
+            CONF_POLL_BREWING: 0.5,
+            CONF_POLL_ACTIVE: 2.0,
+            CONF_POLL_READY: 5.0,
+            CONF_POLL_IDLE: 10.0,
+            CONF_READY_THRESHOLD: 3.0,
+        }
+    )
+    await flow.async_step_configure_polling(user_input=None)
+    schema = flow.async_show_form.call_args[1]["data_schema"]
+    for key in schema.schema:
+        match str(key):
+            case "poll_interval_brewing":
+                assert key.default() == 0.5
+            case "poll_interval_active":
+                assert key.default() == 2.0
+            case "poll_interval_ready":
+                assert key.default() == 5.0
+            case "poll_interval_idle":
+                assert key.default() == 10.0
+            case "ready_threshold":
+                assert key.default() == 3.0
+
+
+@pytest.mark.asyncio
+async def test_options_configure_polling_creates_entry_with_values() -> None:
+    flow = _make_options_flow()
+    flow._weight_data = {
+        CONF_WEIGHT_MANAGEMENT_ENABLED: False,
+        CONF_MANAGED_SCRIPT_ID: None,
+    }
+    await flow.async_step_configure_polling(
+        user_input={
+            CONF_POLL_BREWING: 0.5,
+            CONF_POLL_ACTIVE: 2.0,
+            CONF_POLL_READY: 5.0,
+            CONF_POLL_IDLE: 10.0,
+            CONF_READY_THRESHOLD: 3.0,
+        }
+    )
+    flow.async_create_entry.assert_called_once()
+    entry_data = flow.async_create_entry.call_args[1]["data"]
+    assert entry_data[CONF_POLL_BREWING] == 0.5
+    assert entry_data[CONF_POLL_ACTIVE] == 2.0
+    assert entry_data[CONF_POLL_READY] == 5.0
+    assert entry_data[CONF_POLL_IDLE] == 10.0
+    assert entry_data[CONF_READY_THRESHOLD] == 3.0
+
+
+@pytest.mark.asyncio
+async def test_options_configure_polling_strips_old_polling_when_disabled() -> None:
+    """Disabling polling should remove polling keys from options."""
+    flow = _make_options_flow(
+        current_options={
+            CONF_POLL_BREWING: 0.5,
+            CONF_POLL_ACTIVE: 2.0,
+            CONF_POLL_READY: 5.0,
+            CONF_POLL_IDLE: 10.0,
+            CONF_READY_THRESHOLD: 3.0,
+        }
+    )
+    await flow.async_step_init(
+        user_input={
+            CONF_WEIGHT_MANAGEMENT_ENABLED: False,
+            CONF_CONFIGURE_POLLING: False,
+        }
+    )
+    flow.async_create_entry.assert_called_once()
+    entry_data = flow.async_create_entry.call_args[1]["data"]
+    assert CONF_POLL_BREWING not in entry_data
+    assert CONF_POLL_ACTIVE not in entry_data
+    assert CONF_POLL_READY not in entry_data
+    assert CONF_POLL_IDLE not in entry_data
+    assert CONF_READY_THRESHOLD not in entry_data
+
+
+# ===========================================================================
+# Full flow: weight + polling → all steps
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_options_full_flow_weight_and_polling() -> None:
+    """End-to-end: weight + polling → all steps in sequence."""
+    flow = _make_options_flow()
+    mock_xenia = MagicMock()
+    mock_xenia.get_scripts = AsyncMock(return_value={10: "Shot"})
+    mock_xenia.read_script = AsyncMock(
+        return_value={"Content": "1;13;27 45;7;", "Title": "Shot"}
+    )
+    with (
+        patch(
+            "custom_components.xenia_home.config_flow.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.xenia_home.config_flow.Xenia",
+            return_value=mock_xenia,
+        ),
+    ):
+        # Step 1: enable both
+        await flow.async_step_init(
+            user_input={
+                CONF_WEIGHT_MANAGEMENT_ENABLED: True,
+                CONF_CONFIGURE_POLLING: True,
+            }
+        )
+        # Step 2: select script
+        await flow.async_step_select_script(user_input={CONF_MANAGED_SCRIPT_ID: "10"})
+    # Step 3: configure weight (should NOT create entry, should go to polling)
+    await flow.async_step_configure_weight(
+        user_input={
+            CONF_WEIGHT_MIN: 25.0,
+            CONF_WEIGHT_MAX: 50.0,
+            CONF_WEIGHT_STEP: 0.5,
+        }
+    )
+    # Should show polling form, not create entry yet
+    flow.async_create_entry.assert_not_called()
+    flow.async_show_form.assert_called()
+    assert flow.async_show_form.call_args[1]["step_id"] == "configure_polling"
+
+    # Step 4: configure polling
+    flow.async_show_form.reset_mock()
+    await flow.async_step_configure_polling(
+        user_input={
+            CONF_POLL_BREWING: 0.5,
+            CONF_POLL_ACTIVE: 2.0,
+            CONF_POLL_READY: 5.0,
+            CONF_POLL_IDLE: 10.0,
+            CONF_READY_THRESHOLD: 3.0,
+        }
+    )
+    flow.async_create_entry.assert_called_once()
+    entry_data = flow.async_create_entry.call_args[1]["data"]
+    assert entry_data[CONF_MANAGED_SCRIPT_ID] == 10
+    assert entry_data[CONF_WEIGHT_MIN] == 25.0
+    assert entry_data[CONF_POLL_BREWING] == 0.5
+    assert entry_data[CONF_READY_THRESHOLD] == 3.0
+
+
+# ===========================================================================
+# XeniaOptionsFlow — polling keys stripped when weight on + polling off
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_options_weight_on_polling_off_strips_polling_keys() -> None:
+    """Weight enabled + polling disabled should strip existing polling keys."""
+    flow = _make_options_flow(
+        current_options={
+            CONF_POLL_BREWING: 0.5,
+            CONF_POLL_IDLE: 10.0,
+        }
+    )
+    mock_xenia = MagicMock()
+    mock_xenia.get_scripts = AsyncMock(return_value={10: "Shot"})
+    mock_xenia.read_script = AsyncMock(
+        return_value={"Content": "1;13;27 45;7;", "Title": "Shot"}
+    )
+    with (
+        patch(
+            "custom_components.xenia_home.config_flow.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.xenia_home.config_flow.Xenia",
+            return_value=mock_xenia,
+        ),
+    ):
+        await flow.async_step_init(
+            user_input={
+                CONF_WEIGHT_MANAGEMENT_ENABLED: True,
+                CONF_CONFIGURE_POLLING: False,
+            }
+        )
+        await flow.async_step_select_script(user_input={CONF_MANAGED_SCRIPT_ID: "10"})
+    await flow.async_step_configure_weight(
+        user_input={
+            CONF_WEIGHT_MIN: 25.0,
+            CONF_WEIGHT_MAX: 50.0,
+            CONF_WEIGHT_STEP: 0.5,
+        }
+    )
+    flow.async_create_entry.assert_called_once()
+    entry_data = flow.async_create_entry.call_args[1]["data"]
+    assert entry_data[CONF_WEIGHT_MANAGEMENT_ENABLED] is True
+    assert CONF_POLL_BREWING not in entry_data
+    assert CONF_POLL_IDLE not in entry_data
+
+
+# ===========================================================================
+# XeniaOptionsFlow — partial script read failure
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_options_select_script_skips_unreadable_scripts() -> None:
+    """If one script read fails, the others should still appear."""
+    flow = _make_options_flow()
+    mock_xenia = MagicMock()
+    mock_xenia.get_scripts = AsyncMock(return_value={10: "Readable", 20: "Unreadable"})
+    mock_xenia.read_script = AsyncMock(
+        side_effect=lambda sid: (
+            {"Content": "1;13;27 45;7;", "Title": "Readable"}
+            if sid == 10
+            else (_ for _ in ()).throw(OSError("connection refused"))
+        )
+    )
+    with (
+        patch(
+            "custom_components.xenia_home.config_flow.async_get_clientsession",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "custom_components.xenia_home.config_flow.Xenia",
+            return_value=mock_xenia,
+        ),
+    ):
+        await flow.async_step_select_script(user_input=None)
+
+    flow.async_show_form.assert_called_once()
+    assert flow.async_show_form.call_args[1]["step_id"] == "select_script"

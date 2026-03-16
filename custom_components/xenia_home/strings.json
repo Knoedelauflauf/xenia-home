@@ -44,9 +44,10 @@
   "options": {
     "step": {
       "init": {
-        "title": "Xenia Weight Management",
+        "title": "Xenia options",
         "data": {
-          "weight_management_enabled": "Enable weight management"
+          "weight_management_enabled": "Enable weight management",
+          "configure_polling": "Configure polling intervals (advanced)"
         }
       },
       "select_script": {
@@ -63,6 +64,17 @@
           "weight_min": "Minimum weight (g)",
           "weight_max": "Maximum weight (g)",
           "weight_step": "Step size (g)"
+        }
+      },
+      "configure_polling": {
+        "title": "Polling intervals",
+        "description": "Configure how often your machine is polled in each state (in seconds). The brewing interval also determines the resolution of your shot tracking data.",
+        "data": {
+          "poll_interval_brewing": "Brewing",
+          "poll_interval_active": "Heating up",
+          "poll_interval_ready": "Ready",
+          "poll_interval_idle": "Idle (eco/off)",
+          "ready_threshold": "Ready temperature threshold (\u00b0C)"
         }
       }
     },

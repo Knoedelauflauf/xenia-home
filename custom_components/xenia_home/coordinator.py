@@ -8,8 +8,27 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import CONF_MANAGED_SCRIPT_ID, CONF_WEIGHT_MANAGEMENT_ENABLED
-from .xenia import Xenia, XeniaMachineData, XeniaOverviewData, XeniaOverviewSingleData
+from .const import (
+    CONF_MANAGED_SCRIPT_ID,
+    CONF_POLL_ACTIVE,
+    CONF_POLL_BREWING,
+    CONF_POLL_IDLE,
+    CONF_POLL_READY,
+    CONF_READY_THRESHOLD,
+    CONF_WEIGHT_MANAGEMENT_ENABLED,
+    DEFAULT_POLL_ACTIVE,
+    DEFAULT_POLL_BREWING,
+    DEFAULT_POLL_IDLE,
+    DEFAULT_POLL_READY,
+    DEFAULT_READY_THRESHOLD,
+)
+from .xenia import (
+    MachineStatus,
+    Xenia,
+    XeniaMachineData,
+    XeniaOverviewData,
+    XeniaOverviewSingleData,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -72,13 +91,50 @@ class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
             config_entry=config_entry,
         )
         self.xenia = xenia
+        opts = config_entry.options
+        self._interval_brewing = timedelta(
+            seconds=opts.get(CONF_POLL_BREWING, DEFAULT_POLL_BREWING)
+        )
+        self._interval_active = timedelta(
+            seconds=opts.get(CONF_POLL_ACTIVE, DEFAULT_POLL_ACTIVE)
+        )
+        self._interval_ready = timedelta(
+            seconds=opts.get(CONF_POLL_READY, DEFAULT_POLL_READY)
+        )
+        self._interval_idle = timedelta(
+            seconds=opts.get(CONF_POLL_IDLE, DEFAULT_POLL_IDLE)
+        )
+        self._ready_threshold: float = opts.get(
+            CONF_READY_THRESHOLD, DEFAULT_READY_THRESHOLD
+        )
 
     async def _async_update_data(self) -> XeniaCoordinatorData:
+        """Fetch data and adjust the polling interval based on machine state."""
         try:
             overview = await self.xenia.get_overview()
             overview_single = await self.xenia.get_overview_single()
         except (ClientError, OSError, TimeoutError) as err:
             raise UpdateFailed(f"Xenia fetch failed: {err}") from err
+
+        match overview.ma_status:
+            case MachineStatus.BREWING | MachineStatus.DRAINING:
+                self.update_interval = self._interval_brewing
+            case MachineStatus.ON:
+                bg_ready = (
+                    abs(overview.bg_sens_temp_a - overview_single.bg_set_temp)
+                    <= self._ready_threshold
+                )
+                bb_ready = (
+                    abs(overview.bb_sens_temp_a - overview_single.bb_set_temp)
+                    <= self._ready_threshold
+                )
+                if bg_ready and bb_ready:
+                    self.update_interval = self._interval_ready
+                else:
+                    self.update_interval = self._interval_active
+            case _:
+                self.update_interval = self._interval_idle
+
         return XeniaCoordinatorData(overview, overview_single)
 
 
@@ -106,6 +162,7 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
         self.xenia = xenia
 
     async def _async_update_data(self) -> XeniaConfigData:
+        """Fetch config data: machine info, scripts, switches, and managed script."""
         try:
             machine = await self.xenia.get_machine()
             user_scripts = await self.xenia.get_scripts()
