@@ -1,3 +1,5 @@
+# Standalone dev setup for the Xenia Espresso integration.
+
 services:
   homeassistant:
     image: ghcr.io/home-assistant/home-assistant:dev
@@ -6,4 +8,5 @@ services:
       - ./config:/config
       - ./custom_components/xenia_home:/config/custom_components/xenia_home:ro
     network_mode: host
-    restart: unless-stopped
+    environment:
+      - TZ=Europe/Berlin
