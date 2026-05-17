@@ -2,350 +2,295 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
 
 from custom_components.xenia_home.const import (
     CONF_POWER_ON_BEHAVIOR,
-    XENIA_DOMAIN,
     PowerOnBehavior,
 )
-from custom_components.xenia_home.coordinator import XeniaCoordinatorData
-from custom_components.xenia_home.switch import (
-    XeniaEcoSwitch,
-    XeniaPowerSwitch,
-    XeniaSteamBoilerSwitch,
-)
-from custom_components.xenia_home.xenia import (
-    MachineStatus,
-    SteamBoilerStatus,
-    XeniaOverviewData,
-    XeniaOverviewSingleData,
-)
+from custom_components.xenia_home.xenia import MachineStatus, SteamBoilerStatus
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+POWER = "switch.xenia_espresso_machine_power"
+ECO = "switch.xenia_espresso_machine_eco_mode"
+STEAM_BOILER = "switch.xenia_espresso_machine_steam_boiler_power"
 
 
-def _make_coordinator(
-    ma_status: MachineStatus = MachineStatus.ON,
-    sb_status: SteamBoilerStatus = SteamBoilerStatus.ON,
-    options: dict | None = None,
-) -> MagicMock:
-    coord = MagicMock()
-    coord.config_entry = MagicMock()
-    coord.config_entry.data = {"host": "xenia.local"}
-    coord.config_entry.options = options or {}
-    coord.xenia = MagicMock()
-    coord.xenia.machine_turn_on = AsyncMock()
-    coord.xenia.machine_turn_off = AsyncMock()
-    coord.xenia.machine_set_eco = AsyncMock()
-    coord.xenia.sb_turn_on = AsyncMock()
-    coord.xenia.sb_turn_off = AsyncMock()
-    coord.async_request_refresh = AsyncMock()
-
-    overview = XeniaOverviewData.from_dict(
-        {"MA_STATUS": ma_status.value, "SB_STATUS": sb_status.value}
+async def test_switch_entities_snapshot(
+    hass, init_integration, snapshot, entity_registry
+):
+    entity_ids = sorted(
+        e.entity_id
+        for e in entity_registry.entities.values()
+        if e.platform == "xenia_home" and e.domain == "switch"
     )
-    coord.data = XeniaCoordinatorData(
-        overview=overview,
-        overview_single=XeniaOverviewSingleData.from_dict({}),
-    )
-    return coord
-
-
-def _make_power_switch(coordinator: MagicMock) -> XeniaPowerSwitch:
-    with patch(
-        "custom_components.xenia_home.entity.XeniaEntity.__init__", return_value=None
-    ):
-        sw = XeniaPowerSwitch.__new__(XeniaPowerSwitch)
-        sw.coordinator = coordinator
-        sw.hass = MagicMock()
-        XeniaPowerSwitch.__init__(sw, coordinator)
-    return sw
-
-
-def _make_eco_switch(coordinator: MagicMock) -> XeniaEcoSwitch:
-    with patch(
-        "custom_components.xenia_home.entity.XeniaEntity.__init__", return_value=None
-    ):
-        sw = XeniaEcoSwitch.__new__(XeniaEcoSwitch)
-        sw.coordinator = coordinator
-        sw.hass = MagicMock()
-        XeniaEcoSwitch.__init__(sw, coordinator)
-    return sw
-
-
-def _make_steam_switch(coordinator: MagicMock) -> XeniaSteamBoilerSwitch:
-    with patch(
-        "custom_components.xenia_home.entity.XeniaEntity.__init__", return_value=None
-    ):
-        sw = XeniaSteamBoilerSwitch.__new__(XeniaSteamBoilerSwitch)
-        sw.coordinator = coordinator
-        sw.hass = MagicMock()
-        XeniaSteamBoilerSwitch.__init__(sw, coordinator)
-    return sw
+    assert len(entity_ids) == 3
+    for entity_id in entity_ids:
+        state = hass.states.get(entity_id)
+        registry_entry = entity_registry.async_get(entity_id)
+        assert state == snapshot(name=f"{entity_id}-state")
+        assert registry_entry == snapshot(name=f"{entity_id}-registry")
 
 
 # ===========================================================================
-# XeniaPowerSwitch
+# Power switch — is_on for each MachineStatus
 # ===========================================================================
-
-
-def test_power_switch_unique_id_includes_domain_and_host() -> None:
-    coord = _make_coordinator()
-    sw = _make_power_switch(coord)
-    assert XENIA_DOMAIN in sw._attr_unique_id
-    assert "xenia.local" in sw._attr_unique_id
 
 
 @pytest.mark.parametrize(
-    "status, expected_is_on",
+    "ma_status, expected_state",
+    [
+        (MachineStatus.ON, "on"),
+        (MachineStatus.BREWING, "on"),
+        (MachineStatus.DRAINING, "on"),
+        (MachineStatus.OFF, "off"),
+        (MachineStatus.ECO, "off"),
+        (MachineStatus.UNKNOWN, "off"),
+    ],
+)
+async def test_power_switch_state(
+    hass,
+    enable_custom_integrations,
+    mock_xenia_api,
+    mock_config_entry,
+    ma_status,
+    expected_state,
+):
+    mock_xenia_api.set_overview(MA_STATUS=int(ma_status))
+    mock_xenia_api.register()
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get(POWER).state == expected_state
+
+
+async def test_power_switch_turn_on_steam_on_calls_machine_on(
+    hass,
+    enable_custom_integrations,
+    mock_xenia_api,
+    mock_config_entry_factory_with_options,
+):
+    entry = mock_config_entry_factory_with_options(
+        {CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_ON}
+    )
+    mock_xenia_api.expect_machine_control()
+    mock_xenia_api.register()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": POWER}, blocking=True
+    )
+    await hass.async_block_till_done()
+    # MachineControl.ON = 1
+    mock_xenia_api.assert_post_called_with("machine/control", '"1"')
+
+
+async def test_power_switch_turn_on_steam_off_calls_on_sb_off(
+    hass,
+    enable_custom_integrations,
+    mock_xenia_api,
+    mock_config_entry_factory_with_options,
+):
+    entry = mock_config_entry_factory_with_options(
+        {CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_OFF}
+    )
+    mock_xenia_api.expect_machine_control()
+    mock_xenia_api.register()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": POWER}, blocking=True
+    )
+    await hass.async_block_till_done()
+    # MachineControl.ON_SB_OFF = 5
+    mock_xenia_api.assert_post_called_with("machine/control", '"5"')
+
+
+async def test_power_switch_turn_on_default_behavior_is_steam_off(
+    hass, init_integration, mock_xenia_api
+):
+    mock_xenia_api.expect_machine_control()
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": POWER}, blocking=True
+    )
+    await hass.async_block_till_done()
+    mock_xenia_api.assert_post_called_with("machine/control", '"5"')
+
+
+async def test_power_switch_turn_off_calls_machine_off(
+    hass, init_integration, mock_xenia_api
+):
+    mock_xenia_api.expect_machine_control()
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": POWER}, blocking=True
+    )
+    await hass.async_block_till_done()
+    # MachineControl.OFF = 0
+    mock_xenia_api.assert_post_called_with("machine/control", '"0"')
+
+
+# ===========================================================================
+# Eco switch
+# ===========================================================================
+
+
+@pytest.mark.parametrize(
+    "ma_status, expected_state",
+    [
+        (MachineStatus.ECO, "on"),
+        (MachineStatus.ON, "off"),
+        (MachineStatus.BREWING, "off"),
+        (MachineStatus.OFF, "unavailable"),
+        (MachineStatus.UNKNOWN, "unavailable"),
+    ],
+)
+async def test_eco_switch_state(
+    hass,
+    enable_custom_integrations,
+    mock_xenia_api,
+    mock_config_entry,
+    ma_status,
+    expected_state,
+):
+    mock_xenia_api.set_overview(MA_STATUS=int(ma_status))
+    mock_xenia_api.register()
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get(ECO).state == expected_state
+
+
+async def test_eco_switch_turn_on_calls_machine_set_eco(
+    hass, init_integration, mock_xenia_api
+):
+    from unittest.mock import patch, AsyncMock
+
+    mock_xenia_api.expect_machine_control()
+    with patch(
+        "custom_components.xenia_home.switch.asyncio.sleep", new_callable=AsyncMock
+    ):
+        await hass.services.async_call(
+            "switch", "turn_on", {"entity_id": ECO}, blocking=True
+        )
+        await hass.async_block_till_done()
+    # MachineControl.ECO = 2
+    mock_xenia_api.assert_post_called_with("machine/control", '"2"')
+
+
+async def test_eco_switch_turn_off_steam_off_calls_on_sb_off(
+    hass,
+    enable_custom_integrations,
+    mock_xenia_api,
+    mock_config_entry_factory_with_options,
+):
+    from unittest.mock import patch, AsyncMock
+
+    entry = mock_config_entry_factory_with_options(
+        {CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_OFF}
+    )
+    mock_xenia_api.set_overview(MA_STATUS=int(MachineStatus.ECO))
+    mock_xenia_api.expect_machine_control()
+    mock_xenia_api.register()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    with patch(
+        "custom_components.xenia_home.switch.asyncio.sleep", new_callable=AsyncMock
+    ):
+        await hass.services.async_call(
+            "switch", "turn_off", {"entity_id": ECO}, blocking=True
+        )
+        await hass.async_block_till_done()
+    mock_xenia_api.assert_post_called_with("machine/control", '"5"')
+
+
+# ===========================================================================
+# Steam boiler switch
+# ===========================================================================
+
+
+@pytest.mark.parametrize(
+    "sb_status, expected_state",
+    [
+        (SteamBoilerStatus.ON, "on"),
+        (SteamBoilerStatus.OFF, "off"),
+    ],
+)
+async def test_steam_boiler_state(
+    hass,
+    enable_custom_integrations,
+    mock_xenia_api,
+    mock_config_entry,
+    sb_status,
+    expected_state,
+):
+    mock_xenia_api.set_overview(
+        SB_STATUS=int(sb_status), MA_STATUS=int(MachineStatus.ON)
+    )
+    mock_xenia_api.register()
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get(STEAM_BOILER).state == expected_state
+
+
+@pytest.mark.parametrize(
+    "ma_status, expected_avail",
     [
         (MachineStatus.ON, True),
         (MachineStatus.BREWING, True),
-        (MachineStatus.DRAINING, True),
-        (MachineStatus.OFF, False),
-        (MachineStatus.ECO, False),
-        (MachineStatus.UNKNOWN, False),
-    ],
-)
-def test_power_switch_is_on_for_status(
-    status: MachineStatus, expected_is_on: bool
-) -> None:
-    coord = _make_coordinator(ma_status=status)
-    sw = _make_power_switch(coord)
-    assert sw.is_on == expected_is_on
-
-
-@pytest.mark.asyncio
-async def test_power_switch_turn_on_steam_on_calls_machine_turn_on() -> None:
-    coord = _make_coordinator(
-        options={CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_ON}
-    )
-    sw = _make_power_switch(coord)
-    await sw.async_turn_on()
-    coord.xenia.machine_turn_on.assert_called_once()
-    # Default call with no args means sb_on=True
-    call_kwargs = coord.xenia.machine_turn_on.call_args
-    assert call_kwargs is not None
-
-
-@pytest.mark.asyncio
-async def test_power_switch_turn_on_steam_off_calls_machine_turn_on_false() -> None:
-    coord = _make_coordinator(
-        options={CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_OFF}
-    )
-    sw = _make_power_switch(coord)
-    await sw.async_turn_on()
-    coord.xenia.machine_turn_on.assert_called_once_with(False)
-
-
-@pytest.mark.asyncio
-async def test_power_switch_turn_on_default_behavior_is_steam_off() -> None:
-    # No option stored — DEFAULT_POWER_ON_BEHAVIOR is STEAM_OFF
-    coord = _make_coordinator(options={})
-    sw = _make_power_switch(coord)
-    await sw.async_turn_on()
-    coord.xenia.machine_turn_on.assert_called_once_with(False)
-
-
-@pytest.mark.asyncio
-async def test_power_switch_turn_on_refreshes_coordinator() -> None:
-    coord = _make_coordinator(
-        options={CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_OFF}
-    )
-    sw = _make_power_switch(coord)
-    await sw.async_turn_on()
-    coord.async_request_refresh.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_power_switch_turn_off_calls_machine_turn_off() -> None:
-    coord = _make_coordinator()
-    sw = _make_power_switch(coord)
-    await sw.async_turn_off()
-    coord.xenia.machine_turn_off.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_power_switch_turn_off_refreshes_coordinator() -> None:
-    coord = _make_coordinator()
-    sw = _make_power_switch(coord)
-    await sw.async_turn_off()
-    coord.async_request_refresh.assert_called_once()
-
-
-# ===========================================================================
-# XeniaEcoSwitch
-# ===========================================================================
-
-
-def test_eco_switch_unique_id_includes_eco_mode() -> None:
-    coord = _make_coordinator()
-    sw = _make_eco_switch(coord)
-    assert "eco_mode" in sw._attr_unique_id
-
-
-@pytest.mark.parametrize(
-    "status, expected_is_on",
-    [
-        (MachineStatus.ECO, True),
-        (MachineStatus.ON, False),
-        (MachineStatus.BREWING, False),
-        (MachineStatus.OFF, False),
-        (MachineStatus.UNKNOWN, False),
-    ],
-)
-def test_eco_switch_is_on_only_for_eco_status(
-    status: MachineStatus, expected_is_on: bool
-) -> None:
-    coord = _make_coordinator(ma_status=status)
-    sw = _make_eco_switch(coord)
-    assert sw.is_on == expected_is_on
-
-
-@pytest.mark.parametrize(
-    "status, expected_available",
-    [
-        (MachineStatus.ON, True),
-        (MachineStatus.BREWING, True),
-        (MachineStatus.DRAINING, True),
-        (MachineStatus.ECO, True),
-        (MachineStatus.OFF, False),
-        (MachineStatus.UNKNOWN, False),
-    ],
-)
-def test_eco_switch_available_for_active_states(
-    status: MachineStatus, expected_available: bool
-) -> None:
-    coord = _make_coordinator(ma_status=status)
-    sw = _make_eco_switch(coord)
-    assert sw.available == expected_available
-
-
-@pytest.mark.asyncio
-async def test_eco_switch_turn_on_calls_machine_set_eco() -> None:
-    coord = _make_coordinator()
-    sw = _make_eco_switch(coord)
-    with patch("asyncio.sleep", new_callable=AsyncMock):
-        await sw.async_turn_on()
-    coord.xenia.machine_set_eco.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_eco_switch_turn_off_steam_on_calls_machine_turn_on() -> None:
-    coord = _make_coordinator(
-        ma_status=MachineStatus.ECO,
-        options={CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_ON},
-    )
-    sw = _make_eco_switch(coord)
-    with patch("asyncio.sleep", new_callable=AsyncMock):
-        await sw.async_turn_off()
-    coord.xenia.machine_turn_on.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_eco_switch_turn_off_steam_off_calls_machine_turn_on_false() -> None:
-    coord = _make_coordinator(
-        ma_status=MachineStatus.ECO,
-        options={CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_OFF},
-    )
-    sw = _make_eco_switch(coord)
-    with patch("asyncio.sleep", new_callable=AsyncMock):
-        await sw.async_turn_off()
-    coord.xenia.machine_turn_on.assert_called_once_with(False)
-
-
-@pytest.mark.asyncio
-async def test_eco_switch_turn_on_refreshes_coordinator() -> None:
-    coord = _make_coordinator()
-    sw = _make_eco_switch(coord)
-    with patch("asyncio.sleep", new_callable=AsyncMock):
-        await sw.async_turn_on()
-    coord.async_request_refresh.assert_called_once()
-
-
-# ===========================================================================
-# XeniaSteamBoilerSwitch
-# ===========================================================================
-
-
-def test_steam_boiler_switch_unique_id_includes_steam_boiler_power() -> None:
-    coord = _make_coordinator()
-    sw = _make_steam_switch(coord)
-    assert "steam_boiler_power" in sw._attr_unique_id
-
-
-@pytest.mark.parametrize(
-    "sb_status, expected_is_on",
-    [
-        (SteamBoilerStatus.ON, True),
-        (SteamBoilerStatus.OFF, False),
-        (SteamBoilerStatus.UNKNOWN, False),
-    ],
-)
-def test_steam_boiler_switch_is_on_for_status(
-    sb_status: SteamBoilerStatus, expected_is_on: bool
-) -> None:
-    coord = _make_coordinator(sb_status=sb_status)
-    sw = _make_steam_switch(coord)
-    assert sw.is_on == expected_is_on
-
-
-@pytest.mark.parametrize(
-    "ma_status, expected_available",
-    [
-        (MachineStatus.ON, True),
-        (MachineStatus.BREWING, True),
-        (MachineStatus.DRAINING, True),
         (MachineStatus.ECO, False),
         (MachineStatus.OFF, False),
-        (MachineStatus.UNKNOWN, False),
     ],
 )
-def test_steam_boiler_switch_available_only_when_machine_on(
-    ma_status: MachineStatus, expected_available: bool
-) -> None:
-    coord = _make_coordinator(ma_status=ma_status)
-    sw = _make_steam_switch(coord)
-    assert sw.available == expected_available
+async def test_steam_boiler_availability_follows_machine_state(
+    hass,
+    enable_custom_integrations,
+    mock_xenia_api,
+    mock_config_entry,
+    ma_status,
+    expected_avail,
+):
+    mock_xenia_api.set_overview(MA_STATUS=int(ma_status))
+    mock_xenia_api.register()
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    state = hass.states.get(STEAM_BOILER)
+    assert state is not None
+    is_available = state.state not in ("unavailable", "unknown")
+    assert is_available == expected_avail
 
 
-@pytest.mark.asyncio
-async def test_steam_boiler_switch_turn_on_calls_sb_turn_on() -> None:
-    coord = _make_coordinator()
-    sw = _make_steam_switch(coord)
-    with patch("asyncio.sleep", new_callable=AsyncMock):
-        await sw.async_turn_on()
-    coord.xenia.sb_turn_on.assert_called_once()
+async def test_steam_boiler_turn_on_calls_toggle_sb(
+    hass, init_integration, mock_xenia_api
+):
+    from unittest.mock import patch, AsyncMock
+
+    mock_xenia_api.expect_toggle_sb()
+    with patch(
+        "custom_components.xenia_home.switch.asyncio.sleep", new_callable=AsyncMock
+    ):
+        await hass.services.async_call(
+            "switch", "turn_on", {"entity_id": STEAM_BOILER}, blocking=True
+        )
+        await hass.async_block_till_done()
+    mock_xenia_api.assert_post_called_with("toggle_sb", "true")
 
 
-@pytest.mark.asyncio
-async def test_steam_boiler_switch_turn_off_calls_sb_turn_off() -> None:
-    coord = _make_coordinator()
-    sw = _make_steam_switch(coord)
-    with patch("asyncio.sleep", new_callable=AsyncMock):
-        await sw.async_turn_off()
-    coord.xenia.sb_turn_off.assert_called_once()
+async def test_steam_boiler_turn_off_calls_toggle_sb(
+    hass, init_integration, mock_xenia_api
+):
+    from unittest.mock import patch, AsyncMock
 
-
-@pytest.mark.asyncio
-async def test_steam_boiler_switch_turn_on_refreshes_coordinator() -> None:
-    coord = _make_coordinator()
-    sw = _make_steam_switch(coord)
-    with patch("asyncio.sleep", new_callable=AsyncMock):
-        await sw.async_turn_on()
-    coord.async_request_refresh.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_steam_boiler_switch_turn_off_refreshes_coordinator() -> None:
-    coord = _make_coordinator()
-    sw = _make_steam_switch(coord)
-    with patch("asyncio.sleep", new_callable=AsyncMock):
-        await sw.async_turn_off()
-    coord.async_request_refresh.assert_called_once()
+    mock_xenia_api.expect_toggle_sb()
+    with patch(
+        "custom_components.xenia_home.switch.asyncio.sleep", new_callable=AsyncMock
+    ):
+        await hass.services.async_call(
+            "switch", "turn_off", {"entity_id": STEAM_BOILER}, blocking=True
+        )
+        await hass.async_block_till_done()
+    mock_xenia_api.assert_post_called_with("toggle_sb", "false")

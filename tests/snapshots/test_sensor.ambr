@@ -1,0 +1,460 @@
+# serializer version: 1
+# name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_brewboiler_temperature-registry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': None,
+    'entity_id': 'sensor.xenia_espresso_machine_brewboiler_temperature',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Brewboiler temperature',
+    'options': dict({
+      'sensor': dict({
+        'suggested_display_precision': 1,
+      }),
+    }),
+    'original_device_class': <SensorDeviceClass.TEMPERATURE: 'temperature'>,
+    'original_icon': 'mdi:thermometer-water',
+    'original_name': 'Brewboiler temperature',
+    'platform': 'xenia_home',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'brew_boiler_temperature',
+    'unique_id': 'xenia.local_brew_boiler_temperature',
+    'unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
+  })
+# ---
+# name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_brewboiler_temperature-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'temperature',
+      'friendly_name': 'Xenia Espresso Machine Brewboiler temperature',
+      'icon': 'mdi:thermometer-water',
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+      'unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.xenia_espresso_machine_brewboiler_temperature',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '130.0',
+  })
+# ---
+# name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_brewgroup_temperature-registry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': None,
+    'entity_id': 'sensor.xenia_espresso_machine_brewgroup_temperature',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Brewgroup temperature',
+    'options': dict({
+      'sensor': dict({
+        'suggested_display_precision': 1,
+      }),
+    }),
+    'original_device_class': <SensorDeviceClass.TEMPERATURE: 'temperature'>,
+    'original_icon': 'mdi:thermometer',
+    'original_name': 'Brewgroup temperature',
+    'platform': 'xenia_home',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'brew_group_temperature',
+    'unique_id': 'xenia.local_brew_group_temperature',
+    'unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
+  })
+# ---
+# name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_brewgroup_temperature-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'temperature',
+      'friendly_name': 'Xenia Espresso Machine Brewgroup temperature',
+      'icon': 'mdi:thermometer',
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+      'unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.xenia_espresso_machine_brewgroup_temperature',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '93.0',
+  })
+# ---
+# name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_electric_current-registry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': None,
+    'entity_id': 'sensor.xenia_espresso_machine_electric_current',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Electric current',
+    'options': dict({
+      'sensor': dict({
+        'suggested_display_precision': 2,
+      }),
+    }),
+    'original_device_class': <SensorDeviceClass.CURRENT: 'current'>,
+    'original_icon': 'mdi:current-ac',
+    'original_name': 'Electric current',
+    'platform': 'xenia_home',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'electric_current',
+    'unique_id': 'xenia.local_electric_current',
+    'unit_of_measurement': <UnitOfElectricCurrent.AMPERE: 'A'>,
+  })
+# ---
+# name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_electric_current-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'current',
+      'friendly_name': 'Xenia Espresso Machine Electric current',
+      'icon': 'mdi:current-ac',
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+      'unit_of_measurement': <UnitOfElectricCurrent.AMPERE: 'A'>,
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.xenia_espresso_machine_electric_current',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '3.2',
+  })
+# ---
+# name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_extractions-registry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'state_class': <SensorStateClass.TOTAL_INCREASING: 'total_increasing'>,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': None,
+    'entity_id': 'sensor.xenia_espresso_machine_extractions',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Extractions',
+    'options': dict({
+    }),
+    'original_device_class': None,
+    'original_icon': 'mdi:coffee-to-go',
+    'original_name': 'Extractions',
+    'platform': 'xenia_home',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'extractions',
+    'unique_id': 'xenia.local_extractions',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_extractions-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'friendly_name': 'Xenia Espresso Machine Extractions',
+      'icon': 'mdi:coffee-to-go',
+      'state_class': <SensorStateClass.TOTAL_INCREASING: 'total_increasing'>,
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.xenia_espresso_machine_extractions',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '1234',
+  })
+# ---
+# name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_operating_hours-registry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'state_class': <SensorStateClass.TOTAL_INCREASING: 'total_increasing'>,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': None,
+    'entity_id': 'sensor.xenia_espresso_machine_operating_hours',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Operating hours',
+    'options': dict({
+      'sensor': dict({
+        'suggested_display_precision': 2,
+      }),
+    }),
+    'original_device_class': <SensorDeviceClass.DURATION: 'duration'>,
+    'original_icon': 'mdi:clock-outline',
+    'original_name': 'Operating hours',
+    'platform': 'xenia_home',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'operating_hours',
+    'unique_id': 'xenia.local_operating_hours',
+    'unit_of_measurement': <UnitOfTime.HOURS: 'h'>,
+  })
+# ---
+# name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_operating_hours-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'duration',
+      'friendly_name': 'Xenia Espresso Machine Operating hours',
+      'icon': 'mdi:clock-outline',
+      'state_class': <SensorStateClass.TOTAL_INCREASING: 'total_increasing'>,
+      'unit_of_measurement': <UnitOfTime.HOURS: 'h'>,
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.xenia_espresso_machine_operating_hours',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '12.0',
+  })
+# ---
+# name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_pump_pressure-registry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': None,
+    'entity_id': 'sensor.xenia_espresso_machine_pump_pressure',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Pump pressure',
+    'options': dict({
+      'sensor': dict({
+        'suggested_display_precision': 2,
+      }),
+    }),
+    'original_device_class': <SensorDeviceClass.PRESSURE: 'pressure'>,
+    'original_icon': 'mdi:gauge',
+    'original_name': 'Pump pressure',
+    'platform': 'xenia_home',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'pump_pressure',
+    'unique_id': 'xenia.local_pump_pressure',
+    'unit_of_measurement': <UnitOfPressure.BAR: 'bar'>,
+  })
+# ---
+# name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_pump_pressure-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'pressure',
+      'friendly_name': 'Xenia Espresso Machine Pump pressure',
+      'icon': 'mdi:gauge',
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+      'unit_of_measurement': <UnitOfPressure.BAR: 'bar'>,
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.xenia_espresso_machine_pump_pressure',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '9.1',
+  })
+# ---
+# name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_steamboiler_pressure-registry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': None,
+    'entity_id': 'sensor.xenia_espresso_machine_steamboiler_pressure',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Steamboiler pressure',
+    'options': dict({
+      'sensor': dict({
+        'suggested_display_precision': 2,
+      }),
+    }),
+    'original_device_class': <SensorDeviceClass.PRESSURE: 'pressure'>,
+    'original_icon': 'mdi:gauge-full',
+    'original_name': 'Steamboiler pressure',
+    'platform': 'xenia_home',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'steam_boiler_pressure',
+    'unique_id': 'xenia.local_steam_boiler_pressure',
+    'unit_of_measurement': <UnitOfPressure.BAR: 'bar'>,
+  })
+# ---
+# name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_steamboiler_pressure-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'pressure',
+      'friendly_name': 'Xenia Espresso Machine Steamboiler pressure',
+      'icon': 'mdi:gauge-full',
+      'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
+      'unit_of_measurement': <UnitOfPressure.BAR: 'bar'>,
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.xenia_espresso_machine_steamboiler_pressure',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '1.2',
+  })
+# ---
+# name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_total_energy-registry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': dict({
+      'state_class': <SensorStateClass.TOTAL_INCREASING: 'total_increasing'>,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': None,
+    'entity_id': 'sensor.xenia_espresso_machine_total_energy',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Total energy',
+    'options': dict({
+      'sensor': dict({
+        'suggested_display_precision': 2,
+      }),
+    }),
+    'original_device_class': <SensorDeviceClass.ENERGY: 'energy'>,
+    'original_icon': 'mdi:lightning-bolt',
+    'original_name': 'Total energy',
+    'platform': 'xenia_home',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'total_energy',
+    'unique_id': 'xenia.local_total_energy',
+    'unit_of_measurement': <UnitOfEnergy.KILO_WATT_HOUR: 'kWh'>,
+  })
+# ---
+# name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_total_energy-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'device_class': 'energy',
+      'friendly_name': 'Xenia Espresso Machine Total energy',
+      'icon': 'mdi:lightning-bolt',
+      'state_class': <SensorStateClass.TOTAL_INCREASING: 'total_increasing'>,
+      'unit_of_measurement': <UnitOfEnergy.KILO_WATT_HOUR: 'kWh'>,
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.xenia_espresso_machine_total_energy',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '42.5',
+  })
+# ---

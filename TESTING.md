@@ -1,6 +1,8 @@
 # Testing
 
-The test suite lives in `tests/` and uses `pytest`. All network calls are mocked — no real machine is required to run the tests.
+The test suite lives in `tests/` and uses `pytest` with
+`pytest-homeassistant-custom-component`, `aioresponses`, and `syrupy`.
+All HTTP calls are mocked — no real machine is required.
 
 ## Running tests
 
@@ -8,172 +10,108 @@ The test suite lives in `tests/` and uses `pytest`. All network calls are mocked
 # Run all tests
 uv run pytest tests/
 
-# Run with coverage report
+# With coverage
 uv run pytest tests/ --cov=custom_components.xenia_home --cov-report=term-missing
 
-# Run a single test file
+# Single file or single test
 uv run pytest tests/test_xenia.py
+uv run pytest tests/test_sensor.py::test_sensor_entities_snapshot
 
-# Run a single test by name
-uv run pytest tests/test_xenia.py::test_get_overview_success
+# Update syrupy snapshots after intentional changes
+uv run pytest tests/ --snapshot-update
+
+# Show open xfail markers at the end of the run
+uv run pytest tests/ --tb=no -q | tail -20
 ```
 
-## Test structure
+## Test architecture
 
-| File | What it tests |
+There are two layers:
+
+- **Pure-logic tests** (no `hass` fixture): `test_script_parser.py`,
+  `test_xenia.py`, `test_coordinator.py`. These use plain pytest and
+  `aioresponses` and run in milliseconds.
+- **Integration tests** (with `hass` fixture): all other `test_*.py`. These
+  spin up a real Home Assistant instance, register the integration via
+  `MockConfigEntry`, and assert against actual entity state. HTTP calls
+  to the machine are mocked via `aioresponses`.
+
+## Key fixtures
+
+| Fixture | Purpose |
 |---|---|
-| `conftest.py` | Shared fixtures and API response payloads |
-| `test_xenia.py` | `Xenia` API client methods |
-| `test_coordinator.py` | `XeniaDataUpdateCoordinator` and `XeniaConfigCoordinator` |
-| `test_config_flow.py` | Config flow and options flow (weight management) |
-| `test_init.py` | Integration setup, teardown, and `execute_script` service |
-| `test_sensor.py` | Sensor entity values and state |
-| `test_binary_sensor.py` | Binary sensor (water tank empty) |
-| `test_number.py` | Number entities (temperatures and weight target) |
-| `test_select.py` | Select entities (power on behavior, script, switch config) |
-| `test_switch.py` | Switch entities (power, eco, steam boiler) |
-| `test_button.py` | Execute script button |
-| `test_event.py` | Shot tracker event entity (including auto-tare handling) |
-| `test_script_parser.py` | Script instruction parser and weight target helpers |
+| `hass` | Real HA test instance (from `pytest-homeassistant-custom-component`). |
+| `enable_custom_integrations` | Enables loading of custom integrations. Opt-in; depended on by `init_integration` transitively. Pure-unit tests don't need it. |
+| `mock_xenia_api` | Wrapper around `aioresponses`. Use setters (`set_overview`, `set_scripts`, ...) before integration setup; use `expect_*` and `assert_post_called_with` after. |
+| `mock_config_entry` | A `MockConfigEntry` for the Xenia domain with default options. |
+| `mock_config_entry_factory_with_options` | Factory for building a `MockConfigEntry` with custom options preloaded. |
+| `init_integration` | Wires `mock_xenia_api` + `mock_config_entry` together and calls `async_setup_entry`. Returns the loaded `MockConfigEntry`. |
+| `entity_registry` | Standard HA entity registry. |
+| `snapshot` | syrupy snapshot assertion fixture. |
 
-## Writing tests
+## Writing a new test
 
-### Shared fixtures
-
-`conftest.py` provides ready-made fixtures you can inject into any test:
+For a behavior test:
 
 ```python
-def test_example(overview_data, overview_single_data, config_data, mock_session):
-    ...
+async def test_eco_button_calls_machine_set_eco(
+    hass, init_integration, mock_xenia_api
+):
+    mock_xenia_api.expect_machine_control()
+    await hass.services.async_call(
+        "switch", "turn_on",
+        {"entity_id": "switch.xenia_espresso_machine_eco_mode"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    mock_xenia_api.assert_post_called_with("machine/control", '"2"')
 ```
 
-| Fixture | Type | Description |
-|---|---|---|
-| `overview_data` | `XeniaOverviewData` | Parsed overview API response |
-| `overview_single_data` | `XeniaOverviewSingleData` | Parsed overview_single API response |
-| `machine_data` | `XeniaMachineData` | Parsed machine API response |
-| `coordinator_data` | `XeniaCoordinatorData` | Combined fast coordinator data |
-| `config_data` | `XeniaConfigData` | Combined config coordinator data |
-| `mock_session` | `MagicMock` | Fake `aiohttp.ClientSession` |
-
-The raw API payload dicts (`OVERVIEW_PAYLOAD`, `MACHINE_PAYLOAD`, etc.) are also importable from `conftest.py` for tests that need to modify specific fields.
-
-### Mocking HTTP calls
-
-All HTTP responses are mocked via `unittest.mock`. Use `AsyncMock` for async context managers:
+For a snapshot test (one per platform is sufficient):
 
 ```python
-from unittest.mock import AsyncMock, MagicMock, patch
-
-@pytest.mark.asyncio
-async def test_get_overview_success(mock_session):
-    mock_resp = AsyncMock()
-    mock_resp.json = AsyncMock(return_value={"MA_STATUS": 1, ...})
-    mock_resp.raise_for_status = MagicMock()
-    mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_resp)
-    mock_session.get.return_value.__aexit__ = AsyncMock(return_value=False)
-
-    xenia = Xenia("192.168.1.1", mock_session)
-    data = await xenia.get_overview()
-
-    assert data.ma_status == MachineStatus.ON
+async def test_my_platform_entities_snapshot(
+    hass, init_integration, snapshot, entity_registry
+):
+    entity_ids = sorted(
+        e.entity_id
+        for e in entity_registry.entities.values()
+        if e.platform == "xenia_home" and e.domain == "my_platform"
+    )
+    for entity_id in entity_ids:
+        state = hass.states.get(entity_id)
+        registry_entry = entity_registry.async_get(entity_id)
+        assert state == snapshot(name=f"{entity_id}-state")
+        assert registry_entry == snapshot(name=f"{entity_id}-registry")
 ```
 
-### Mocking coordinators
+After adding or changing entities, regenerate snapshots:
 
-For entity tests, build a coordinator with pre-populated data using `MagicMock`:
-
-```python
-from unittest.mock import MagicMock
-
-def make_coordinator(coordinator_data, config_data):
-    config_entry = MagicMock()
-    config_entry.data = {"host": "192.168.1.1"}
-    config_entry.options = {}
-    config_entry.runtime_data.config_coordinator.data = config_data
-
-    coordinator = MagicMock()
-    coordinator.data = coordinator_data
-    coordinator.config_entry = config_entry
-    coordinator.xenia = MagicMock()
-    return coordinator
+```bash
+uv run pytest tests/ --snapshot-update
 ```
 
-### Testing error paths
+Review the snapshot diff in your editor before committing.
 
-Always test what happens when the API fails:
+## Known bugs
 
-```python
-@pytest.mark.asyncio
-async def test_get_overview_raises_on_http_error(mock_session):
-    mock_resp = AsyncMock()
-    mock_resp.raise_for_status.side_effect = aiohttp.ClientError("timeout")
-    mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_resp)
-    mock_session.get.return_value.__aexit__ = AsyncMock(return_value=False)
+Production bugs discovered during testing are deferred via
+`pytest.mark.xfail(strict=True)` and tracked in `docs/known-bugs.md`
+(gitignored, locally only). The pytest session summary prints all open
+xfails at the end of every run.
 
-    xenia = Xenia("192.168.1.1", mock_session)
-    with pytest.raises(aiohttp.ClientError):
-        await xenia.get_overview()
-```
+## Coverage
 
-### Testing entity state
-
-```python
-def test_sensor_native_value(coordinator_data, config_data):
-    coordinator = make_coordinator(coordinator_data, config_data)
-    sensor = XeniaSensor(coordinator, SENSOR_TYPES[0])
-
-    assert sensor.native_value == coordinator_data.overview.bg_sens_temp_a
-```
-
-### Async tests
-
-Mark async tests with `@pytest.mark.asyncio`:
-
-```python
-import pytest
-
-@pytest.mark.asyncio
-async def test_async_something():
-    result = await some_async_function()
-    assert result is not None
-```
+`fail_under = 90` is enforced via `pyproject.toml`. Run
+`uv run pytest tests/ --cov` to see the breakdown.
 
 ## Local Home Assistant instance
 
-To manually test the integration against a real machine, use the included `docker-compose.yml`:
+To manually test the integration against a real machine, use the included
+`docker-compose.yml`:
 
 ```bash
 docker compose up -d
 ```
 
-HA is then available at `http://localhost:8123`. The integration code is mounted as a read-only volume. After code changes, restart the container:
-
-```bash
-docker compose restart
-```
-
-Enable debug logging by adding this to `config/configuration.yaml`:
-
-```yaml
-logger:
-  default: warning
-  logs:
-    custom_components.xenia_home: debug
-```
-
-To stop and remove the container:
-
-```bash
-docker compose down
-```
-
-## Coverage
-
-Target coverage is 90%+. The following areas are excluded because they require the full Home Assistant test harness:
-
-- `async_setup_entry` function bodies in platform files (lines 13–20 range)
-- `device_info` and `runtime_data` property bodies in `entity.py`
-- Platform registration loop in `__init__.py`
-
-To add full integration tests (including these areas), install `pytest-homeassistant-custom-component` and use its `hass` fixture.
+HA is then available at `http://localhost:8123`.

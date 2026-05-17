@@ -1,5 +1,7 @@
 """Tests for the script instruction parser."""
 
+import pytest
+
 from custom_components.xenia_home.script_parser import (
     COMMAND_WEIGHT_TARGET,
     ScriptCommand,
@@ -96,12 +98,16 @@ def test_set_command_value_insert_new():
 # ---------------------------------------------------------------------------
 
 
-def test_get_weight_target():
-    assert get_weight_target("1;13;3 70 5000;27 45;17;7;") == 45.0
-
-
-def test_get_weight_target_decimal():
-    assert get_weight_target("1;27 36.5;7;") == 36.5
+@pytest.mark.parametrize(
+    "instruction, expected",
+    [
+        ("1;13;3 70 5000;27 45;17;7;", 45.0),
+        ("1;27 36.5;7;", 36.5),
+        ("1;27 0;7;", 0.0),
+    ],
+)
+def test_get_weight_target_reads_command_27(instruction, expected):
+    assert get_weight_target(instruction) == expected
 
 
 def test_get_weight_target_missing():

@@ -1,4 +1,4 @@
-"""Unit tests for coordinator.py — XeniaDataUpdateCoordinator and XeniaConfigCoordinator."""
+"""Tests for coordinator.py — fast and config coordinators."""
 
 from __future__ import annotations
 
@@ -14,6 +14,10 @@ from custom_components.xenia_home.const import (
     CONF_POLL_IDLE,
     CONF_POLL_READY,
     CONF_READY_THRESHOLD,
+    DEFAULT_POLL_ACTIVE,
+    DEFAULT_POLL_BREWING,
+    DEFAULT_POLL_IDLE,
+    DEFAULT_POLL_READY,
 )
 from custom_components.xenia_home.coordinator import (
     BUILTIN_SCRIPTS,
@@ -40,25 +44,26 @@ def _make_hass() -> MagicMock:
     hass = MagicMock()
     hass.loop = MagicMock()
     hass.bus = MagicMock()
-    hass.config = MagicMock()
-    hass.config.time_zone = "UTC"
     return hass
 
 
-def _make_config_entry(entry_id: str = "test_entry", **options) -> MagicMock:
+def _make_entry(**options) -> MagicMock:
     entry = MagicMock()
-    entry.entry_id = entry_id
+    entry.entry_id = "test_entry"
     entry.options = options
     return entry
 
 
-def _make_xenia_mock() -> MagicMock:
+def _make_xenia_mock(
+    overview: dict | None = None,
+    overview_single: dict | None = None,
+) -> MagicMock:
     xenia = MagicMock()
     xenia.get_overview = AsyncMock(
-        return_value=XeniaOverviewData.from_dict({"MA_STATUS": 1})
+        return_value=XeniaOverviewData.from_dict(overview or {"MA_STATUS": 1})
     )
     xenia.get_overview_single = AsyncMock(
-        return_value=XeniaOverviewSingleData.from_dict({})
+        return_value=XeniaOverviewSingleData.from_dict(overview_single or {})
     )
     xenia.get_machine = AsyncMock(
         return_value=XeniaMachineData.from_dict({"MA_TYPE": 1})
@@ -68,111 +73,73 @@ def _make_xenia_mock() -> MagicMock:
     return xenia
 
 
+def _make_data_coordinator(xenia=None, **options):
+    """Build a fully constructed XeniaDataUpdateCoordinator with patched super."""
+    hass = _make_hass()
+    entry = _make_entry(**options)
+    if xenia is None:
+        xenia = _make_xenia_mock()
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
+        coordinator = XeniaDataUpdateCoordinator(hass, entry, xenia)
+        coordinator.config_entry = entry
+    return coordinator
+
+
+def _make_config_coordinator(xenia=None, **options):
+    hass = _make_hass()
+    entry = _make_entry(**options)
+    if xenia is None:
+        xenia = _make_xenia_mock()
+    with patch(
+        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
+    ):
+        coordinator = XeniaConfigCoordinator(hass, entry, xenia)
+        coordinator.config_entry = entry
+    return coordinator
+
+
 # ===========================================================================
 # BUILTIN_SCRIPTS
 # ===========================================================================
 
 
-def test_builtin_scripts_contains_none_entry() -> None:
-    assert 0 in BUILTIN_SCRIPTS
-    assert BUILTIN_SCRIPTS[0] == "None"
-
-
-def test_builtin_scripts_contains_espresso() -> None:
-    assert 1 in BUILTIN_SCRIPTS
-    assert BUILTIN_SCRIPTS[1] == "Espresso"
-
-
-def test_builtin_scripts_contains_espresso_endless() -> None:
-    assert 2 in BUILTIN_SCRIPTS
-    assert BUILTIN_SCRIPTS[2] == "Espresso endless"
+def test_builtin_scripts_has_three_entries() -> None:
+    assert BUILTIN_SCRIPTS == {
+        0: "None",
+        1: "Espresso",
+        2: "Espresso endless",
+    }
 
 
 # ===========================================================================
-# XeniaCoordinatorData
+# Data classes
 # ===========================================================================
 
 
-def test_coordinator_data_stores_overview_and_single(
-    overview_data: XeniaOverviewData,
-    overview_single_data: XeniaOverviewSingleData,
-) -> None:
-    data = XeniaCoordinatorData(
-        overview=overview_data, overview_single=overview_single_data
-    )
-    assert data.overview is overview_data
-    assert data.overview_single is overview_single_data
+def test_coordinator_data_holds_both_payloads() -> None:
+    overview = XeniaOverviewData.from_dict({})
+    single = XeniaOverviewSingleData.from_dict({})
+    data = XeniaCoordinatorData(overview=overview, overview_single=single)
+    assert data.overview is overview
+    assert data.overview_single is single
 
 
-# ===========================================================================
-# XeniaConfigData
-# ===========================================================================
-
-
-def test_config_data_default_scripts_is_empty(machine_data: XeniaMachineData) -> None:
-    data = XeniaConfigData(machine=machine_data)
+def test_config_data_defaults_are_empty() -> None:
+    machine = XeniaMachineData.from_dict({})
+    data = XeniaConfigData(machine=machine)
     assert data.scripts == {}
-
-
-def test_config_data_default_switches_is_empty(machine_data: XeniaMachineData) -> None:
-    data = XeniaConfigData(machine=machine_data)
     assert data.switches == {}
+    assert data.managed_script_instruction is None
+    assert data.managed_script_name is None
 
 
-def test_config_data_stores_machine(machine_data: XeniaMachineData) -> None:
-    data = XeniaConfigData(machine=machine_data)
-    assert data.machine is machine_data
-
-
-# ===========================================================================
-# XeniaRuntimeData
-# ===========================================================================
-
-
-def test_runtime_data_stores_both_coordinators() -> None:
-    coord = MagicMock()
-    config_coord = MagicMock()
-    runtime = XeniaRuntimeData(coordinator=coord, config_coordinator=config_coord)
-    assert runtime.coordinator is coord
-    assert runtime.config_coordinator is config_coord
-
-
-# ===========================================================================
-# XeniaDataUpdateCoordinator.__init__
-# ===========================================================================
-
-
-def test_data_update_coordinator_initializes_with_empty_data() -> None:
-    hass = _make_hass()
-    entry = _make_config_entry()
-    xenia = _make_xenia_mock()
-
-    with patch(
-        "custom_components.xenia_home.coordinator.DataUpdateCoordinator.__init__",
-        return_value=None,
-    ):
-        coordinator = XeniaDataUpdateCoordinator.__new__(XeniaDataUpdateCoordinator)
-        coordinator.hass = hass
-        coordinator.config_entry = entry
-        coordinator.logger = MagicMock()
-        # Call real __init__ indirectly through attribute assignment
-        coordinator.xenia = xenia
-
-    # The default data should be XeniaCoordinatorData with zero values
-    assert xenia is coordinator.xenia
-
-
-def test_data_update_coordinator_stores_xenia_client() -> None:
-    hass = _make_hass()
-    entry = _make_config_entry()
-    xenia = _make_xenia_mock()
-
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaDataUpdateCoordinator(hass, entry, xenia)
-
-    assert coordinator.xenia is xenia
+def test_runtime_data_holds_both_coordinators() -> None:
+    a, b = MagicMock(), MagicMock()
+    runtime = XeniaRuntimeData(coordinator=a, config_coordinator=b)
+    assert runtime.coordinator is a
+    assert runtime.config_coordinator is b
 
 
 # ===========================================================================
@@ -180,103 +147,136 @@ def test_data_update_coordinator_stores_xenia_client() -> None:
 # ===========================================================================
 
 
-@pytest.mark.asyncio
-async def test_data_coordinator_update_returns_coordinator_data() -> None:
-    hass = _make_hass()
-    entry = _make_config_entry()
-    xenia = _make_xenia_mock()
-
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaDataUpdateCoordinator(hass, entry, xenia)
-
+async def test_data_coordinator_returns_combined_data() -> None:
+    coordinator = _make_data_coordinator()
     result = await coordinator._async_update_data()
-
     assert isinstance(result, XeniaCoordinatorData)
-    assert result.overview.ma_status.value == 1
+    assert result.overview.ma_status == MachineStatus.ON
 
 
-@pytest.mark.asyncio
-async def test_data_coordinator_update_calls_both_endpoints() -> None:
-    hass = _make_hass()
-    entry = _make_config_entry()
-    xenia = _make_xenia_mock()
-
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaDataUpdateCoordinator(hass, entry, xenia)
-
+async def test_data_coordinator_calls_both_endpoints() -> None:
+    coordinator = _make_data_coordinator()
     await coordinator._async_update_data()
+    coordinator.xenia.get_overview.assert_called_once()
+    coordinator.xenia.get_overview_single.assert_called_once()
 
-    xenia.get_overview.assert_called_once()
-    xenia.get_overview_single.assert_called_once()
 
-
-@pytest.mark.asyncio
-async def test_data_coordinator_update_raises_update_failed_on_exception() -> None:
-    hass = _make_hass()
-    entry = _make_config_entry()
+async def test_data_coordinator_raises_update_failed_on_overview_error() -> None:
     xenia = _make_xenia_mock()
-    xenia.get_overview = AsyncMock(side_effect=OSError("network error"))
-
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaDataUpdateCoordinator(hass, entry, xenia)
-
+    xenia.get_overview = AsyncMock(side_effect=OSError("net"))
+    coordinator = _make_data_coordinator(xenia=xenia)
     with pytest.raises(UpdateFailed, match="Xenia fetch failed"):
         await coordinator._async_update_data()
 
 
-@pytest.mark.asyncio
-async def test_data_coordinator_update_raises_update_failed_on_single_exception() -> (
-    None
-):
-    hass = _make_hass()
-    entry = _make_config_entry()
+async def test_data_coordinator_raises_update_failed_on_single_error() -> None:
     xenia = _make_xenia_mock()
     xenia.get_overview_single = AsyncMock(side_effect=TimeoutError("timeout"))
-
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaDataUpdateCoordinator(hass, entry, xenia)
-
+    coordinator = _make_data_coordinator(xenia=xenia)
     with pytest.raises(UpdateFailed, match="Xenia fetch failed"):
         await coordinator._async_update_data()
 
 
 # ===========================================================================
-# XeniaConfigCoordinator.__init__
+# Dynamic polling intervals — REAL test of the match statement
+#
+# Trick: pass distinct overrides for all four CONF_POLL_* keys so the
+# four expected intervals differ and the assertion truly distinguishes
+# them. With the production defaults of (1.0, 1.0, 1.0, 1.0), tests
+# cannot tell brewing from idle.
 # ===========================================================================
 
 
-def test_config_coordinator_stores_xenia_client() -> None:
-    hass = _make_hass()
-    entry = _make_config_entry()
-    xenia = _make_xenia_mock()
-
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaConfigCoordinator(hass, entry, xenia)
-
-    assert coordinator.xenia is xenia
+POLL_OPTS_DISTINCT = {
+    CONF_POLL_BREWING: 0.5,
+    CONF_POLL_ACTIVE: 2.0,
+    CONF_POLL_READY: 5.0,
+    CONF_POLL_IDLE: 10.0,
+    CONF_READY_THRESHOLD: 2.0,
+}
 
 
-def test_config_coordinator_selected_script_id_starts_none() -> None:
-    hass = _make_hass()
-    entry = _make_config_entry()
-    xenia = _make_xenia_mock()
+@pytest.mark.parametrize(
+    "ma_status, expected_seconds",
+    [
+        (MachineStatus.BREWING, 0.5),
+        (MachineStatus.DRAINING, 0.5),
+        (MachineStatus.ECO, 10.0),
+        (MachineStatus.OFF, 10.0),
+        (MachineStatus.UNKNOWN, 10.0),
+    ],
+)
+async def test_polling_interval_per_state_with_distinct_options(
+    ma_status, expected_seconds
+) -> None:
+    xenia = _make_xenia_mock(overview={"MA_STATUS": ma_status})
+    coordinator = _make_data_coordinator(xenia=xenia, **POLL_OPTS_DISTINCT)
+    await coordinator._async_update_data()
+    assert coordinator.update_interval == timedelta(seconds=expected_seconds)
 
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaConfigCoordinator(hass, entry, xenia)
 
-    assert coordinator.selected_script_id is None
+async def test_polling_interval_ready_when_temps_within_threshold() -> None:
+    xenia = _make_xenia_mock(
+        overview={
+            "MA_STATUS": MachineStatus.ON,
+            "BG_SENS_TEMP_A": 93.0,
+            "BB_SENS_TEMP_A": 130.0,
+        },
+        overview_single={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
+    )
+    coordinator = _make_data_coordinator(xenia=xenia, **POLL_OPTS_DISTINCT)
+    await coordinator._async_update_data()
+    assert coordinator.update_interval == timedelta(seconds=5.0)  # READY
+
+
+async def test_polling_interval_active_when_temps_outside_threshold() -> None:
+    xenia = _make_xenia_mock(
+        overview={
+            "MA_STATUS": MachineStatus.ON,
+            "BG_SENS_TEMP_A": 50.0,
+            "BB_SENS_TEMP_A": 100.0,
+        },
+        overview_single={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
+    )
+    coordinator = _make_data_coordinator(xenia=xenia, **POLL_OPTS_DISTINCT)
+    await coordinator._async_update_data()
+    assert coordinator.update_interval == timedelta(seconds=2.0)  # ACTIVE
+
+
+async def test_polling_interval_zero_threshold_requires_exact_match() -> None:
+    """Threshold 0 means even 0.5°C off counts as ACTIVE."""
+    xenia = _make_xenia_mock(
+        overview={
+            "MA_STATUS": MachineStatus.ON,
+            "BG_SENS_TEMP_A": 93.0,
+            "BB_SENS_TEMP_A": 130.0,
+        },
+        overview_single={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
+    )
+    opts = {**POLL_OPTS_DISTINCT, CONF_READY_THRESHOLD: 0.0}
+    coordinator = _make_data_coordinator(xenia=xenia, **opts)
+    await coordinator._async_update_data()
+    assert coordinator.update_interval == timedelta(seconds=2.0)  # ACTIVE
+
+
+async def test_polling_interval_uses_defaults_when_options_absent() -> None:
+    """With no options, all four defaults are equal — interval becomes default."""
+    xenia = _make_xenia_mock(overview={"MA_STATUS": MachineStatus.BREWING})
+    coordinator = _make_data_coordinator(xenia=xenia)
+    await coordinator._async_update_data()
+    assert coordinator.update_interval == timedelta(seconds=DEFAULT_POLL_BREWING)
+
+
+def test_default_poll_constants_are_documented_to_be_equal() -> None:
+    """If this fails, the parametrized distinct-options tests above may need
+    review — they intentionally rely on the four defaults being interchangeable
+    for the "no options" case but distinct under explicit overrides."""
+    assert (
+        DEFAULT_POLL_BREWING
+        == DEFAULT_POLL_ACTIVE
+        == DEFAULT_POLL_READY
+        == DEFAULT_POLL_IDLE
+    )
 
 
 # ===========================================================================
@@ -284,408 +284,91 @@ def test_config_coordinator_selected_script_id_starts_none() -> None:
 # ===========================================================================
 
 
-@pytest.mark.asyncio
-async def test_config_coordinator_update_returns_config_data() -> None:
-    hass = _make_hass()
-    entry = _make_config_entry()
-    xenia = _make_xenia_mock()
-
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaConfigCoordinator(hass, entry, xenia)
-
+async def test_config_coordinator_returns_config_data() -> None:
+    coordinator = _make_config_coordinator()
     result = await coordinator._async_update_data()
-
     assert isinstance(result, XeniaConfigData)
     assert result.machine is not None
 
 
-@pytest.mark.asyncio
-async def test_config_coordinator_update_merges_builtin_scripts() -> None:
-    hass = _make_hass()
-    entry = _make_config_entry()
+async def test_config_coordinator_merges_builtin_and_user_scripts() -> None:
     xenia = _make_xenia_mock()
     xenia.get_scripts = AsyncMock(return_value={10: "MyShot"})
-
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaConfigCoordinator(hass, entry, xenia)
-
+    coordinator = _make_config_coordinator(xenia=xenia)
     result = await coordinator._async_update_data()
-
-    # Built-in scripts should be included
-    assert 0 in result.scripts
-    assert 1 in result.scripts
-    assert 2 in result.scripts
-    # User scripts should also be present
-    assert 10 in result.scripts
-    assert result.scripts[10] == "MyShot"
+    assert result.scripts == {**BUILTIN_SCRIPTS, 10: "MyShot"}
 
 
-@pytest.mark.asyncio
-async def test_config_coordinator_update_user_scripts_override_builtin() -> None:
-    """If a user script has the same ID as a built-in, user script wins."""
-    hass = _make_hass()
-    entry = _make_config_entry()
+async def test_config_coordinator_user_script_overrides_builtin() -> None:
     xenia = _make_xenia_mock()
-    xenia.get_scripts = AsyncMock(return_value={1: "Custom Espresso"})
-
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaConfigCoordinator(hass, entry, xenia)
-
+    xenia.get_scripts = AsyncMock(return_value={1: "Custom"})
+    coordinator = _make_config_coordinator(xenia=xenia)
     result = await coordinator._async_update_data()
-    assert result.scripts[1] == "Custom Espresso"
+    assert result.scripts[1] == "Custom"
 
 
-@pytest.mark.asyncio
-async def test_config_coordinator_update_stores_switches() -> None:
-    hass = _make_hass()
-    entry = _make_config_entry()
-    xenia = _make_xenia_mock()
-
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaConfigCoordinator(hass, entry, xenia)
-
+async def test_config_coordinator_stores_switches() -> None:
+    coordinator = _make_config_coordinator()
     result = await coordinator._async_update_data()
     assert result.switches == {"SWITCH_SET_LEFT_LEFT_0": 1}
 
 
-@pytest.mark.asyncio
-async def test_config_coordinator_update_raises_update_failed_on_machine_error() -> (
-    None
-):
-    hass = _make_hass()
-    entry = _make_config_entry()
+@pytest.mark.parametrize(
+    "broken_attr, exc",
+    [
+        ("get_machine", OSError("unreachable")),
+        ("get_scripts", TimeoutError("timeout")),
+        ("get_switches", ConnectionError("refused")),
+    ],
+)
+async def test_config_coordinator_raises_update_failed_on_any_error(
+    broken_attr, exc
+) -> None:
     xenia = _make_xenia_mock()
-    xenia.get_machine = AsyncMock(side_effect=OSError("unreachable"))
-
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaConfigCoordinator(hass, entry, xenia)
-
+    setattr(xenia, broken_attr, AsyncMock(side_effect=exc))
+    coordinator = _make_config_coordinator(xenia=xenia)
     with pytest.raises(UpdateFailed, match="Xenia config fetch failed"):
         await coordinator._async_update_data()
 
 
-@pytest.mark.asyncio
-async def test_config_coordinator_update_raises_update_failed_on_scripts_error() -> (
-    None
-):
-    hass = _make_hass()
-    entry = _make_config_entry()
-    xenia = _make_xenia_mock()
-    xenia.get_scripts = AsyncMock(side_effect=TimeoutError("timeout"))
-
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaConfigCoordinator(hass, entry, xenia)
-
-    with pytest.raises(UpdateFailed, match="Xenia config fetch failed"):
-        await coordinator._async_update_data()
-
-
-@pytest.mark.asyncio
-async def test_config_coordinator_update_raises_update_failed_on_switches_error() -> (
-    None
-):
-    hass = _make_hass()
-    entry = _make_config_entry()
-    xenia = _make_xenia_mock()
-    xenia.get_switches = AsyncMock(side_effect=ConnectionError("refused"))
-
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaConfigCoordinator(hass, entry, xenia)
-
-    with pytest.raises(UpdateFailed, match="Xenia config fetch failed"):
-        await coordinator._async_update_data()
-
-
-# ===========================================================================
-# XeniaConfigCoordinator — managed script reading
-# ===========================================================================
-
-
-@pytest.mark.asyncio
 async def test_config_coordinator_reads_managed_script_when_enabled() -> None:
-    hass = _make_hass()
-    entry = _make_config_entry(weight_management_enabled=True, managed_script_id=17)
     xenia = _make_xenia_mock()
     xenia.read_script = AsyncMock(
         return_value={"Content": "1;13;27 45;7;", "Title": "My Shot"}
     )
-
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaConfigCoordinator(hass, entry, xenia)
-
+    coordinator = _make_config_coordinator(
+        xenia=xenia, weight_management_enabled=True, managed_script_id=17
+    )
     result = await coordinator._async_update_data()
     assert result.managed_script_instruction == "1;13;27 45;7;"
     assert result.managed_script_name == "My Shot"
 
 
-@pytest.mark.asyncio
 async def test_config_coordinator_skips_managed_script_when_disabled() -> None:
-    hass = _make_hass()
-    entry = _make_config_entry(weight_management_enabled=False)
     xenia = _make_xenia_mock()
     xenia.read_script = AsyncMock()
-
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaConfigCoordinator(hass, entry, xenia)
-
+    coordinator = _make_config_coordinator(xenia=xenia, weight_management_enabled=False)
     result = await coordinator._async_update_data()
     assert result.managed_script_instruction is None
-    assert result.managed_script_name is None
     xenia.read_script.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_config_coordinator_skips_managed_script_when_no_script_id() -> None:
-    hass = _make_hass()
-    entry = _make_config_entry(weight_management_enabled=True)
     xenia = _make_xenia_mock()
     xenia.read_script = AsyncMock()
-
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaConfigCoordinator(hass, entry, xenia)
-
+    coordinator = _make_config_coordinator(xenia=xenia, weight_management_enabled=True)
     result = await coordinator._async_update_data()
     assert result.managed_script_instruction is None
     xenia.read_script.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_config_coordinator_handles_managed_script_read_failure() -> None:
-    """When reading the managed script fails, the update should still succeed."""
-    hass = _make_hass()
-    entry = _make_config_entry(weight_management_enabled=True, managed_script_id=17)
     xenia = _make_xenia_mock()
-    xenia.read_script = AsyncMock(side_effect=OSError("connection refused"))
-
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaConfigCoordinator(hass, entry, xenia)
-
+    xenia.read_script = AsyncMock(side_effect=OSError("refused"))
+    coordinator = _make_config_coordinator(
+        xenia=xenia, weight_management_enabled=True, managed_script_id=17
+    )
     result = await coordinator._async_update_data()
-    # Update succeeds but managed instruction is None
     assert isinstance(result, XeniaConfigData)
     assert result.managed_script_instruction is None
     assert result.machine is not None
-
-
-# ===========================================================================
-# Dynamic polling intervals
-# ===========================================================================
-
-
-def _make_data_coordinator(
-    overview_dict: dict | None = None,
-    overview_single_dict: dict | None = None,
-    **options,
-) -> XeniaDataUpdateCoordinator:
-    """Build a XeniaDataUpdateCoordinator with mocked internals."""
-    hass = _make_hass()
-    entry = _make_config_entry(**options)
-    xenia = _make_xenia_mock()
-
-    if overview_dict is not None:
-        xenia.get_overview = AsyncMock(
-            return_value=XeniaOverviewData.from_dict(overview_dict)
-        )
-    if overview_single_dict is not None:
-        xenia.get_overview_single = AsyncMock(
-            return_value=XeniaOverviewSingleData.from_dict(overview_single_dict)
-        )
-
-    with patch(
-        "homeassistant.helpers.update_coordinator.DataUpdateCoordinator.__init__"
-    ):
-        coordinator = XeniaDataUpdateCoordinator(hass, entry, xenia)
-        coordinator.update_interval = timedelta(seconds=1)
-
-    return coordinator
-
-
-@pytest.mark.asyncio
-async def test_polling_interval_brewing_state() -> None:
-    """Brewing status should use the brewing interval."""
-    coordinator = _make_data_coordinator(
-        overview_dict={"MA_STATUS": MachineStatus.BREWING},
-    )
-    await coordinator._async_update_data()
-    assert coordinator.update_interval == timedelta(seconds=1)
-
-
-@pytest.mark.asyncio
-async def test_polling_interval_draining_state() -> None:
-    """Draining status should use the brewing interval."""
-    coordinator = _make_data_coordinator(
-        overview_dict={"MA_STATUS": MachineStatus.DRAINING},
-    )
-    await coordinator._async_update_data()
-    assert coordinator.update_interval == timedelta(seconds=1)
-
-
-@pytest.mark.asyncio
-async def test_polling_interval_idle_eco() -> None:
-    """ECO status should use the idle interval."""
-    coordinator = _make_data_coordinator(
-        overview_dict={"MA_STATUS": MachineStatus.ECO},
-    )
-    await coordinator._async_update_data()
-    assert coordinator.update_interval == timedelta(seconds=1)
-
-
-@pytest.mark.asyncio
-async def test_polling_interval_idle_off() -> None:
-    """OFF status should use the idle interval."""
-    coordinator = _make_data_coordinator(
-        overview_dict={"MA_STATUS": MachineStatus.OFF},
-    )
-    await coordinator._async_update_data()
-    assert coordinator.update_interval == timedelta(seconds=1)
-
-
-@pytest.mark.asyncio
-async def test_polling_interval_ready_when_temps_within_threshold() -> None:
-    """ON with temps within threshold should use the ready interval."""
-    coordinator = _make_data_coordinator(
-        overview_dict={
-            "MA_STATUS": MachineStatus.ON,
-            "BG_SENS_TEMP_A": 93.0,
-            "BB_SENS_TEMP_A": 130.0,
-        },
-        overview_single_dict={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
-    )
-    await coordinator._async_update_data()
-    assert coordinator.update_interval == timedelta(seconds=1)
-
-
-@pytest.mark.asyncio
-async def test_polling_interval_active_when_temps_outside_threshold() -> None:
-    """ON with temps outside threshold should use the active interval."""
-    coordinator = _make_data_coordinator(
-        overview_dict={
-            "MA_STATUS": MachineStatus.ON,
-            "BG_SENS_TEMP_A": 50.0,
-            "BB_SENS_TEMP_A": 100.0,
-        },
-        overview_single_dict={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
-    )
-    await coordinator._async_update_data()
-    assert coordinator.update_interval == timedelta(seconds=1)
-
-
-@pytest.mark.asyncio
-async def test_polling_interval_custom_brewing() -> None:
-    """Custom brewing interval from options should be used."""
-    coordinator = _make_data_coordinator(
-        overview_dict={"MA_STATUS": MachineStatus.BREWING},
-        **{CONF_POLL_BREWING: 0.5},
-    )
-    await coordinator._async_update_data()
-    assert coordinator.update_interval == timedelta(seconds=0.5)
-
-
-@pytest.mark.asyncio
-async def test_polling_interval_custom_idle() -> None:
-    """Custom idle interval from options should be used."""
-    coordinator = _make_data_coordinator(
-        overview_dict={"MA_STATUS": MachineStatus.ECO},
-        **{CONF_POLL_IDLE: 10.0},
-    )
-    await coordinator._async_update_data()
-    assert coordinator.update_interval == timedelta(seconds=10.0)
-
-
-@pytest.mark.asyncio
-async def test_polling_interval_custom_ready() -> None:
-    """Custom ready interval from options should be used."""
-    coordinator = _make_data_coordinator(
-        overview_dict={
-            "MA_STATUS": MachineStatus.ON,
-            "BG_SENS_TEMP_A": 93.0,
-            "BB_SENS_TEMP_A": 130.0,
-        },
-        overview_single_dict={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
-        **{CONF_POLL_READY: 5.0},
-    )
-    await coordinator._async_update_data()
-    assert coordinator.update_interval == timedelta(seconds=5.0)
-
-
-@pytest.mark.asyncio
-async def test_polling_interval_custom_active() -> None:
-    """Custom active interval from options should be used."""
-    coordinator = _make_data_coordinator(
-        overview_dict={
-            "MA_STATUS": MachineStatus.ON,
-            "BG_SENS_TEMP_A": 50.0,
-            "BB_SENS_TEMP_A": 100.0,
-        },
-        overview_single_dict={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
-        **{CONF_POLL_ACTIVE: 3.0},
-    )
-    await coordinator._async_update_data()
-    assert coordinator.update_interval == timedelta(seconds=3.0)
-
-
-@pytest.mark.asyncio
-async def test_polling_interval_custom_threshold() -> None:
-    """Custom threshold should affect ready vs active classification."""
-    # With default threshold (2.0) this would be active, but with 50.0 it should be ready
-    coordinator = _make_data_coordinator(
-        overview_dict={
-            "MA_STATUS": MachineStatus.ON,
-            "BG_SENS_TEMP_A": 50.0,
-            "BB_SENS_TEMP_A": 100.0,
-        },
-        overview_single_dict={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
-        **{CONF_READY_THRESHOLD: 50.0, CONF_POLL_READY: 5.0, CONF_POLL_ACTIVE: 2.0},
-    )
-    await coordinator._async_update_data()
-    assert coordinator.update_interval == timedelta(seconds=5.0)
-
-
-@pytest.mark.asyncio
-async def test_polling_interval_unknown_status_uses_idle() -> None:
-    """UNKNOWN status should use the idle interval."""
-    coordinator = _make_data_coordinator(
-        overview_dict={"MA_STATUS": MachineStatus.UNKNOWN},
-        **{CONF_POLL_IDLE: 15.0},
-    )
-    await coordinator._async_update_data()
-    assert coordinator.update_interval == timedelta(seconds=15.0)
-
-
-@pytest.mark.asyncio
-async def test_polling_interval_zero_threshold_requires_exact_match() -> None:
-    """Threshold of 0.0 means temps must match exactly for ready state."""
-    # Temps differ by 0.5 — with threshold 0 this should be active
-    coordinator = _make_data_coordinator(
-        overview_dict={
-            "MA_STATUS": MachineStatus.ON,
-            "BG_SENS_TEMP_A": 93.0,
-            "BB_SENS_TEMP_A": 130.0,
-        },
-        overview_single_dict={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
-        **{CONF_READY_THRESHOLD: 0.0, CONF_POLL_READY: 5.0, CONF_POLL_ACTIVE: 2.0},
-    )
-    await coordinator._async_update_data()
-    assert coordinator.update_interval == timedelta(seconds=2.0)

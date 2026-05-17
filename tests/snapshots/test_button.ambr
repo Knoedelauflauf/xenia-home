@@ -1,0 +1,51 @@
+# serializer version: 1
+# name: test_button_entities_snapshot[button.xenia_espresso_machine_execute_script-registry]
+  EntityRegistryEntrySnapshot({
+    'aliases': set({
+    }),
+    'area_id': None,
+    'capabilities': None,
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'button',
+    'entity_category': None,
+    'entity_id': 'button.xenia_espresso_machine_execute_script',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Execute script',
+    'options': dict({
+    }),
+    'original_device_class': None,
+    'original_icon': 'mdi:play',
+    'original_name': 'Execute script',
+    'platform': 'xenia_home',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'execute_script',
+    'unique_id': 'xenia_home_execute_script_xenia.local',
+    'unit_of_measurement': None,
+  })
+# ---
+# name: test_button_entities_snapshot[button.xenia_espresso_machine_execute_script-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      'friendly_name': 'Xenia Espresso Machine Execute script',
+      'icon': 'mdi:play',
+    }),
+    'context': <ANY>,
+    'entity_id': 'button.xenia_espresso_machine_execute_script',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': 'unknown',
+  })
+# ---

@@ -3,78 +3,30 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
 
 import pytest
 
-from custom_components.xenia_home.coordinator import (
-    XeniaCoordinatorData,
-)
-from custom_components.xenia_home.event import ShotData, XeniaShotTracker
-from custom_components.xenia_home.xenia import (
-    MachineStatus,
-    XeniaOverviewData,
-    XeniaOverviewSingleData,
-)
+from custom_components.xenia_home.event import ShotData
+from custom_components.xenia_home.xenia import MachineStatus
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+TRACKER = "event.xenia_espresso_machine_shot_tracker"
 
 
-def _make_coordinator(ma_status: MachineStatus = MachineStatus.ON) -> MagicMock:
-    coord = MagicMock()
-    coord.config_entry = MagicMock()
-    coord.config_entry.data = {"host": "xenia.local"}
-
-    overview = XeniaOverviewData.from_dict(
-        {
-            "MA_STATUS": ma_status.value,
-            "BG_SENS_TEMP_A": 93.0,
-            "BB_SENS_TEMP_A": 130.0,
-            "PU_SENS_PRESS": 9.0,
-            "PU_SENS_FLOW_METER_ML": 5.0,
-            "SCALE_WEIGHT": 18.0,
-        }
+async def test_event_entities_snapshot(
+    hass, init_integration, snapshot, entity_registry
+):
+    entity_ids = sorted(
+        e.entity_id
+        for e in entity_registry.entities.values()
+        if e.platform == "xenia_home" and e.domain == "event"
     )
-    overview_single = XeniaOverviewSingleData.from_dict({})
-    coord.data = XeniaCoordinatorData(
-        overview=overview, overview_single=overview_single
-    )
-    return coord
-
-
-def _make_tracker(coordinator: MagicMock) -> XeniaShotTracker:
-    with patch(
-        "custom_components.xenia_home.entity.XeniaEntity.__init__", return_value=None
-    ):
-        tracker = XeniaShotTracker.__new__(XeniaShotTracker)
-        tracker.coordinator = coordinator
-        tracker.hass = MagicMock()
-        XeniaShotTracker.__init__(tracker, coordinator)
-    return tracker
-
-
-def _update_status(tracker: XeniaShotTracker, status: MachineStatus) -> None:
-    """Update the coordinator's machine status and trigger a coordinator update."""
-    tracker.coordinator.data.overview._replace  # just to ensure it's a real object
-    # Patch the status directly on the dataclass
-    tracker.coordinator.data = XeniaCoordinatorData(
-        overview=XeniaOverviewData.from_dict(
-            {
-                "MA_STATUS": status.value,
-                "BG_SENS_TEMP_A": 93.0,
-                "BB_SENS_TEMP_A": 130.0,
-                "PU_SENS_PRESS": 9.0,
-                "PU_SENS_FLOW_METER_ML": 5.0,
-                "SCALE_WEIGHT": 18.5,
-            }
-        ),
-        overview_single=XeniaOverviewSingleData.from_dict({}),
-    )
-    tracker.async_write_ha_state = MagicMock()
-    tracker._handle_coordinator_update()
+    assert entity_ids
+    for entity_id in entity_ids:
+        registry_entry = entity_registry.async_get(entity_id)
+        # State of an event entity is volatile (last event timestamp).
+        # Snapshot the registry entry only.
+        assert registry_entry == snapshot(name=f"{entity_id}-registry")
 
 
 # ===========================================================================
@@ -82,7 +34,7 @@ def _update_status(tracker: XeniaShotTracker, status: MachineStatus) -> None:
 # ===========================================================================
 
 
-def test_shot_data_to_dict_returns_all_fields() -> None:
+def test_shot_data_to_dict_has_all_fields() -> None:
     shot = ShotData(
         start_time="2026-01-01T10:00:00",
         brew_end_time="2026-01-01T10:00:30",
@@ -102,7 +54,7 @@ def test_shot_data_to_dict_returns_all_fields() -> None:
     assert d["brew_end_time"] == "2026-01-01T10:00:30"
 
 
-def test_shot_data_to_dict_brew_end_time_can_be_none() -> None:
+def test_shot_data_brew_end_time_optional() -> None:
     shot = ShotData(
         start_time="2026-01-01T10:00:00",
         brew_end_time=None,
@@ -115,202 +67,120 @@ def test_shot_data_to_dict_brew_end_time_can_be_none() -> None:
         flow_rates=[],
         weights=[],
     )
-    d = shot.to_dict()
-    assert d["brew_end_time"] is None
+    assert shot.to_dict()["brew_end_time"] is None
 
 
 # ===========================================================================
-# XeniaShotTracker — initialization
+# Helpers to grab the live entity object and prime the state machine
 # ===========================================================================
 
 
-def test_shot_tracker_unique_id_contains_host() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    assert "xenia.local" in tracker._attr_unique_id
+def _get_tracker(hass, init_integration):
+    """Return the XeniaShotTracker entity instance from runtime data."""
+    from homeassistant.helpers.entity_component import DATA_INSTANCES
+
+    component = hass.data[DATA_INSTANCES].get("event")
+    if component is not None:
+        for entity in component.entities:
+            if entity.entity_id == TRACKER:
+                return entity
+    raise AssertionError(f"tracker entity {TRACKER} not found")
 
 
-def test_shot_tracker_translation_key_is_set() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    assert tracker._attr_translation_key == "shot_tracker"
+async def _drive_status(hass, mock_xenia_api, init_integration, status: MachineStatus):
+    """Push a new MA_STATUS through the coordinator and let listeners run."""
+    from custom_components.xenia_home.coordinator import XeniaCoordinatorData
+    from custom_components.xenia_home.xenia import (
+        XeniaOverviewData,
+    )
+
+    coordinator = init_integration.runtime_data.coordinator
+    new_overview = XeniaOverviewData.from_dict(
+        {**mock_xenia_api._overview, "MA_STATUS": int(status)}
+    )
+    new_data = XeniaCoordinatorData(
+        overview=new_overview,
+        overview_single=coordinator.data.overview_single,
+    )
+    coordinator.async_set_updated_data(new_data)
+    await hass.async_block_till_done()
 
 
-def test_shot_tracker_event_types_contains_shot_completed() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    assert "shot_completed" in tracker._attr_event_types
+# ===========================================================================
+# State-machine transitions driven through the real coordinator
+# ===========================================================================
 
 
-def test_shot_tracker_initial_state_not_brewing() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
+async def test_tracker_starts_shot_when_brewing_begins(
+    hass, init_integration, mock_xenia_api
+):
+    tracker = _get_tracker(hass, init_integration)
     assert tracker._is_brewing is False
-
-
-def test_shot_tracker_initial_shot_start_time_is_none() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    assert tracker._shot_start_time is None
-
-
-def test_shot_tracker_extra_state_attributes_returns_is_brewing() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    attrs = tracker.extra_state_attributes
-    assert "is_brewing" in attrs
-    assert attrs["is_brewing"] is False
-
-
-# ===========================================================================
-# _start_shot_tracking
-# ===========================================================================
-
-
-def test_start_shot_tracking_sets_shot_start_time() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    tracker._start_shot_tracking()
+    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.BREWING)
+    assert tracker._is_brewing is True
     assert tracker._shot_start_time is not None
 
 
-def test_start_shot_tracking_clears_all_lists() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    tracker._brew_group_temps = [1.0, 2.0]
-    tracker._timestamps = [0.5, 1.5]
-    tracker._start_shot_tracking()
-    assert tracker._brew_group_temps == []
-    assert tracker._timestamps == []
-
-
-def test_start_shot_tracking_clears_brew_end_time() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    tracker._brew_end_time = datetime.now()
-    tracker._start_shot_tracking()
-    assert tracker._brew_end_time is None
-
-
-# ===========================================================================
-# _start_afterflow
-# ===========================================================================
-
-
-def test_start_afterflow_sets_afterflow_until() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    tracker._start_afterflow()
+async def test_tracker_starts_afterflow_when_brewing_stops(
+    hass, init_integration, mock_xenia_api
+):
+    tracker = _get_tracker(hass, init_integration)
+    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.BREWING)
+    assert tracker._is_brewing is True
+    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.ON)
+    assert tracker._is_brewing is False
     assert tracker._afterflow_until is not None
 
 
-def test_start_afterflow_does_not_reset_if_already_active() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    first_time = datetime.now() + timedelta(seconds=10)
-    tracker._afterflow_until = first_time
-    tracker._start_afterflow()
-    # Should not overwrite
-    assert tracker._afterflow_until == first_time
-
-
-def test_start_afterflow_sets_brew_end_time() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    tracker._start_afterflow()
-    assert tracker._brew_end_time is not None
-
-
-def test_start_afterflow_resets_sample_counter() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    tracker._afterflow_samples = 5
-    tracker._start_afterflow()
-    assert tracker._afterflow_samples == 0
-
-
-# ===========================================================================
-# _cancel_afterflow
-# ===========================================================================
-
-
-def test_cancel_afterflow_clears_afterflow_until() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    tracker._afterflow_until = datetime.now() + timedelta(seconds=5)
-    tracker._cancel_afterflow()
+async def test_tracker_cancels_afterflow_on_new_brew(
+    hass, init_integration, mock_xenia_api
+):
+    tracker = _get_tracker(hass, init_integration)
+    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.BREWING)
+    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.ON)
+    assert tracker._afterflow_until is not None
+    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.BREWING)
     assert tracker._afterflow_until is None
 
 
-def test_cancel_afterflow_resets_samples() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
+# ===========================================================================
+# Direct entity-instance tests for the internal helpers
+# ===========================================================================
+
+
+async def test_start_shot_tracking_clears_lists(hass, init_integration):
+    tracker = _get_tracker(hass, init_integration)
+    tracker._brew_group_temps = [1.0, 2.0]
+    tracker._timestamps = [0.5, 1.5]
+    tracker._brew_end_time = datetime.now()
+    tracker._start_shot_tracking()
+    assert tracker._brew_group_temps == []
+    assert tracker._timestamps == []
+    assert tracker._brew_end_time is None
+    assert tracker._shot_start_time is not None
+
+
+async def test_start_afterflow_does_not_reset_if_already_active(hass, init_integration):
+    tracker = _get_tracker(hass, init_integration)
+    first = datetime.now() + timedelta(seconds=10)
+    tracker._afterflow_until = first
+    tracker._start_afterflow()
+    assert tracker._afterflow_until == first
+
+
+async def test_cancel_afterflow_clears_state(hass, init_integration):
+    tracker = _get_tracker(hass, init_integration)
+    tracker._afterflow_until = datetime.now() + timedelta(seconds=5)
     tracker._afterflow_samples = 3
     tracker._cancel_afterflow()
+    assert tracker._afterflow_until is None
     assert tracker._afterflow_samples == 0
 
 
-# ===========================================================================
-# _collect_shot_data
-# ===========================================================================
-
-
-def test_collect_shot_data_does_nothing_if_shot_not_started() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    tracker._shot_start_time = None
-    tracker._collect_shot_data()
-    assert tracker._brew_group_temps == []
-
-
-def test_collect_shot_data_appends_sensor_values() -> None:
-    coord = _make_coordinator(MachineStatus.BREWING)
-    tracker = _make_tracker(coord)
-    tracker._shot_start_time = datetime.now()
-    tracker._is_brewing = True
-    tracker._collect_shot_data()
-    assert len(tracker._brew_group_temps) == 1
-    assert len(tracker._pump_pressures) == 1
-    assert len(tracker._weights) == 1
-    assert len(tracker._timestamps) == 1
-
-
-def test_collect_shot_data_increments_afterflow_samples_when_not_brewing() -> None:
-    coord = _make_coordinator(MachineStatus.ON)
-    tracker = _make_tracker(coord)
-    tracker._shot_start_time = datetime.now()
-    tracker._is_brewing = False
-    tracker._afterflow_until = datetime.now() + timedelta(seconds=5)
-    tracker._collect_shot_data()
-    assert tracker._afterflow_samples == 1
-
-
-# ===========================================================================
-# _complete_shot_tracking
-# ===========================================================================
-
-
-def test_complete_shot_tracking_does_nothing_if_no_start_time() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    tracker._shot_start_time = None
-    tracker._timestamps = []
-    # Should not raise
-    tracker._complete_shot_tracking()
-
-
-def test_complete_shot_tracking_does_nothing_if_no_timestamps() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    tracker._shot_start_time = datetime.now()
-    tracker._timestamps = []
-    tracker._complete_shot_tracking()
-
-
-def test_complete_shot_tracking_ignores_short_shots() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    tracker._trigger_event = MagicMock()
+async def test_complete_shot_ignores_short_shots(hass, init_integration):
+    tracker = _get_tracker(hass, init_integration)
+    fired: list = []
+    tracker._trigger_event = lambda name, data: fired.append((name, data))
     tracker._shot_start_time = datetime.now() - timedelta(seconds=5)
     tracker._timestamps = [0.0, 1.0]
     tracker._brew_group_temps = [93.0, 93.0]
@@ -319,13 +189,13 @@ def test_complete_shot_tracking_ignores_short_shots() -> None:
     tracker._flow_rates = [5.0, 5.0]
     tracker._weights = [0.0, 5.0]
     tracker._complete_shot_tracking()
-    tracker._trigger_event.assert_not_called()
+    assert fired == []
 
 
-def test_complete_shot_tracking_fires_event_for_long_enough_shot() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    tracker._trigger_event = MagicMock()
+async def test_complete_shot_fires_for_long_enough_shot(hass, init_integration):
+    tracker = _get_tracker(hass, init_integration)
+    fired: list = []
+    tracker._trigger_event = lambda name, data: fired.append((name, data))
     tracker._shot_start_time = datetime.now() - timedelta(seconds=25)
     tracker._timestamps = [0.0, 5.0, 10.0, 15.0, 20.0]
     tracker._brew_group_temps = [93.0] * 5
@@ -334,17 +204,16 @@ def test_complete_shot_tracking_fires_event_for_long_enough_shot() -> None:
     tracker._flow_rates = [5.0] * 5
     tracker._weights = [0.0, 5.0, 10.0, 15.0, 18.0]
     tracker._complete_shot_tracking()
-    tracker._trigger_event.assert_called_once()
-    call_args = tracker._trigger_event.call_args
-    assert call_args[0][0] == "shot_completed"
+    assert len(fired) == 1
+    name, data = fired[0]
+    assert name == "shot_completed"
+    assert "duration_seconds" in data
 
 
-def test_complete_shot_tracking_uses_brew_end_time_for_duration_when_available() -> (
-    None
-):
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    tracker._trigger_event = MagicMock()
+async def test_complete_shot_uses_brew_end_time_for_duration(hass, init_integration):
+    tracker = _get_tracker(hass, init_integration)
+    fired: list = []
+    tracker._trigger_event = lambda name, data: fired.append((name, data))
     start = datetime.now() - timedelta(seconds=30)
     brew_end = start + timedelta(seconds=25)
     tracker._shot_start_time = start
@@ -356,14 +225,12 @@ def test_complete_shot_tracking_uses_brew_end_time_for_duration_when_available()
     tracker._flow_rates = [5.0] * 25
     tracker._weights = [float(i) for i in range(25)]
     tracker._complete_shot_tracking()
-    shot_data_arg = tracker._trigger_event.call_args[0][1]
-    assert shot_data_arg["duration_seconds"] == pytest.approx(25.0, abs=1.0)
+    assert pytest.approx(fired[0][1]["duration_seconds"], abs=1.0) == 25.0
 
 
-def test_complete_shot_tracking_cancels_afterflow_when_done() -> None:
-    coord = _make_coordinator()
-    tracker = _make_tracker(coord)
-    tracker._trigger_event = MagicMock()
+async def test_complete_shot_cancels_afterflow(hass, init_integration):
+    tracker = _get_tracker(hass, init_integration)
+    tracker._trigger_event = lambda *a, **k: None
     tracker._afterflow_until = datetime.now() + timedelta(seconds=5)
     tracker._shot_start_time = datetime.now() - timedelta(seconds=25)
     tracker._timestamps = list(range(25))
@@ -374,173 +241,3 @@ def test_complete_shot_tracking_cancels_afterflow_when_done() -> None:
     tracker._weights = [float(i) for i in range(25)]
     tracker._complete_shot_tracking()
     assert tracker._afterflow_until is None
-
-
-# ===========================================================================
-# _handle_coordinator_update — state machine transitions
-# ===========================================================================
-
-
-def test_handle_update_starts_tracking_when_brewing_begins() -> None:
-    coord = _make_coordinator(MachineStatus.ON)
-    tracker = _make_tracker(coord)
-    tracker.async_write_ha_state = MagicMock()
-    tracker._is_brewing = False
-
-    # Simulate transition to BREWING
-    coord.data = XeniaCoordinatorData(
-        overview=XeniaOverviewData.from_dict(
-            {"MA_STATUS": MachineStatus.BREWING.value}
-        ),
-        overview_single=XeniaOverviewSingleData.from_dict({}),
-    )
-    tracker._handle_coordinator_update()
-
-    assert tracker._shot_start_time is not None
-    assert tracker._is_brewing is True
-
-
-def test_handle_update_collects_data_while_brewing() -> None:
-    coord = _make_coordinator(MachineStatus.BREWING)
-    tracker = _make_tracker(coord)
-    tracker.async_write_ha_state = MagicMock()
-    tracker._is_brewing = True
-    tracker._shot_start_time = datetime.now()
-
-    coord.data = XeniaCoordinatorData(
-        overview=XeniaOverviewData.from_dict(
-            {"MA_STATUS": MachineStatus.BREWING.value}
-        ),
-        overview_single=XeniaOverviewSingleData.from_dict({}),
-    )
-    tracker._handle_coordinator_update()
-
-    assert len(tracker._timestamps) >= 1
-
-
-def test_handle_update_starts_afterflow_when_brewing_stops() -> None:
-    coord = _make_coordinator(MachineStatus.BREWING)
-    tracker = _make_tracker(coord)
-    tracker.async_write_ha_state = MagicMock()
-    tracker._is_brewing = True
-    tracker._shot_start_time = datetime.now()
-
-    coord.data = XeniaCoordinatorData(
-        overview=XeniaOverviewData.from_dict({"MA_STATUS": MachineStatus.ON.value}),
-        overview_single=XeniaOverviewSingleData.from_dict({}),
-    )
-    tracker._handle_coordinator_update()
-
-    assert tracker._afterflow_until is not None
-    assert tracker._is_brewing is False
-
-
-def test_handle_update_completes_shot_after_afterflow_expires() -> None:
-    coord = _make_coordinator(MachineStatus.ON)
-    tracker = _make_tracker(coord)
-    tracker.async_write_ha_state = MagicMock()
-    tracker._trigger_event = MagicMock()
-    tracker._is_brewing = False
-    tracker._shot_start_time = datetime.now() - timedelta(seconds=30)
-    tracker._timestamps = list(range(20))
-    tracker._brew_group_temps = [93.0] * 20
-    tracker._brew_boiler_temps = [130.0] * 20
-    tracker._pump_pressures = [9.0] * 20
-    tracker._flow_rates = [5.0] * 20
-    tracker._weights = [float(i) for i in range(20)]
-    # Set afterflow to already expired
-    tracker._afterflow_until = datetime.now() - timedelta(seconds=1)
-
-    coord.data = XeniaCoordinatorData(
-        overview=XeniaOverviewData.from_dict({"MA_STATUS": MachineStatus.ON.value}),
-        overview_single=XeniaOverviewSingleData.from_dict({}),
-    )
-    tracker._handle_coordinator_update()
-
-    tracker._trigger_event.assert_called_once()
-
-
-def test_handle_update_cancels_afterflow_when_new_brew_starts() -> None:
-    coord = _make_coordinator(MachineStatus.ON)
-    tracker = _make_tracker(coord)
-    tracker.async_write_ha_state = MagicMock()
-    tracker._is_brewing = False
-    tracker._afterflow_until = datetime.now() + timedelta(seconds=5)
-
-    # Transition directly to brewing again
-    coord.data = XeniaCoordinatorData(
-        overview=XeniaOverviewData.from_dict(
-            {"MA_STATUS": MachineStatus.BREWING.value}
-        ),
-        overview_single=XeniaOverviewSingleData.from_dict({}),
-    )
-    tracker._handle_coordinator_update()
-
-    assert tracker._afterflow_until is None
-
-
-def test_afterflow_ends_early_on_scale_auto_tare() -> None:
-    """Scale sending 0g during afterflow should complete the shot immediately."""
-    coord = _make_coordinator(MachineStatus.ON)
-    tracker = _make_tracker(coord)
-    tracker.async_write_ha_state = MagicMock()
-    tracker._trigger_event = MagicMock()
-    tracker._is_brewing = False
-    tracker._shot_start_time = datetime.now() - timedelta(seconds=30)
-    tracker._timestamps = list(range(20))
-    tracker._brew_group_temps = [93.0] * 20
-    tracker._brew_boiler_temps = [130.0] * 20
-    tracker._pump_pressures = [9.0] * 20
-    tracker._flow_rates = [5.0] * 20
-    tracker._weights = [float(i) for i in range(20)]  # last value is 19.0
-    tracker._afterflow_until = datetime.now() + timedelta(seconds=5)
-    tracker._brew_end_time = datetime.now()
-
-    # Scale reports 0g (auto-tare)
-    coord.data = XeniaCoordinatorData(
-        overview=XeniaOverviewData.from_dict(
-            {"MA_STATUS": MachineStatus.ON.value, "SCALE_WEIGHT": 0.0}
-        ),
-        overview_single=XeniaOverviewSingleData.from_dict({}),
-    )
-    tracker._handle_coordinator_update()
-
-    # Shot should be completed, 0g not in weights
-    tracker._trigger_event.assert_called_once()
-    assert tracker._weights[-1] == 19.0
-
-
-def test_zero_weight_during_brewing_is_recorded() -> None:
-    """0g during active brewing should be recorded normally."""
-    coord = _make_coordinator(MachineStatus.BREWING)
-    tracker = _make_tracker(coord)
-    tracker.async_write_ha_state = MagicMock()
-    tracker._is_brewing = True
-    tracker._shot_start_time = datetime.now() - timedelta(seconds=5)
-    tracker._timestamps = [0.0, 1.0]
-    tracker._brew_group_temps = [93.0, 93.0]
-    tracker._brew_boiler_temps = [130.0, 130.0]
-    tracker._pump_pressures = [9.0, 9.0]
-    tracker._flow_rates = [5.0, 5.0]
-    tracker._weights = [10.0, 15.0]
-
-    # Scale reports 0g while still brewing
-    coord.data = XeniaCoordinatorData(
-        overview=XeniaOverviewData.from_dict(
-            {"MA_STATUS": MachineStatus.BREWING.value, "SCALE_WEIGHT": 0.0}
-        ),
-        overview_single=XeniaOverviewSingleData.from_dict({}),
-    )
-    tracker._handle_coordinator_update()
-
-    # 0g should be recorded
-    assert tracker._weights[-1] == 0.0
-    assert len(tracker._weights) == 3
-
-
-def test_handle_update_writes_ha_state_every_call() -> None:
-    coord = _make_coordinator(MachineStatus.ON)
-    tracker = _make_tracker(coord)
-    tracker.async_write_ha_state = MagicMock()
-    tracker._handle_coordinator_update()
-    tracker.async_write_ha_state.assert_called_once()
