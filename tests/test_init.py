@@ -122,16 +122,6 @@ async def test_execute_script_id_takes_priority_over_name(
 # ===========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "BUG-2: async_unload_entry checks async_entries(XENIA_DOMAIN) to decide "
-        "whether to remove the service, but the entry being unloaded is still in "
-        "the registry (state=UNLOAD_IN_PROGRESS) when the check runs, so the "
-        "condition is always False and the service is never removed. "
-        "Fix: exclude `entry` from the remaining-entries check."
-    ),
-)
 async def test_unload_entry_removes_service_when_last_entry_gone(
     hass, init_integration
 ):

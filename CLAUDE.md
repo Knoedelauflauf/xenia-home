@@ -12,13 +12,16 @@ This is a custom Home Assistant integration for Xenia Espresso Machines. These i
 
 ## Python Requirements
 
-- **Compatibility**: Python 3.13+
+- **Compatibility**: Python 3.14+
 - **Language Features**: Use the newest features when possible:
   - Pattern matching
   - Type hints
   - f-strings (preferred over `%` or `.format()`)
   - Dataclasses
   - Walrus operator
+  - **PEP 649 (Python 3.14)**: Annotations are evaluated lazily. Forward references in
+    annotations do not need quoting, and `from __future__ import annotations` is no
+    longer required for forward-reference support in new files.
 
 ## Code Quality Standards
 

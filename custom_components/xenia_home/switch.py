@@ -1,8 +1,7 @@
-import asyncio
-
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
     CONF_POWER_ON_BEHAVIOR,
@@ -14,10 +13,14 @@ from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
 from .entity import XeniaEntity
 from .xenia import MachineStatus, SteamBoilerStatus
 
+PARALLEL_UPDATES = 1
+
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: XeniaConfigEntry, async_add_entities
-):
+    hass: HomeAssistant,
+    entry: XeniaConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     coordinator = entry.runtime_data.coordinator
     async_add_entities(
         [
@@ -47,7 +50,7 @@ class XeniaPowerSwitch(XeniaEntity, SwitchEntity):
             MachineStatus.DRAINING,
         ]
 
-    async def async_turn_on(self, **kwargs):
+    async def async_turn_on(self, **kwargs) -> None:
         behavior = self.coordinator.config_entry.options.get(
             CONF_POWER_ON_BEHAVIOR, DEFAULT_POWER_ON_BEHAVIOR
         )
@@ -57,7 +60,7 @@ class XeniaPowerSwitch(XeniaEntity, SwitchEntity):
             await self.coordinator.xenia.machine_turn_on(False)
         await self.coordinator.async_request_refresh()
 
-    async def async_turn_off(self, **kwargs):
+    async def async_turn_off(self, **kwargs) -> None:
         await self.coordinator.xenia.machine_turn_off()
         await self.coordinator.async_request_refresh()
 
@@ -84,12 +87,11 @@ class XeniaEcoSwitch(XeniaEntity, SwitchEntity):
     def is_on(self):
         return self.coordinator.data.overview.ma_status == MachineStatus.ECO
 
-    async def async_turn_on(self, **kwargs):
+    async def async_turn_on(self, **kwargs) -> None:
         await self.coordinator.xenia.machine_set_eco()
-        await asyncio.sleep(1)
         await self.coordinator.async_request_refresh()
 
-    async def async_turn_off(self, **kwargs):
+    async def async_turn_off(self, **kwargs) -> None:
         behavior = self.coordinator.config_entry.options.get(
             CONF_POWER_ON_BEHAVIOR, DEFAULT_POWER_ON_BEHAVIOR
         )
@@ -97,7 +99,6 @@ class XeniaEcoSwitch(XeniaEntity, SwitchEntity):
             await self.coordinator.xenia.machine_turn_on()
         elif behavior == PowerOnBehavior.STEAM_OFF:
             await self.coordinator.xenia.machine_turn_on(False)
-        await asyncio.sleep(1)
         await self.coordinator.async_request_refresh()
 
 
@@ -123,12 +124,10 @@ class XeniaSteamBoilerSwitch(XeniaEntity, SwitchEntity):
     def is_on(self):
         return self.coordinator.data.overview.sb_status == SteamBoilerStatus.ON
 
-    async def async_turn_on(self, **kwargs):
+    async def async_turn_on(self, **kwargs) -> None:
         await self.coordinator.xenia.sb_turn_on()
-        await asyncio.sleep(1)
         await self.coordinator.async_request_refresh()
 
-    async def async_turn_off(self, **kwargs):
+    async def async_turn_off(self, **kwargs) -> None:
         await self.coordinator.xenia.sb_turn_off()
-        await asyncio.sleep(1)
         await self.coordinator.async_request_refresh()

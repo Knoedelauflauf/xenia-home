@@ -1,7 +1,17 @@
 from enum import Enum
 
+from homeassistant.const import Platform
+
 XENIA_DOMAIN = "xenia_home"
-PLATFORMS = ["binary_sensor", "button", "event", "number", "select", "sensor", "switch"]
+PLATFORMS: list[Platform] = [
+    Platform.BINARY_SENSOR,
+    Platform.BUTTON,
+    Platform.EVENT,
+    Platform.NUMBER,
+    Platform.SELECT,
+    Platform.SENSOR,
+    Platform.SWITCH,
+]
 DEFAULT_HOST = "xenia.local"
 
 CONF_POWER_ON_BEHAVIOR = "power_on_behavior"
@@ -45,4 +55,4 @@ class PowerOnBehavior(str, Enum):
 
 POWER_ON_BEHAVIOR_OPTIONS: list[str] = [e.value for e in PowerOnBehavior]
 
-DEFAULT_POWER_ON_BEHAVIOR = PowerOnBehavior.STEAM_OFF
+DEFAULT_POWER_ON_BEHAVIOR = PowerOnBehavior.STEAM_OFF.value

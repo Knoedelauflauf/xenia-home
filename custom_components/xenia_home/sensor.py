@@ -28,6 +28,8 @@ from .coordinator import (
 )
 from .entity import XeniaEntity
 
+PARALLEL_UPDATES = 0
+
 
 @dataclass(frozen=True, kw_only=True)
 class XeniaEntityDescriptionMixinSensor:
@@ -121,7 +123,7 @@ async def async_setup_entry(
     hass: HomeAssistant,
     entry: XeniaConfigEntry,
     async_add_entities: AddEntitiesCallback,
-):
+) -> None:
     coordinator = entry.runtime_data.coordinator
     async_add_entities(
         XeniaSensor(coordinator, description) for description in SENSOR_TYPES

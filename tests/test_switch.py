@@ -165,16 +165,11 @@ async def test_eco_switch_state(
 async def test_eco_switch_turn_on_calls_machine_set_eco(
     hass, init_integration, mock_xenia_api
 ):
-    from unittest.mock import patch, AsyncMock
-
     mock_xenia_api.expect_machine_control()
-    with patch(
-        "custom_components.xenia_home.switch.asyncio.sleep", new_callable=AsyncMock
-    ):
-        await hass.services.async_call(
-            "switch", "turn_on", {"entity_id": ECO}, blocking=True
-        )
-        await hass.async_block_till_done()
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": ECO}, blocking=True
+    )
+    await hass.async_block_till_done()
     # MachineControl.ECO = 2
     mock_xenia_api.assert_post_called_with("machine/control", '"2"')
 
@@ -185,8 +180,6 @@ async def test_eco_switch_turn_off_steam_off_calls_on_sb_off(
     mock_xenia_api,
     mock_config_entry_factory_with_options,
 ):
-    from unittest.mock import patch, AsyncMock
-
     entry = mock_config_entry_factory_with_options(
         {CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_OFF}
     )
@@ -196,13 +189,10 @@ async def test_eco_switch_turn_off_steam_off_calls_on_sb_off(
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    with patch(
-        "custom_components.xenia_home.switch.asyncio.sleep", new_callable=AsyncMock
-    ):
-        await hass.services.async_call(
-            "switch", "turn_off", {"entity_id": ECO}, blocking=True
-        )
-        await hass.async_block_till_done()
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": ECO}, blocking=True
+    )
+    await hass.async_block_till_done()
     mock_xenia_api.assert_post_called_with("machine/control", '"5"')
 
 
@@ -267,30 +257,20 @@ async def test_steam_boiler_availability_follows_machine_state(
 async def test_steam_boiler_turn_on_calls_toggle_sb(
     hass, init_integration, mock_xenia_api
 ):
-    from unittest.mock import patch, AsyncMock
-
     mock_xenia_api.expect_toggle_sb()
-    with patch(
-        "custom_components.xenia_home.switch.asyncio.sleep", new_callable=AsyncMock
-    ):
-        await hass.services.async_call(
-            "switch", "turn_on", {"entity_id": STEAM_BOILER}, blocking=True
-        )
-        await hass.async_block_till_done()
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": STEAM_BOILER}, blocking=True
+    )
+    await hass.async_block_till_done()
     mock_xenia_api.assert_post_called_with("toggle_sb", "true")
 
 
 async def test_steam_boiler_turn_off_calls_toggle_sb(
     hass, init_integration, mock_xenia_api
 ):
-    from unittest.mock import patch, AsyncMock
-
     mock_xenia_api.expect_toggle_sb()
-    with patch(
-        "custom_components.xenia_home.switch.asyncio.sleep", new_callable=AsyncMock
-    ):
-        await hass.services.async_call(
-            "switch", "turn_off", {"entity_id": STEAM_BOILER}, blocking=True
-        )
-        await hass.async_block_till_done()
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": STEAM_BOILER}, blocking=True
+    )
+    await hass.async_block_till_done()
     mock_xenia_api.assert_post_called_with("toggle_sb", "false")

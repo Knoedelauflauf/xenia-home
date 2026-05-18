@@ -38,6 +38,8 @@ from .script_parser import get_weight_target, set_weight_target
 
 _LOGGER = logging.getLogger(__name__)
 
+PARALLEL_UPDATES = 1
+
 
 @dataclass(frozen=True, kw_only=True)
 class XeniaEntityDescriptionMixinNumber:
@@ -86,7 +88,7 @@ async def async_setup_entry(
     hass: HomeAssistant,
     entry: XeniaConfigEntry,
     async_add_entities: AddEntitiesCallback,
-):
+) -> None:
     coordinator = entry.runtime_data.coordinator
     entities: list[NumberEntity] = [
         XeniaNumber(coordinator, description) for description in NUMBER_TYPES

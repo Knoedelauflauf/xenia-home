@@ -4,10 +4,12 @@ import logging
 
 import voluptuous as vol
 
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import ConfigType
 
 from .const import PLATFORMS, XENIA_DOMAIN
 from .coordinator import (
@@ -32,6 +34,55 @@ SERVICE_EXECUTE_SCRIPT_SCHEMA = vol.Schema(
 )
 
 
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the integration's global service."""
+
+    async def handle_execute_script(call: ServiceCall) -> None:
+        """Handle the execute_script service call."""
+        entries = [
+            entry
+            for entry in hass.config_entries.async_entries(XENIA_DOMAIN)
+            if entry.state is ConfigEntryState.LOADED
+        ]
+        if not entries:
+            raise ServiceValidationError(
+                "No Xenia config entry is loaded; cannot execute script"
+            )
+
+        script_id = call.data.get(ATTR_SCRIPT_ID)
+        script_name = call.data.get(ATTR_SCRIPT_NAME)
+
+        if script_id is None and script_name is None:
+            raise ServiceValidationError(
+                "Either script_id or script_name is required"
+            )
+
+        # Use the first loaded entry's coordinators
+        entry = entries[0]
+        runtime = entry.runtime_data
+        xenia = runtime.coordinator.xenia
+        config_coordinator = runtime.config_coordinator
+
+        if script_id is None:
+            scripts = config_coordinator.data.scripts
+            for sid, title in scripts.items():
+                if title == script_name:
+                    script_id = sid
+                    break
+            if script_id is None:
+                raise ServiceValidationError(f"Script '{script_name}' not found")
+
+        await xenia.execute_script(script_id)
+
+    hass.services.async_register(
+        XENIA_DOMAIN,
+        SERVICE_EXECUTE_SCRIPT,
+        handle_execute_script,
+        schema=SERVICE_EXECUTE_SCRIPT_SCHEMA,
+    )
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> bool:
     """Set up Xenia from a config entry."""
     host = entry.data[CONF_HOST]
@@ -49,47 +100,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> boo
         config_coordinator=config_coordinator,
     )
 
-    async def handle_execute_script(call: ServiceCall) -> None:
-        """Handle the execute_script service call."""
-        script_id = call.data.get(ATTR_SCRIPT_ID)
-        script_name = call.data.get(ATTR_SCRIPT_NAME)
-
-        if script_id is None and script_name is None:
-            raise ServiceValidationError("Either script_id or script_name is required")
-
-        if script_id is None:
-            # Look up script ID by name
-            scripts = config_coordinator.data.scripts
-            for sid, title in scripts.items():
-                if title == script_name:
-                    script_id = sid
-                    break
-            if script_id is None:
-                raise ServiceValidationError(f"Script '{script_name}' not found")
-
-        await xenia.execute_script(script_id)
-
-    hass.services.async_register(
-        XENIA_DOMAIN,
-        SERVICE_EXECUTE_SCRIPT,
-        handle_execute_script,
-        schema=SERVICE_EXECUTE_SCRIPT_SCHEMA,
-    )
-
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(_async_update_options))
     return True
 
-
-async def _async_update_options(hass: HomeAssistant, entry: XeniaConfigEntry) -> None:
-    """Reload integration when options change."""
-    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     # Only remove the service when no more entries remain loaded
-    if unload_ok and not hass.config_entries.async_entries(XENIA_DOMAIN):
+    if unload_ok and not hass.config_entries.async_loaded_entries(XENIA_DOMAIN):
         hass.services.async_remove(XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT)
     return unload_ok

@@ -184,7 +184,7 @@
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
-    'state': 'PowerOnBehavior.STEAM_OFF',
+    'state': 'steam_off',
   })
 # ---
 # name: test_select_entities_snapshot[select.xenia_espresso_machine_right_switch_left_long-registry]

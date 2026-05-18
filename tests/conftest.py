@@ -267,5 +267,5 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
         terminalreporter.write_line(f"  XFAIL {report.nodeid}")
         terminalreporter.write_line(f"        {report.wasxfail}")
     terminalreporter.write_line(
-        f"\n{len(xfailed)} known bugs are deferred. See docs/known-bugs.md"
+        f"\n{len(xfailed)} known bugs are deferred."
     )

@@ -19,6 +19,8 @@ from .xenia import MachineStatus
 
 _LOGGER = logging.getLogger(__name__)
 
+PARALLEL_UPDATES = 0
+
 
 @dataclass
 class ShotData:

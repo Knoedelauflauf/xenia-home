@@ -37,29 +37,11 @@ async def test_select_entities_snapshot(
 # ===========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Bug #1: DEFAULT_POWER_ON_BEHAVIOR is a PowerOnBehavior enum instance; "
-        "Python 3.11+ str(StrEnum) returns 'ClassName.MEMBER' not the value. "
-        "Fix: set DEFAULT_POWER_ON_BEHAVIOR = PowerOnBehavior.STEAM_OFF.value in const.py. "
-        "See docs/known-bugs.md#bug-1."
-    ),
-)
 async def test_power_on_behavior_defaults_to_steam_off(hass, init_integration):
     state = hass.states.get(POBE)
-    assert state.state == PowerOnBehavior.STEAM_OFF
+    assert state.state == PowerOnBehavior.STEAM_OFF.value
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Bug #1: When CONF_POWER_ON_BEHAVIOR is set to a PowerOnBehavior enum "
-        "instance (not a plain string), HA stores str(enum) = 'PowerOnBehavior.STEAM_ON'. "
-        "Fix: store the .value string in options, or accept plain strings in config flow. "
-        "See docs/known-bugs.md#bug-1."
-    ),
-)
 async def test_power_on_behavior_reads_saved_option(
     hass,
     enable_custom_integrations,
@@ -67,13 +49,13 @@ async def test_power_on_behavior_reads_saved_option(
     mock_config_entry_factory_with_options,
 ):
     entry = mock_config_entry_factory_with_options(
-        {CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_ON}
+        {CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_ON.value}
     )
     mock_xenia_api.register()
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    assert hass.states.get(POBE).state == PowerOnBehavior.STEAM_ON
+    assert hass.states.get(POBE).state == PowerOnBehavior.STEAM_ON.value
 
 
 async def test_power_on_behavior_select_updates_entry_options(hass, init_integration):
