@@ -7,20 +7,12 @@ rules:
   config-flow: done
   config-flow-test-coverage:
     status: todo
-    comment: "411 tests exist; explicit verification that all config-flow paths are covered is pending (Plan A.2)."
+    comment: "Explicit coverage report verifying all config-flow paths is not yet produced."
   dependency-transparency: done
-  docs-actions:
-    status: todo
-    comment: "README needs an 'Actions' section documenting the execute_script service (deferred to Plan A.2)."
-  docs-high-level-description:
-    status: todo
-    comment: "README opening paragraph could be expanded to a full high-level description (deferred to Plan A.2)."
-  docs-installation-instructions:
-    status: todo
-    comment: "README has installation hints but needs the full HACS + manual instructions format (deferred to Plan A.2)."
-  docs-removal-instructions:
-    status: todo
-    comment: "Removal instructions are missing from README (deferred to Plan A.2)."
+  docs-actions: done
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions: done
   entity-event-setup: done
   entity-unique-id: done
   has-entity-name: done
@@ -32,14 +24,10 @@ rules:
   # Silver
   action-exceptions:
     status: todo
-    comment: "Verify all action handlers raise ServiceValidationError / HomeAssistantError correctly."
+    comment: "Audit pending: confirm all action handlers raise ServiceValidationError or HomeAssistantError as appropriate."
   config-entry-unloading: done
-  docs-configuration-parameters:
-    status: todo
-    comment: "Deferred to Plan A.2."
-  docs-installation-parameters:
-    status: todo
-    comment: "Deferred to Plan A.2."
+  docs-configuration-parameters: done
+  docs-installation-parameters: done
   entity-unavailable: done
   integration-owner: done
   log-when-unavailable: done
@@ -49,13 +37,13 @@ rules:
     comment: "Local device with no authentication; no credentials to refresh."
   test-coverage:
     status: todo
-    comment: "411 tests exist; explicit pytest --cov percentage check against the 95% threshold is pending."
+    comment: "Explicit pytest --cov verification against the 95% threshold is not yet produced."
 
   # Gold
   devices: done
   diagnostics:
     status: todo
-    comment: "No diagnostics.py yet; add as part of Plan B (Gold push)."
+    comment: "No diagnostics.py module yet."
   discovery:
     status: exempt
     comment: "Xenia machines have no documented discovery protocol; host is entered manually."
@@ -64,39 +52,39 @@ rules:
     comment: "Same reason as discovery."
   docs-data-update:
     status: todo
-    comment: "Deferred to Plan A.2 / Plan B."
+    comment: "README does not yet document the data update strategy."
   docs-examples:
     status: todo
-    comment: "Deferred to Plan A.2 / Plan B."
+    comment: "README does not yet contain example automations."
   docs-known-limitations:
     status: todo
-    comment: "Deferred to Plan A.2 / Plan B."
+    comment: "README does not yet contain a known-limitations section."
   docs-supported-devices:
     status: todo
-    comment: "README mentions DBL with API v2; expand to full supported-devices section."
+    comment: "README mentions DBL with API v2; a full supported-devices section is not yet written."
   docs-supported-functions:
     status: todo
-    comment: "Deferred to Plan A.2 / Plan B."
+    comment: "README does not yet contain a dedicated supported-functions section."
   docs-troubleshooting:
     status: todo
-    comment: "Deferred to Plan A.2 / Plan B."
+    comment: "README does not yet contain a troubleshooting section."
   docs-use-cases:
     status: todo
-    comment: "Deferred to Plan A.2 / Plan B."
+    comment: "README does not yet contain a use-cases section."
   dynamic-devices:
     status: exempt
     comment: "One physical machine per config entry; no dynamic device discovery."
   entity-category: done
   entity-device-class:
     status: todo
-    comment: "Audit pending: some sensors already declare device_class, verify all that should do."
+    comment: "Audit pending: confirm all sensors that should declare device_class actually do."
   entity-disabled-by-default:
     status: todo
     comment: "Audit pending: identify rarely-used entities that should default to disabled."
   entity-translations: done
   exception-translations:
     status: todo
-    comment: "ServiceValidationError messages should use translation_key (Plan B)."
+    comment: "ServiceValidationError messages do not yet use translation_key."
   icon-translations:
     status: todo
     comment: "Optional polish; consider when adding icons for new entities."
@@ -113,4 +101,4 @@ rules:
   inject-websession: done
   strict-typing:
     status: todo
-    comment: "Several files still lack full type coverage; mypy strict pass pending (Plan C)."
+    comment: "Several files lack full type coverage; mypy strict pass not yet produced."
