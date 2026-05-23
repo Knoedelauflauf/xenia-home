@@ -12,7 +12,7 @@ This is a custom Home Assistant integration for Xenia Espresso Machines. These i
 
 ## Python Requirements
 
-- **Compatibility**: Python 3.14+
+- **Compatibility**: Python 3.14.2+ (matches `pyproject.toml`'s `requires-python` and Home Assistant 2026.5's own minimum)
 - **Language Features**: Use the newest features when possible:
   - Pattern matching
   - Type hints

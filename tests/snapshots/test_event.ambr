@@ -1,8 +1,9 @@
 # serializer version: 1
 # name: test_event_entities_snapshot[event.xenia_espresso_machine_shot_tracker-registry]
   EntityRegistryEntrySnapshot({
-    'aliases': set({
-    }),
+    'aliases': list([
+      None,
+    ]),
     'area_id': None,
     'capabilities': dict({
       'event_types': list([

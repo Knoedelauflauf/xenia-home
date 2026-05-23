@@ -1,8 +1,9 @@
 # serializer version: 1
 # name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_brewboiler_temperature-registry]
   EntityRegistryEntrySnapshot({
-    'aliases': set({
-    }),
+    'aliases': list([
+      None,
+    ]),
     'area_id': None,
     'capabilities': dict({
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
@@ -59,8 +60,9 @@
 # ---
 # name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_brewgroup_temperature-registry]
   EntityRegistryEntrySnapshot({
-    'aliases': set({
-    }),
+    'aliases': list([
+      None,
+    ]),
     'area_id': None,
     'capabilities': dict({
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
@@ -117,8 +119,9 @@
 # ---
 # name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_electric_current-registry]
   EntityRegistryEntrySnapshot({
-    'aliases': set({
-    }),
+    'aliases': list([
+      None,
+    ]),
     'area_id': None,
     'capabilities': dict({
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
@@ -175,8 +178,9 @@
 # ---
 # name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_extractions-registry]
   EntityRegistryEntrySnapshot({
-    'aliases': set({
-    }),
+    'aliases': list([
+      None,
+    ]),
     'area_id': None,
     'capabilities': dict({
       'state_class': <SensorStateClass.TOTAL_INCREASING: 'total_increasing'>,
@@ -228,8 +232,9 @@
 # ---
 # name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_operating_hours-registry]
   EntityRegistryEntrySnapshot({
-    'aliases': set({
-    }),
+    'aliases': list([
+      None,
+    ]),
     'area_id': None,
     'capabilities': dict({
       'state_class': <SensorStateClass.TOTAL_INCREASING: 'total_increasing'>,
@@ -286,8 +291,9 @@
 # ---
 # name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_pump_pressure-registry]
   EntityRegistryEntrySnapshot({
-    'aliases': set({
-    }),
+    'aliases': list([
+      None,
+    ]),
     'area_id': None,
     'capabilities': dict({
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
@@ -344,8 +350,9 @@
 # ---
 # name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_steamboiler_pressure-registry]
   EntityRegistryEntrySnapshot({
-    'aliases': set({
-    }),
+    'aliases': list([
+      None,
+    ]),
     'area_id': None,
     'capabilities': dict({
       'state_class': <SensorStateClass.MEASUREMENT: 'measurement'>,
@@ -402,8 +409,9 @@
 # ---
 # name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_total_energy-registry]
   EntityRegistryEntrySnapshot({
-    'aliases': set({
-    }),
+    'aliases': list([
+      None,
+    ]),
     'area_id': None,
     'capabilities': dict({
       'state_class': <SensorStateClass.TOTAL_INCREASING: 'total_increasing'>,

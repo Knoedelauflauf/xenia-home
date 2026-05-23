@@ -7,7 +7,7 @@ This document provides instructions for AI coding assistants (Claude Code, GitHu
 This is a **Home Assistant custom integration** for Xenia espresso machines. It provides real-time monitoring, machine control, shot tracking, and script/switch configuration.
 
 - **Domain**: `xenia_home`
-- **Python version**: 3.13+
+- **Python version**: 3.14.2+
 - **Polling**: Local polling over HTTP (API v2)
 
 For the full development guide, see `CONTRIBUTING.md`. For testing instructions, see `TESTING.md`.

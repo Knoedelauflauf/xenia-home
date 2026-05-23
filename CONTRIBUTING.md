@@ -6,7 +6,7 @@ Thank you for your interest in contributing! This guide explains how to set up y
 
 ### Prerequisites
 
-- Python 3.13.2+
+- Python 3.14.2+
 - [uv](https://docs.astral.sh/uv/) for dependency management
 - A Xenia espresso machine on your local network (for manual testing)
 
@@ -67,7 +67,7 @@ All three must pass before a pull request can be merged.
 
 ### Python style
 
-- Python 3.13+ features encouraged (pattern matching, type aliases, etc.)
+- Python 3.14.2+ features encouraged (pattern matching, type aliases, PEP 649 lazy annotations)
 - Type hints on all functions and methods
 - f-strings preferred over `.format()` or `%`
 - Docstrings required on all public methods
