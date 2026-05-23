@@ -179,12 +179,21 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
             if script_id is not None:
                 try:
                     script_data = await self.xenia.read_script(int(script_id))
-                    managed_instruction = script_data.get("Content")
-                    managed_name = script_data.get("Title")
                 except (ClientError, OSError, TimeoutError) as err:
                     _LOGGER.warning(
                         "Failed to read managed script %s: %s", script_id, err
                     )
+                else:
+                    content = script_data.get("Content") or None
+                    title = script_data.get("Title") or None
+                    if content is None:
+                        _LOGGER.warning(
+                            "Managed script %s no longer exists on the machine; "
+                            "reconfigure weight management to pick another script",
+                            script_id,
+                        )
+                    managed_instruction = content
+                    managed_name = title
 
         return XeniaConfigData(
             machine=machine,
