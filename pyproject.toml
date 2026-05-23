@@ -266,7 +266,11 @@ convention = "google"
 py-version = "3.14"
 jobs = 1
 init-hook = "import os, sys; sys.path.extend([os.path.join(os.environ.get('HA_CORE', ''), 'pylint/plugins'), os.getcwd()])"
-load-plugins = ["pylint_home_assistant"]
+load-plugins = [
+  "pylint.extensions.code_style",
+  "pylint.extensions.typing",
+  "pylint_home_assistant",
+]
 persistent = false
 
 [tool.pylint.BASIC]
@@ -294,6 +298,8 @@ disable = [
   "too-many-boolean-expressions",
   "too-many-positional-arguments",
   "wrong-import-order",
+  "consider-using-namedtuple-or-dataclass",
+  "consider-using-assignment-expr",
   "possibly-used-before-assignment",
   # Handled by ruff
   "await-outside-async",
@@ -398,7 +404,9 @@ disable = [
   "wrong-import-position",
   "comparison-of-constants",
   "comparison-with-itself",
+  "consider-alternative-union-syntax",
   "consider-merging-isinstance",
+  "consider-using-alias",
   "consider-using-dict-comprehension",
   "consider-using-generator",
   "consider-using-get",
@@ -520,4 +528,7 @@ overgeneral-exceptions = [
   "builtins.BaseException",
   "builtins.Exception",
 ]
+
+[tool.pylint.TYPING]
+runtime-typing = false
 
