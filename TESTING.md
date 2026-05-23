@@ -95,10 +95,10 @@ Review the snapshot diff in your editor before committing.
 
 ## Known bugs
 
-Production bugs discovered during testing are deferred via
-`pytest.mark.xfail(strict=True)` and tracked in `docs/known-bugs.md`
-(gitignored, locally only). The pytest session summary prints all open
-xfails at the end of every run.
+Production bugs that cannot be fixed immediately are deferred via
+`pytest.mark.xfail(strict=True)` on the corresponding test. The
+pytest session summary prints all open xfail markers at the end of
+every run so they remain visible.
 
 ## Coverage
 
