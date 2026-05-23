@@ -5,6 +5,7 @@ from typing import Any
 from aiohttp import ClientResponseError, ClientSession
 from aioresponses import aioresponses as AioResponses
 import pytest
+from yarl import URL
 
 from custom_components.xenia_home.xenia import (
     MachineControl,
@@ -532,10 +533,8 @@ async def test_method_hits_expected_url(
 # ===========================================================================
 
 
-def _yarl(url: str):
+def _yarl(url: str) -> URL:
     """Aioresponses keys requests by yarl.URL, not str."""
-    from yarl import URL
-
     return URL(url)
 
 

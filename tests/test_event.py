@@ -2,9 +2,8 @@
 
 from datetime import datetime, timedelta
 
-import pytest
-
 from homeassistant.helpers.entity_component import DATA_INSTANCES
+import pytest
 
 from custom_components.xenia_home.coordinator import XeniaCoordinatorData
 from custom_components.xenia_home.event import ShotData

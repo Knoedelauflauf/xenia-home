@@ -136,11 +136,11 @@ class ScriptSelect(XeniaEntity, SelectEntity):
         """Handle script selection."""
         config_coordinator = self.runtime_data.config_coordinator
         scripts = config_coordinator.data.scripts
-        # Find script ID by title
-        for script_id, title in scripts.items():
-            if title == option:
-                config_coordinator.selected_script_id = script_id
-                break
+        script_id = next(
+            (sid for sid, title in scripts.items() if title == option), None
+        )
+        if script_id is not None:
+            config_coordinator.selected_script_id = script_id
         self.async_write_ha_state()
 
 
@@ -179,12 +179,7 @@ class SwitchConfigSelect(XeniaEntity, SelectEntity):
         """Handle switch script assignment."""
         config_coordinator = self.runtime_data.config_coordinator
         scripts = config_coordinator.data.scripts
-        # Find script ID by title
-        script_id = 0
-        for sid, title in scripts.items():
-            if title == option:
-                script_id = sid
-                break
+        script_id = next((sid for sid, title in scripts.items() if title == option), 0)
         # Update the switch assignment
         await self.coordinator.xenia.set_switch(self._switch_key, script_id)
         # Refresh config data

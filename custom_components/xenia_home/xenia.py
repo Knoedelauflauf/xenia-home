@@ -78,14 +78,12 @@ class XeniaOverviewData:
     @staticmethod
     def from_dict(data: dict) -> XeniaOverviewData:
         """Build a `XeniaOverviewData` from a raw API dict."""
-        raw_status = data.get("MA_STATUS", 99)
         try:
-            machine_status_enum = MachineStatus(raw_status)
+            machine_status_enum = MachineStatus(data.get("MA_STATUS", 99))
         except ValueError:
             machine_status_enum = MachineStatus.UNKNOWN
-        raw_status = data.get("SB_STATUS", 99)
         try:
-            sb_status_enum = SteamBoilerStatus(raw_status)
+            sb_status_enum = SteamBoilerStatus(data.get("SB_STATUS", 99))
         except ValueError:
             sb_status_enum = SteamBoilerStatus.UNKNOWN
         return XeniaOverviewData(

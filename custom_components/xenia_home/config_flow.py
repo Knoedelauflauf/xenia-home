@@ -358,11 +358,10 @@ class XeniaOptionsFlow(OptionsFlow):
             return self.async_abort(reason="cannot_connect")
 
         # Find the new script by name
-        new_id: int | None = None
-        for sid, title in scripts.items():
-            if title == DEFAULT_SCRIPT_NAME:
-                new_id = sid
-                break
+        new_id = next(
+            (sid for sid, title in scripts.items() if title == DEFAULT_SCRIPT_NAME),
+            None,
+        )
 
         if new_id is None:
             _LOGGER.error(

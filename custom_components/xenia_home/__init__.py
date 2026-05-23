@@ -62,10 +62,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
         if script_id is None:
             scripts = config_coordinator.data.scripts
-            for sid, title in scripts.items():
-                if title == script_name:
-                    script_id = sid
-                    break
+            script_id = next(
+                (sid for sid, title in scripts.items() if title == script_name), None
+            )
             if script_id is None:
                 raise ServiceValidationError(f"Script '{script_name}' not found")
 
