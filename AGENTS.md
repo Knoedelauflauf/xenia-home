@@ -35,7 +35,7 @@ docker compose up -d                                        # exposes HA at http
 
 Two `DataUpdateCoordinator` instances are stored in `entry.runtime_data` as `XeniaRuntimeData`:
 
-- **`XeniaDataUpdateCoordinator`** — sub-second to several-second poll interval, switches dynamically based on machine state (`BREWING` / `READY` / `IDLE`). Polls `/api/v2/overview` and `/api/v2/overview_single`.
+- **`XeniaDataUpdateCoordinator`** — poll interval switches dynamically based on machine state (`BREWING`, `ACTIVE` while heating, `READY`, `IDLE`); defaults in `const.py`. Polls `/api/v2/overview` and `/api/v2/overview_single`.
 - **`XeniaConfigCoordinator`** — one-hour interval. Polls `/api/v2/machine`, `/api/v2/scripts/list`, `/api/v2/switches`, and the optionally-configured managed weight script.
 
 In any `XeniaEntity` subclass:
