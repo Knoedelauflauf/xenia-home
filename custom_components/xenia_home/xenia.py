@@ -187,7 +187,7 @@ def _safe_int(value: Any) -> int | None:
 class Xenia:
     """Async HTTP client for the Xenia espresso machine local API (v2)."""
 
-    def __init__(self, host: str, session: ClientSession):
+    def __init__(self, host: str, session: ClientSession) -> None:
         """Bind the client to a host and a shared aiohttp session."""
         self._host = host
         self._session = session
