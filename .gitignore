@@ -140,6 +140,12 @@ celerybeat.pid
 # Local Home Assistant test instance
 config/
 
+# Local dev compose overlay (e.g. frontend card bind-mount)
+docker-compose.override.yml
+
+# Local design / planning notes (not part of the public artifact)
+docs/
+
 # Environments
 .env
 .envrc
