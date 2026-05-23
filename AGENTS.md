@@ -1,150 +1,78 @@
-# AI agent instructions - Xenia Home integration
+# Agent and developer instructions
 
-This document provides instructions for AI coding assistants (Claude Code, GitHub Copilot, etc.) working on this Home Assistant custom integration.
+Working notes for AI coding assistants (Claude Code, GitHub Copilot, Codex) and human contributors. Generic Home Assistant conventions are not repeated here — see the references at the bottom. Only project-specific information lives in this file.
 
 ## Project context
 
-This is a **Home Assistant custom integration** for Xenia espresso machines. It provides real-time monitoring, machine control, shot tracking, and script/switch configuration.
-
 - **Domain**: `xenia_home`
-- **Python version**: 3.14.2+
-- **Polling**: Local polling over HTTP (API v2)
+- **Integration type**: device, local polling, HTTP API v2
+- **Python version**: matches `pyproject.toml` (`requires-python`)
+- **End-user docs**: see `README.md`
+- **Quality scale compliance**: see `QUALITY_SCALE.md`
 
-For the full development guide, see `CONTRIBUTING.md`. For testing instructions, see `TESTING.md`.
-
-## Architecture
-
-### Dual coordinator pattern
-
-The integration uses two coordinators stored in `entry.runtime_data` (`XeniaRuntimeData`):
-
-- **`XeniaDataUpdateCoordinator`** — 1-second interval, polls `/api/v2/overview` and `/api/v2/overview_single`
-- **`XeniaConfigCoordinator`** — 1-hour interval, polls `/api/v2/machine`, `/api/v2/scripts/list`, `/api/v2/switches`
-
-Entities access live data via `self.coordinator.data` and config data via `self.runtime_data.config_coordinator.data`.
-
-### Runtime data access
-
-```python
-# In any XeniaEntity subclass:
-self.coordinator.data           # XeniaCoordinatorData (fast, live)
-self.runtime_data.config_coordinator.data  # XeniaConfigData (slow, config)
-```
-
-### Config entry access
-
-Both coordinators declare `config_entry: XeniaConfigEntry` as a class attribute. This tells mypy the field is always typed and never `None`, so **no assert is needed**:
-
-```python
-def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
-    super().__init__(coordinator)
-    self._attr_unique_id = f"...{coordinator.config_entry.data[CONF_HOST]}"
-```
-
-## Code review guidelines
-
-**Do NOT comment on:**
-- Missing imports — caught by ruff
-- Formatting — handled by ruff format automatically
-
-**Do focus on:**
-- Async/await correctness (no blocking calls, no `time.sleep()`)
-- Correct use of `ClientTimeout(total=N)` for all aiohttp calls
-- Proper exception types (`UpdateFailed`, `ConfigEntryNotReady`, `ServiceValidationError`, etc.)
-- Entity unique IDs and translation keys
-- Type hint accuracy
-
-## Quality checks
-
-All four must pass before merge:
+## Development setup
 
 ```bash
+uv sync                                                     # install dev deps
+uv run pytest                                               # all tests
+uv run pytest tests/test_sensor.py::test_x -v               # single test
+uv run pytest tests/ --snapshot-update                      # after intentional snapshot changes
+uv run pytest tests/ --cov=custom_components.xenia_home     # with coverage
 uv run ruff format custom_components/xenia_home/
 uv run ruff check custom_components/xenia_home/
 uv run mypy custom_components/xenia_home/
-uv run pytest tests/ --cov=custom_components.xenia_home
 ```
 
-## Common patterns
+To run the integration against a real machine for manual testing:
 
-### Adding a sensor
+```bash
+docker compose up -d                                        # exposes HA at http://localhost:8123
+```
+
+## Project-specific architecture
+
+### Dual coordinator pattern
+
+Two `DataUpdateCoordinator` instances are stored in `entry.runtime_data` as `XeniaRuntimeData`:
+
+- **`XeniaDataUpdateCoordinator`** — sub-second to several-second poll interval, switches dynamically based on machine state (`BREWING` / `READY` / `IDLE`). Polls `/api/v2/overview` and `/api/v2/overview_single`.
+- **`XeniaConfigCoordinator`** — one-hour interval. Polls `/api/v2/machine`, `/api/v2/scripts/list`, `/api/v2/switches`, and the optionally-configured managed weight script.
+
+In any `XeniaEntity` subclass:
 
 ```python
-XeniaSensorEntityDescription(
-    key="my_sensor",
-    translation_key="my_sensor",      # must exist in strings.json + de.json
-    device_class=SensorDeviceClass.TEMPERATURE,
-    native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-    value_fn=lambda data: data.overview.some_field,
-)
+self.coordinator.data                          # XeniaCoordinatorData (live)
+self.runtime_data.config_coordinator.data      # XeniaConfigData (slow)
 ```
 
-### Adding an API method
+### Type-safe config entry access
+
+Both coordinators declare `config_entry: XeniaConfigEntry` as a class attribute, so mypy knows the field is never `None` — no `assert` is needed:
 
 ```python
-async def my_method(self) -> dict:
-    """Describe what this method does."""
-    url = f"http://{self._host}/api/v2/endpoint"
-    async with self._session.get(url, timeout=ClientTimeout(total=10)) as resp:
-        resp.raise_for_status()
-        return await resp.json()
-```
-
-### Error handling
-
-```python
-# In coordinator
-try:
-    data = await self.xenia.get_data()
-except (ClientError, OSError, TimeoutError) as err:
-    raise UpdateFailed(f"Fetch failed: {err}") from err
-
-# In service handler
-try:
-    await xenia.do_something()
-except (ClientError, OSError, TimeoutError) as err:
-    raise HomeAssistantError("Could not reach machine") from err
-```
-
-### Translations
-
-Every new entity needs an entry in both:
-- `custom_components/xenia_home/strings.json`
-- `custom_components/xenia_home/translations/de.json`
-
-Use sentence case. Example:
-```json
-"sensor": {
-  "my_sensor": {
-    "name": "My sensor"
-  }
-}
-```
-
-## Anti-patterns to avoid
-
-```python
-# ❌ Bare int timeout
-async with self._session.get(url, timeout=10) as resp: ...
-
-# ✅ Correct
-async with self._session.get(url, timeout=ClientTimeout(total=10)) as resp: ...
-
-# ❌ assert to guard config_entry
-assert coordinator.config_entry is not None
 self._attr_unique_id = f"...{coordinator.config_entry.data[CONF_HOST]}"
-
-# ✅ Correct — no assert needed, coordinators type config_entry as a class attribute
-self._attr_unique_id = f"...{coordinator.config_entry.data[CONF_HOST]}"
-
-# ❌ Sleep in coordinator
-await asyncio.sleep(0.5)  # blocks event loop on every poll
-
-# ✅ No sleep needed — API response time naturally spaces requests
-
-# ❌ Bare except
-except Exception as e: ...
-
-# ✅ Specific exception
-except (ClientError, OSError, TimeoutError) as e: ...
 ```
+
+### Device client
+
+`xenia.py` is an inlined async HTTP client. Keeping it in-tree avoids the dependency-transparency burden for an API only this integration speaks. All HTTP calls use `ClientTimeout(total=N)` (never a bare `int`).
+
+## Project-specific test fixtures
+
+| Fixture | Purpose |
+|---|---|
+| `mock_xenia_api` | Wrapper around `aioresponses`. Setters (`set_overview`, `set_scripts`, ...) before integration setup; `expect_*` and `assert_post_called_with` after. |
+| `mock_config_entry` | A `MockConfigEntry` for the xenia domain with default options. |
+| `mock_config_entry_factory_with_options` | Factory for building a `MockConfigEntry` with custom options preloaded. |
+| `init_integration` | Wires `mock_xenia_api` + `mock_config_entry` together and calls `async_setup_entry`. Returns the loaded entry. |
+
+Pure-logic tests (`test_xenia.py`, `test_script_parser.py`, `test_coordinator.py`) do not need the `hass` fixture and run in milliseconds. All other test files use `pytest-homeassistant-custom-component`'s `hass` fixture.
+
+`xfail` markers are printed in the pytest session summary so deferred bugs stay visible.
+
+## References
+
+- **Home Assistant developer docs:** <https://developers.home-assistant.io/> — architecture, coding standards, entity patterns, error-handling, async rules. All generic conventions live there.
+- **Quality scale rules:** <https://developers.home-assistant.io/docs/core/integration-quality-scale/> — Bronze through Platinum, with the exact text of every rule.
+- **`quality-scale-rule-verifier` agent:** defined at `.claude/agents/quality-scale-rule-verifier.md` in the Home Assistant Core repository (<https://github.com/home-assistant/core>). In a Claude Code session with that repository on disk, dispatch the agent against this integration to verify a specific rule against its official documentation.
+- **Local compliance state:** `QUALITY_SCALE.md` in this repo — a checklist where boxes are only checked once a rule has been verified.
