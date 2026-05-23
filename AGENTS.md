@@ -29,6 +29,20 @@ To run the integration against a real machine for manual testing:
 docker compose up -d                                        # exposes HA at http://localhost:8123
 ```
 
+### Optional: pylint with the Home Assistant Core plugin
+
+The ruff config in `pyproject.toml` mirrors home-assistant/core, but Home Assistant Core also maintains a pylint plugin (`pylint_home_assistant`) that runs HA-specific checks ruff cannot express — `enforce_runtime_data`, `exception_translations`, `logger`, `mdi_icons`, `enforce_super_call`, action/config-flow checks, and more. The plugin is not on PyPI; it lives in the HA Core repo. If you have a checkout of <https://github.com/home-assistant/core> available, you can run pylint against this integration like so:
+
+```bash
+HA_CORE=/path/to/home-assistant/core
+uv run --with "pylint>=4" pylint \
+    --rcfile "$HA_CORE/pyproject.toml" \
+    --init-hook "import sys; sys.path.append('$HA_CORE/pylint/plugins')" \
+    custom_components/xenia_home/
+```
+
+Optional only — ruff + mypy are the canonical local checks.
+
 ## Project-specific architecture
 
 ### Dual coordinator pattern
