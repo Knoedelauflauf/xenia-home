@@ -1,4 +1,6 @@
-from enum import Enum
+"""Constants for the Xenia espresso machine integration."""
+
+from enum import StrEnum
 
 from homeassistant.const import Platform
 
@@ -47,7 +49,9 @@ POLLING_OPTION_KEYS = (
 )
 
 
-class PowerOnBehavior(str, Enum):
+class PowerOnBehavior(StrEnum):
+    """Whether the steam boiler turns on with the machine."""
+
     STEAM_ON = "steam_on"
     STEAM_OFF = "steam_off"
     # REMEMBER_LAST = "remember_last"

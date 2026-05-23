@@ -1,9 +1,6 @@
 """Tests for number.py — temperature setters and weight target."""
 
-from __future__ import annotations
-
 import pytest
-
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.xenia_home.const import (
@@ -14,7 +11,6 @@ from custom_components.xenia_home.const import (
     CONF_WEIGHT_STEP,
     XENIA_DOMAIN,
 )
-
 
 # ===========================================================================
 # Snapshot — covers both XeniaNumber instances + (if weight enabled)

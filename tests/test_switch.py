@@ -1,15 +1,9 @@
 """Tests for switch.py — XeniaPowerSwitch, XeniaEcoSwitch, XeniaSteamBoilerSwitch."""
 
-from __future__ import annotations
-
 import pytest
 
-from custom_components.xenia_home.const import (
-    CONF_POWER_ON_BEHAVIOR,
-    PowerOnBehavior,
-)
+from custom_components.xenia_home.const import CONF_POWER_ON_BEHAVIOR, PowerOnBehavior
 from custom_components.xenia_home.xenia import MachineStatus, SteamBoilerStatus
-
 
 POWER = "switch.xenia_espresso_machine_power"
 ECO = "switch.xenia_espresso_machine_eco_mode"
@@ -38,7 +32,7 @@ async def test_switch_entities_snapshot(
 
 
 @pytest.mark.parametrize(
-    "ma_status, expected_state",
+    ("ma_status", "expected_state"),
     [
         (MachineStatus.ON, "on"),
         (MachineStatus.BREWING, "on"),
@@ -137,7 +131,7 @@ async def test_power_switch_turn_off_calls_machine_off(
 
 
 @pytest.mark.parametrize(
-    "ma_status, expected_state",
+    ("ma_status", "expected_state"),
     [
         (MachineStatus.ECO, "on"),
         (MachineStatus.ON, "off"),
@@ -202,7 +196,7 @@ async def test_eco_switch_turn_off_steam_off_calls_on_sb_off(
 
 
 @pytest.mark.parametrize(
-    "sb_status, expected_state",
+    ("sb_status", "expected_state"),
     [
         (SteamBoilerStatus.ON, "on"),
         (SteamBoilerStatus.OFF, "off"),
@@ -227,7 +221,7 @@ async def test_steam_boiler_state(
 
 
 @pytest.mark.parametrize(
-    "ma_status, expected_avail",
+    ("ma_status", "expected_avail"),
     [
         (MachineStatus.ON, True),
         (MachineStatus.BREWING, True),

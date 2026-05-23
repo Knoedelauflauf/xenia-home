@@ -10,7 +10,6 @@ from custom_components.xenia_home.script_parser import (
     set_weight_target,
 )
 
-
 # ---------------------------------------------------------------------------
 # parse_instruction
 # ---------------------------------------------------------------------------
@@ -99,7 +98,7 @@ def test_set_command_value_insert_new():
 
 
 @pytest.mark.parametrize(
-    "instruction, expected",
+    ("instruction", "expected"),
     [
         ("1;13;3 70 5000;27 45;17;7;", 45.0),
         ("1;27 36.5;7;", 36.5),

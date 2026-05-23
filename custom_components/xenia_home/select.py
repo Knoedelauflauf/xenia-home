@@ -66,8 +66,7 @@ async def async_setup_entry(
         PowerOnBehaviorSelect(coordinator),
         ScriptSelect(coordinator),
     ]
-    for switch_desc in SWITCH_TYPES:
-        entities.append(SwitchConfigSelect(coordinator, switch_desc))
+    entities.extend(SwitchConfigSelect(coordinator, sd) for sd in SWITCH_TYPES)
     async_add_entities(entities)
 
 

@@ -10,8 +10,6 @@ This module provides helpers to read and modify individual command values while
 preserving unknown commands (round-trip safe).
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 
 # Well-known command IDs

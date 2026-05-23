@@ -1,3 +1,5 @@
+"""Sensor platform for the Xenia espresso machine."""
+
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final
@@ -33,6 +35,8 @@ PARALLEL_UPDATES = 0
 
 @dataclass(frozen=True, kw_only=True)
 class XeniaEntityDescriptionMixinSensor:
+    """Mixin adding a value extractor to a sensor description."""
+
     value_fn: Callable[[XeniaCoordinatorData], StateType]
 
 
@@ -40,6 +44,8 @@ class XeniaEntityDescriptionMixinSensor:
 class XeniaSensorEntityDescription(
     SensorEntityDescription, XeniaEntityDescriptionMixinSensor
 ):
+    """Sensor description with optional dynamic entity-category resolution."""
+
     entity_category_fn: (
         Callable[[XeniaCoordinatorData], EntityCategory | None] | None
     ) = None
@@ -124,6 +130,7 @@ async def async_setup_entry(
     entry: XeniaConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    """Set up the Xenia sensor entities."""
     coordinator = entry.runtime_data.coordinator
     async_add_entities(
         XeniaSensor(coordinator, description) for description in SENSOR_TYPES
@@ -131,11 +138,14 @@ async def async_setup_entry(
 
 
 class XeniaSensor(XeniaEntity, SensorEntity):
+    """A sensor backed by `value_fn` against the fast coordinator data."""
+
     def __init__(
         self,
         coordinator: XeniaDataUpdateCoordinator,
         entity_description: XeniaSensorEntityDescription,
     ) -> None:
+        """Initialize the sensor."""
         super().__init__(coordinator)
         self.entity_description: XeniaSensorEntityDescription = entity_description
         self._attr_unique_id = (
@@ -155,6 +165,7 @@ class XeniaSensor(XeniaEntity, SensorEntity):
 
     @property
     def entity_category(self) -> EntityCategory | None:
+        """Resolve the entity category dynamically if `entity_category_fn` is set."""
         if self.entity_description.entity_category_fn is not None:
             return self.entity_description.entity_category_fn(self.coordinator.data)
         return super().entity_category

@@ -1,9 +1,7 @@
 """Tests for config_flow.py — config and options flows."""
 
-from __future__ import annotations
-
-import pytest
 from homeassistant import config_entries, data_entry_flow
+import pytest
 
 from custom_components.xenia_home.config_flow import CREATE_NEW_SCRIPT
 from custom_components.xenia_home.const import (
@@ -21,7 +19,6 @@ from custom_components.xenia_home.const import (
     DEFAULT_SCRIPT_NAME,
     XENIA_DOMAIN,
 )
-
 
 # ===========================================================================
 # Config flow — user step

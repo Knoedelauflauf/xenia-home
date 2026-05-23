@@ -1,8 +1,8 @@
-from __future__ import annotations
+"""Number platform for the Xenia espresso machine."""
 
-import logging
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
+import logging
 from typing import Any, Final
 
 from homeassistant.components.number import (
@@ -43,6 +43,8 @@ PARALLEL_UPDATES = 1
 
 @dataclass(frozen=True, kw_only=True)
 class XeniaEntityDescriptionMixinNumber:
+    """Mixin adding `value_fn` and `set_fn` to a number description."""
+
     value_fn: Callable[[XeniaCoordinatorData], StateType]
     set_fn: Callable[[XeniaDataUpdateCoordinator, float], Coroutine[Any, Any, None]]
 
@@ -51,6 +53,8 @@ class XeniaEntityDescriptionMixinNumber:
 class XeniaNumberEntityDescription(
     NumberEntityDescription, XeniaEntityDescriptionMixinNumber
 ):
+    """Number description with optional dynamic entity-category resolution."""
+
     entity_category_fn: (
         Callable[[XeniaCoordinatorData], EntityCategory | None] | None
     ) = None
@@ -89,6 +93,7 @@ async def async_setup_entry(
     entry: XeniaConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    """Set up the Xenia number entities (setpoints and weight target)."""
     coordinator = entry.runtime_data.coordinator
     entities: list[NumberEntity] = [
         XeniaNumber(coordinator, description) for description in NUMBER_TYPES
@@ -102,11 +107,14 @@ async def async_setup_entry(
 
 
 class XeniaNumber(XeniaEntity, NumberEntity):
+    """A live number (e.g. brew-group setpoint) backed by `value_fn`/`set_fn`."""
+
     def __init__(
         self,
         coordinator: XeniaDataUpdateCoordinator,
         entity_description: XeniaNumberEntityDescription,
     ) -> None:
+        """Initialize the live-number entity."""
         super().__init__(coordinator)
         self.entity_description: XeniaNumberEntityDescription = entity_description
         self._attr_unique_id = (
@@ -118,15 +126,18 @@ class XeniaNumber(XeniaEntity, NumberEntity):
 
     @property
     def native_value(self) -> float | None:
+        """Return the current native value from the coordinator data."""
         return self.entity_description.value_fn(self.coordinator.data)  # type: ignore[return-value]
 
     @property
     def entity_category(self) -> EntityCategory | None:
+        """Resolve the entity category dynamically if `entity_category_fn` is set."""
         if self.entity_description.entity_category_fn is not None:
             return self.entity_description.entity_category_fn(self.coordinator.data)
         return super().entity_category
 
     async def async_set_native_value(self, value: float) -> None:
+        """Push a new value to the machine and trigger a refresh."""
         try:
             await self.entity_description.set_fn(self.coordinator, float(value))
         finally:
@@ -143,6 +154,7 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
     _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, coordinator: XeniaConfigCoordinator) -> None:
+        """Initialize the weight-target entity."""
         super().__init__(coordinator)
         self._attr_unique_id = (
             f"{coordinator.config_entry.data[CONF_HOST]}_script_weight_target"
@@ -154,6 +166,7 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
 
     @property
     def native_value(self) -> float | None:
+        """Return the weight target parsed from the managed script."""
         instruction = self.coordinator.data.managed_script_instruction
         if instruction is None:
             return None
@@ -161,6 +174,7 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
 
     @property
     def available(self) -> bool:
+        """Available only when weight management is enabled and a script is known."""
         options = self.coordinator.config_entry.options
         if not options.get(CONF_WEIGHT_MANAGEMENT_ENABLED):
             return False
@@ -174,6 +188,7 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
         return build_device_info(host, machine)
 
     async def async_set_native_value(self, value: float) -> None:
+        """Rewrite the weight-target command in the managed script on the machine."""
         options = self.coordinator.config_entry.options
         script_id = options.get(CONF_MANAGED_SCRIPT_ID)
         if script_id is None:

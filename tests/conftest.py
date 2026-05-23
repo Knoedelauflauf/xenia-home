@@ -1,15 +1,12 @@
 """Shared pytest fixtures for the xenia_home integration tests."""
 
-from __future__ import annotations
-
 from collections.abc import Callable, Iterator
 from typing import Any
 
-import pytest
-import yarl
 from aioresponses import aioresponses as AioResponses
-
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+import yarl
 
 from custom_components.xenia_home.const import XENIA_DOMAIN
 from tests.fixtures.api_responses import (
@@ -130,7 +127,7 @@ class MockXeniaApi:
         # Default: scripts/read POST returns 404 unless the test registered
         # a specific script id. Tests that need read_script must call
         # set_read_script before init_integration.
-        for script_id, response in self._read_script_responses.items():
+        for response in self._read_script_responses.values():
             self._mock.post(
                 self._url("scripts/read"),
                 payload=response,
@@ -176,7 +173,7 @@ class MockXeniaApi:
     def assert_post_called_with(self, path: str, substring: str) -> None:
         """Assert that some POST to `path` had `substring` in its body."""
         url = self._url(path)
-        calls = [call for call in self._mock.requests.get(("POST", yarl.URL(url)), [])]
+        calls = list(self._mock.requests.get(("POST", yarl.URL(url)), []))
         assert calls, f"No POST to {url} was made"
         bodies = [str(call.kwargs.get("data", "")) for call in calls]
         assert any(substring in body for body in bodies), (
@@ -266,6 +263,4 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     for report in xfailed:
         terminalreporter.write_line(f"  XFAIL {report.nodeid}")
         terminalreporter.write_line(f"        {report.wasxfail}")
-    terminalreporter.write_line(
-        f"\n{len(xfailed)} known bugs are deferred."
-    )
+    terminalreporter.write_line(f"\n{len(xfailed)} known bugs are deferred.")

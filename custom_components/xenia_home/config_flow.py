@@ -1,10 +1,10 @@
+"""Config flow for the Xenia espresso machine integration."""
+
 import asyncio
 import logging
 from typing import Any
 
 from aiohttp import ClientError
-import voluptuous as vol
-
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -14,6 +14,7 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import voluptuous as vol
 
 from .const import (
     CONF_CONFIGURE_POLLING,
@@ -57,14 +58,18 @@ CREATE_NEW_SCRIPT = "__create_new__"
 
 
 class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
+    """User-driven config flow for adding and reconfiguring a Xenia machine."""
+
     VERSION = 1
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """Return the options flow handler for this integration."""
         return XeniaOptionsFlow()
 
     def __init__(self) -> None:
+        """Initialize per-flow state."""
         self._entry: ConfigEntry | None = None
         self._host: str | None = None
         self._name: str | None = None
@@ -77,9 +82,9 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
         try:
             if not await asyncio.wait_for(xenia.device_connected(), timeout=8):
                 return "cannot_connect"
-            return None
-        except (TimeoutError, ClientError, OSError):
+        except TimeoutError, ClientError, OSError:
             return "cannot_connect"
+        return None
 
     def _create_entry(self, title: str) -> ConfigFlowResult:
         assert self._host is not None
@@ -102,6 +107,7 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Handle the initial step where the user supplies the host."""
         errors: dict[str, str] = {}
         if user_input is not None:
             self._host = user_input[CONF_HOST]
@@ -122,6 +128,7 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
     async def async_step_reconfigure(
         self, _: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Pre-fill the existing host and forward to the reconfigure form."""
         entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
         assert entry is not None
         self._entry = entry
@@ -133,6 +140,7 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
     async def async_step_reconfigure_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Validate a new host and update the existing entry."""
         assert self._host is not None
         errors: dict[str, str] = {}
 
@@ -170,6 +178,7 @@ class XeniaOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Show the options entry form and route to weight or polling flow."""
         if user_input is not None:
             self._configure_polling = user_input.get(CONF_CONFIGURE_POLLING, False)
             if not user_input.get(CONF_WEIGHT_MANAGEMENT_ENABLED):
@@ -210,6 +219,7 @@ class XeniaOptionsFlow(OptionsFlow):
     async def async_step_select_script(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Let the user pick an existing weight-script or create a new one."""
         if user_input is not None:
             selected = user_input[CONF_MANAGED_SCRIPT_ID]
             if selected == CREATE_NEW_SCRIPT:
@@ -224,7 +234,7 @@ class XeniaOptionsFlow(OptionsFlow):
 
         try:
             all_scripts = await xenia.get_scripts()
-        except (ClientError, OSError, TimeoutError):
+        except ClientError, OSError, TimeoutError:
             return self.async_abort(reason="cannot_connect")
 
         weight_scripts: dict[str, str] = {}
@@ -235,14 +245,11 @@ class XeniaOptionsFlow(OptionsFlow):
                 parsed = parse_instruction(instruction)
                 if parsed.has_command(COMMAND_WEIGHT_TARGET):
                     weight_scripts[str(script_id)] = title
-            except (ClientError, OSError, TimeoutError):
+            except ClientError, OSError, TimeoutError:
                 _LOGGER.debug("Could not read script %s, skipping", script_id)
 
-        options: dict[str, str] = {}
-        # Pre-select current managed script if set
         current_id = self.config_entry.options.get(CONF_MANAGED_SCRIPT_ID)
-        for sid, title in weight_scripts.items():
-            options[sid] = title
+        options: dict[str, str] = dict(weight_scripts)
         options[CREATE_NEW_SCRIPT] = DEFAULT_SCRIPT_NAME + " (create new)"
 
         default = str(current_id) if current_id and str(current_id) in options else None
@@ -347,7 +354,7 @@ class XeniaOptionsFlow(OptionsFlow):
             await xenia.create_script(DEFAULT_SCRIPT_NAME, DEFAULT_SCRIPT_INSTRUCTION)
             # Re-fetch script list to find the newly created script
             scripts = await xenia.get_scripts()
-        except (ClientError, OSError, TimeoutError):
+        except ClientError, OSError, TimeoutError:
             return self.async_abort(reason="cannot_connect")
 
         # Find the new script by name

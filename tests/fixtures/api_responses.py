@@ -5,8 +5,6 @@ endpoint. Tests modify copies of these via dict-spread to override
 specific fields.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 OVERVIEW_PAYLOAD: dict[str, Any] = {

@@ -1,9 +1,10 @@
+"""Data update coordinators for the Xenia espresso machine."""
+
 from dataclasses import dataclass, field
 from datetime import timedelta
 import logging
 
 from aiohttp import ClientError
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -64,8 +65,8 @@ class XeniaConfigData:
 class XeniaRuntimeData:
     """Runtime data for the integration."""
 
-    coordinator: "XeniaDataUpdateCoordinator"
-    config_coordinator: "XeniaConfigCoordinator"
+    coordinator: XeniaDataUpdateCoordinator
+    config_coordinator: XeniaConfigCoordinator
 
 
 type XeniaConfigEntry = ConfigEntry[XeniaRuntimeData]

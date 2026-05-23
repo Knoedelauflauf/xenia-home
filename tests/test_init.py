@@ -1,9 +1,8 @@
 """Tests for __init__.py — setup, unload, and the execute_script service."""
 
-from __future__ import annotations
-
-import pytest
 from homeassistant.exceptions import ServiceValidationError
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.xenia_home import (
     ATTR_SCRIPT_ID,
@@ -11,8 +10,6 @@ from custom_components.xenia_home import (
     SERVICE_EXECUTE_SCRIPT,
 )
 from custom_components.xenia_home.const import XENIA_DOMAIN
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 
 # ===========================================================================
 # Setup smoke

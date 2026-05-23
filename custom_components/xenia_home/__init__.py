@@ -2,14 +2,13 @@
 
 import logging
 
-import voluptuous as vol
-
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
+import voluptuous as vol
 
 from .const import PLATFORMS, XENIA_DOMAIN
 from .coordinator import (
@@ -53,9 +52,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         script_name = call.data.get(ATTR_SCRIPT_NAME)
 
         if script_id is None and script_name is None:
-            raise ServiceValidationError(
-                "Either script_id or script_name is required"
-            )
+            raise ServiceValidationError("Either script_id or script_name is required")
 
         # Use the first loaded entry's coordinators
         entry = entries[0]
@@ -102,7 +99,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> boo
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
-
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> bool:

@@ -1,12 +1,10 @@
 """Tests for coordinator.py — fast and config coordinators."""
 
-from __future__ import annotations
-
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from homeassistant.helpers.update_coordinator import UpdateFailed
+import pytest
 
 from custom_components.xenia_home.const import (
     CONF_POLL_ACTIVE,
@@ -33,7 +31,6 @@ from custom_components.xenia_home.xenia import (
     XeniaOverviewData,
     XeniaOverviewSingleData,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -197,7 +194,7 @@ POLL_OPTS_DISTINCT = {
 
 
 @pytest.mark.parametrize(
-    "ma_status, expected_seconds",
+    ("ma_status", "expected_seconds"),
     [
         (MachineStatus.BREWING, 0.5),
         (MachineStatus.DRAINING, 0.5),
@@ -268,9 +265,12 @@ async def test_polling_interval_uses_defaults_when_options_absent() -> None:
 
 
 def test_default_poll_constants_are_documented_to_be_equal() -> None:
-    """If this fails, the parametrized distinct-options tests above may need
+    """Guard the contract that all four poll defaults stay numerically equal.
+
+    If this fails, the parametrized distinct-options tests above may need
     review — they intentionally rely on the four defaults being interchangeable
-    for the "no options" case but distinct under explicit overrides."""
+    for the "no options" case but distinct under explicit overrides.
+    """
     assert (
         DEFAULT_POLL_BREWING
         == DEFAULT_POLL_ACTIVE
@@ -314,7 +314,7 @@ async def test_config_coordinator_stores_switches() -> None:
 
 
 @pytest.mark.parametrize(
-    "broken_attr, exc",
+    ("broken_attr", "exc"),
     [
         ("get_machine", OSError("unreachable")),
         ("get_scripts", TimeoutError("timeout")),

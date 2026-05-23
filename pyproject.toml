@@ -35,3 +35,223 @@ exclude_also = [
     "\\.\\.\\.",
 ]
 fail_under = 90
+
+# Ruff configuration mirrors home-assistant/core. Only HA-internal aliases
+# (PLATFORM_SCHEMA, helper-module shortenings) have been dropped because this
+# integration does not import those.
+
+[tool.ruff]
+required-version = ">=0.15.13"
+
+[tool.ruff.lint]
+select = [
+  "A001",   # Variable {name} is shadowing a Python builtin
+  "ASYNC",  # flake8-async
+  "B002",   # Python does not support the unary prefix increment
+  "B003",   # Assigning to os.environ doesn't clear the environment
+  "B004",   # Using hasattr(x, "__call__") instead of callable(x)
+  "B005",   # Using .strip() with multi-character strings is misleading
+  "B006",   # Do not use mutable data structures for argument defaults
+  "B007",   # Loop control variable {name} not used within loop body
+  "B009",   # Do not call getattr with a constant attribute value
+  "B010",   # Do not call setattr with a constant attribute value
+  "B011",   # Do not call assert False since python -O removes these calls
+  "B012",   # Use of break/continue/return inside a finally block
+  "B013",   # A length-one tuple literal is redundant in exception handlers
+  "B014",   # Exception handler with duplicate exception
+  "B015",   # Pointless comparison
+  "B016",   # Cannot raise a literal
+  "B017",   # pytest.raises(BaseException) should be considered evil
+  "B018",   # Found useless attribute access
+  "B020",   # Loop control variable overrides iterable it iterates
+  "B021",   # f-string used as docstring
+  "B022",   # No arguments passed to contextlib.suppress
+  "B023",   # Function definition does not bind loop variable
+  "B024",   # Abstract base class without abstract methods
+  "B025",   # try-except* block with duplicate exception
+  "B026",   # Star-arg unpacking after a keyword argument
+  "B027",   # Empty method in abstract base class without abstract decorator
+  "B028",   # No explicit stacklevel keyword argument in warnings.warn
+  "B029",   # except () with empty tuple is a no-op
+  "B030",   # Except handlers should only be exception classes
+  "B031",   # Using the result of the groupby() generator
+  "B032",   # Possible unintentional type annotation
+  "B033",   # Set should not contain duplicate items
+  "B034",   # re.sub/subn/split should pass count/maxsplit as keyword arguments
+  "B035",   # Dictionary comprehension uses static key
+  "B039",   # ContextVar with mutable literal or function call as default
+  "B904",   # Use raise from to specify exception cause
+  "B905",   # zip() without an explicit strict= parameter
+  "B911",   # itertools.batched() without explicit strict= parameter
+  "BLE",
+  "C",      # complexity
+  "COM818", # Trailing comma on bare tuple prohibited
+  "D",      # docstrings
+  "DTZ003", # Use datetime.now(tz=) instead of datetime.utcnow()
+  "DTZ004", # Use datetime.fromtimestamp(ts, tz=)
+  "DTZ011", # Use datetime.now(tz=).date() instead of date.today()
+  "E",      # pycodestyle
+  "F",      # pyflakes/autoflake
+  "F541",   # f-string without any placeholders
+  "FLY",    # flynt
+  "FURB",   # refurb
+  "G",      # flake8-logging-format
+  "I",      # isort
+  "INP",    # flake8-no-pep420
+  "ISC",    # flake8-implicit-str-concat
+  "ICN001", # import conventions
+  "LOG",    # flake8-logging
+  "N804",   # First argument of a class method should be named cls
+  "N805",   # First argument of a method should be named self
+  "N815",   # Variable in class scope should not be mixedCase
+  "PERF",   # Perflint
+  "PGH",    # pygrep-hooks
+  "PIE",    # flake8-pie
+  "PL",     # pylint
+  "PT",     # flake8-pytest-style
+  "PTH",    # flake8-pathlib
+  "PYI",    # flake8-pyi
+  "RET",    # flake8-return
+  "RSE",    # flake8-raise
+  "RUF005", # Consider iterable unpacking instead of concatenation
+  "RUF006", # Store a reference to the return value of asyncio.create_task
+  "RUF007", # Prefer itertools.pairwise() over zip() when iterating over successive pairs
+  "RUF008", # Do not use mutable default values for dataclass attributes
+  "RUF010", # Use explicit conversion flag
+  "RUF013", # PEP 484 prohibits implicit Optional
+  "RUF016", # Slice indexed access with non-integer
+  "RUF017", # Avoid quadratic list summation
+  "RUF018", # Avoid assignment expressions in assert statements
+  "RUF019", # Unnecessary key check before dictionary access
+  "RUF020", # never_like | T is equivalent to T
+  "RUF021", # Parenthesize a and b expressions when chaining
+  "RUF022", # Sort __all__
+  "RUF023", # Sort __slots__
+  "RUF024", # Do not pass mutable objects as values to dict.fromkeys
+  "RUF026", # default_factory is a positional-only argument
+  "RUF030", # print() call in assert statement
+  "RUF032", # Decimal() called with float literal argument
+  "RUF033", # __post_init__ method with argument defaults
+  "RUF034", # Useless if-else condition
+  "RUF037", # Unnecessary empty iterable within deque call
+  "RUF046", # Unnecessary cast to int
+  "RUF051", # Use dict.pop(key, None) instead of if-key-in-dict-del
+  "RUF057", # Unnecessary round call
+  "RUF059", # unused-unpacked-variable
+  "RUF100", # Unused noqa directive
+  "RUF101", # noqa directives that use redirected rule codes
+  "RUF200", # Failed to parse pyproject.toml
+  "S102",   # Use of exec detected
+  "S103",   # bad-file-permissions
+  "S107",   # Possible hardcoded password assigned to function default
+  "S108",   # hardcoded-temp-file
+  "S301",   # suspicious-pickle-usage
+  "S306",   # suspicious-mktemp-usage
+  "S307",   # suspicious-eval-usage
+  "S313",   # suspicious-xmlc-element-tree-usage
+  "S314",   # suspicious-xml-element-tree-usage
+  "S315",   # suspicious-xml-expat-reader-usage
+  "S316",   # suspicious-xml-expat-builder-usage
+  "S317",   # suspicious-xml-sax-usage
+  "S318",   # suspicious-xml-mini-dom-usage
+  "S319",   # suspicious-xml-pull-dom-usage
+  "S601",   # paramiko-call
+  "S602",   # subprocess-popen-with-shell-equals-true
+  "S604",   # call-with-shell-equals-true
+  "S608",   # hardcoded-sql-expression
+  "S609",   # unix-command-wildcard-injection
+  "SIM",    # flake8-simplify
+  "SLF",    # flake8-self
+  "SLOT",   # flake8-slots
+  "T100",   # Trace found
+  "T20",    # flake8-print
+  "TC",     # flake8-type-checking
+  "TID",    # Tidy imports
+  "TRY",    # tryceratops
+  "UP",     # pyupgrade
+  "UP031",  # Use format specifiers instead of percent format
+  "UP032",  # Use f-string instead of format call
+  "W",      # pycodestyle
+]
+
+ignore = [
+  "ASYNC109", # Async function definition with a timeout parameter; use asyncio.timeout instead
+  "ASYNC110", # Use asyncio.Event instead of awaiting asyncio.sleep in a while loop
+  "ASYNC240", # Use an async function for entering the file system
+  "D202",     # No blank lines allowed after function docstring
+  "D203",     # 1 blank line required before class docstring
+  "D213",     # Multi-line docstring summary should start at the second line
+  "D406",     # Section name should end with a newline
+  "D407",     # Section name underlining
+  "D417",     # Missing argument descriptions in docstring
+  "E501",     # line too long
+  "PLC1901",  # comparison to empty string is too noisy
+  "PLR0911",  # Too many return statements
+  "PLR0912",  # Too many branches
+  "PLR0913",  # Too many arguments to function call
+  "PLR0915",  # Too many statements
+  "PLR2004",  # Magic value used in comparison
+  "PLW0108",  # Unnecessary lambda wrapping a function call
+  "PLW1641",  # __eq__ without __hash__
+  "PLW2901",  # Outer variable overwritten by inner target
+  "PT011",    # pytest.raises is too broad
+  "PT018",    # Assertion should be broken down into multiple parts
+  "RUF001",   # String contains ambiguous unicode character
+  "RUF002",   # Docstring contains ambiguous unicode character
+  "RUF003",   # Comment contains ambiguous unicode character
+  "RUF015",   # Prefer next(...) over single element slice
+  "SIM102",   # Use a single if statement instead of nested if statements
+  "SIM103",   # Return the condition directly
+  "SIM108",   # Use ternary operator instead of if-else-block
+  "SIM115",   # Use context handler for opening files
+  # Moving imports into type-checking blocks can mess with pytest.patch()
+  "TC001",
+  "TC002",
+  "TC003",
+  "TC006",
+  "TRY003",   # Avoid specifying long messages outside the exception class
+  "TRY400",   # Use logging.exception instead of logging.error
+  "UP047",    # Non PEP 696 generic function
+  "UP049",    # Avoid private type parameter names
+  # Conflict with the formatter
+  "W191",
+  "E111",
+  "E114",
+  "E117",
+  "D206",
+  "D300",
+  "Q",
+  "COM812",
+  "COM819",
+  # Disabled because ruff does not understand type of __all__ generated by a function
+  "PLE0605",
+  "FURB116",
+]
+
+[tool.ruff.lint.flake8-import-conventions.extend-aliases]
+voluptuous = "vol"
+
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
+mark-parentheses = false
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"async_timeout".msg = "use asyncio.timeout instead"
+"pytz".msg = "use zoneinfo instead"
+"tests".msg = "You should not import tests"
+"__future__.annotations".msg = "not needed on Python 3.14+ (PEP 649)"
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+known-first-party = ["custom_components", "tests"]
+combine-as-imports = true
+split-on-trailing-comma = false
+
+[tool.ruff.lint.mccabe]
+max-complexity = 25
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PTH"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

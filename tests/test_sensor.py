@@ -1,7 +1,5 @@
 """Tests for sensor.py — eight sensor entities."""
 
-from __future__ import annotations
-
 import pytest
 
 
@@ -29,7 +27,7 @@ async def test_sensor_entities_snapshot(
 
 
 @pytest.mark.parametrize(
-    "minutes, expected_hours",
+    ("minutes", "expected_hours"),
     [
         (120, 2.0),
         (60, 1.0),
@@ -55,7 +53,7 @@ async def test_operating_hours_divides_minutes_by_60(
 
 
 @pytest.mark.parametrize(
-    "sensor_key, payload_key",
+    ("sensor_key", "payload_key"),
     [
         ("operating_hours", "MA_OPERATING_HOURS"),
         ("total_energy", "MA_ENERGY_TOTAL_KWH"),

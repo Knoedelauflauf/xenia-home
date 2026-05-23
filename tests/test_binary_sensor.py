@@ -1,9 +1,6 @@
 """Tests for binary_sensor.py — water tank empty sensor."""
 
-from __future__ import annotations
-
 import pytest
-
 
 # ===========================================================================
 # Snapshot — covers unique_id, translation_key, device_class, icon, name
@@ -32,7 +29,7 @@ async def test_binary_sensor_entities_snapshot(
 
 
 @pytest.mark.parametrize(
-    "level, expected_state",
+    ("level", "expected_state"),
     [
         (1, "off"),  # water present
         (2, "on"),  # tank empty

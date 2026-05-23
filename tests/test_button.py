@@ -1,9 +1,6 @@
 """Tests for button.py — execute script button."""
 
-from __future__ import annotations
-
 import pytest
-
 
 BUTTON_ENTITY_ID = "button.xenia_espresso_machine_execute_script"
 

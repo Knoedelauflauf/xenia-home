@@ -1,12 +1,10 @@
 """Tests for xenia.py — the HTTP API client."""
 
-from __future__ import annotations
-
 from typing import Any
 
-import pytest
+from aiohttp import ClientResponseError, ClientSession
 from aioresponses import aioresponses as AioResponses
-from aiohttp import ClientSession, ClientResponseError
+import pytest
 
 from custom_components.xenia_home.xenia import (
     MachineControl,
@@ -43,7 +41,7 @@ async def xenia(mock_api):
 
 
 @pytest.mark.parametrize(
-    "value, expected",
+    ("value", "expected"),
     [
         (42, 42),
         ("7", 7),
@@ -68,7 +66,7 @@ def test_safe_int(value: Any, expected: int | None) -> None:
 
 
 @pytest.mark.parametrize(
-    "value, expected",
+    ("value", "expected"),
     [
         (0, MachineStatus.OFF),
         (1, MachineStatus.ON),
@@ -89,7 +87,7 @@ def test_machine_status_unknown_int_raises() -> None:
 
 
 @pytest.mark.parametrize(
-    "value, expected",
+    ("value", "expected"),
     [
         (1, SteamBoilerStatus.OFF),
         (2, SteamBoilerStatus.ON),
@@ -106,7 +104,7 @@ def test_steam_boiler_status_unknown_int_raises() -> None:
 
 
 @pytest.mark.parametrize(
-    "control, expected_int",
+    ("control", "expected_int"),
     [
         (MachineControl.OFF, 0),
         (MachineControl.ON, 1),
@@ -151,7 +149,7 @@ def test_overview_data_from_empty_dict_uses_defaults() -> None:
 
 
 @pytest.mark.parametrize(
-    "status_value, expected",
+    ("status_value", "expected"),
     [
         (0, MachineStatus.OFF),
         (2, MachineStatus.ECO),
@@ -468,7 +466,7 @@ async def test_set_switch_preserves_other_keys(mock_api, xenia) -> None:
 
 
 @pytest.mark.parametrize(
-    "method, path, kwargs, callable_attr, args",
+    ("method", "path", "kwargs", "callable_attr", "args"),
     [
         ("get", "overview", {}, "get_overview", ()),
         ("get", "overview_single", {}, "get_overview_single", ()),
@@ -496,7 +494,7 @@ async def test_http_500_raises(
 
 
 @pytest.mark.parametrize(
-    "callable_attr, args, expected_path, http_method",
+    ("callable_attr", "args", "expected_path", "http_method"),
     [
         ("device_connected", (), "overview", "get"),
         ("get_overview", (), "overview", "get"),
@@ -535,7 +533,7 @@ async def test_method_hits_expected_url(
 
 
 def _yarl(url: str):
-    """aioresponses keys requests by yarl.URL, not str."""
+    """Aioresponses keys requests by yarl.URL, not str."""
     from yarl import URL
 
     return URL(url)

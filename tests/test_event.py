@@ -1,14 +1,14 @@
 """Tests for event.py — XeniaShotTracker and ShotData."""
 
-from __future__ import annotations
-
 from datetime import datetime, timedelta
 
 import pytest
 
-from custom_components.xenia_home.event import ShotData
-from custom_components.xenia_home.xenia import MachineStatus
+from homeassistant.helpers.entity_component import DATA_INSTANCES
 
+from custom_components.xenia_home.coordinator import XeniaCoordinatorData
+from custom_components.xenia_home.event import ShotData
+from custom_components.xenia_home.xenia import MachineStatus, XeniaOverviewData
 
 TRACKER = "event.xenia_espresso_machine_shot_tracker"
 
@@ -77,8 +77,6 @@ def test_shot_data_brew_end_time_optional() -> None:
 
 def _get_tracker(hass, init_integration):
     """Return the XeniaShotTracker entity instance from runtime data."""
-    from homeassistant.helpers.entity_component import DATA_INSTANCES
-
     component = hass.data[DATA_INSTANCES].get("event")
     if component is not None:
         for entity in component.entities:
@@ -89,11 +87,6 @@ def _get_tracker(hass, init_integration):
 
 async def _drive_status(hass, mock_xenia_api, init_integration, status: MachineStatus):
     """Push a new MA_STATUS through the coordinator and let listeners run."""
-    from custom_components.xenia_home.coordinator import XeniaCoordinatorData
-    from custom_components.xenia_home.xenia import (
-        XeniaOverviewData,
-    )
-
     coordinator = init_integration.runtime_data.coordinator
     new_overview = XeniaOverviewData.from_dict(
         {**mock_xenia_api._overview, "MA_STATUS": int(status)}

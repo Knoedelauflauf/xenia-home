@@ -1,14 +1,9 @@
 """Tests for select.py — power-on-behavior, script, and switch-config selects."""
 
-from __future__ import annotations
-
+from homeassistant.exceptions import ServiceValidationError
 import pytest
 
-from custom_components.xenia_home.const import (
-    CONF_POWER_ON_BEHAVIOR,
-    PowerOnBehavior,
-)
-
+from custom_components.xenia_home.const import CONF_POWER_ON_BEHAVIOR, PowerOnBehavior
 
 POBE = "select.xenia_espresso_machine_power_on_behavior"
 SCRIPT = "select.xenia_espresso_machine_script"
@@ -71,7 +66,7 @@ async def test_power_on_behavior_select_updates_entry_options(hass, init_integra
 
 async def test_power_on_behavior_invalid_option_raises(hass, init_integration):
     # HA's select platform validates options before forwarding to the entity
-    with pytest.raises(Exception):
+    with pytest.raises(ServiceValidationError):
         await hass.services.async_call(
             "select",
             "select_option",
