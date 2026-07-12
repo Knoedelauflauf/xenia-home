@@ -9,6 +9,7 @@ import pytest
 from custom_components.xenia_home.coordinator import XeniaCoordinatorData
 from custom_components.xenia_home.event import ShotData
 from custom_components.xenia_home.xenia import MachineStatus, XeniaOverviewData
+from tests.fixtures.api_responses import OVERVIEW_PAYLOAD
 
 TRACKER = "event.xenia_espresso_machine_shot_tracker"
 
@@ -85,18 +86,21 @@ def _get_tracker(hass, init_integration):
     raise AssertionError(f"tracker entity {TRACKER} not found")
 
 
-async def _drive_status(hass, mock_xenia_api, init_integration, status: MachineStatus):
-    """Push a new MA_STATUS through the coordinator and let listeners run."""
+async def _drive_overview(hass, mock_xenia_api, init_integration, **fields):
+    """Push overview field overrides through the coordinator."""
     coordinator = init_integration.runtime_data.coordinator
-    new_overview = XeniaOverviewData.from_dict(
-        {**mock_xenia_api._overview, "MA_STATUS": int(status)}
-    )
+    new_overview = XeniaOverviewData.from_dict({**mock_xenia_api._overview, **fields})
     new_data = XeniaCoordinatorData(
         overview=new_overview,
         overview_single=coordinator.data.overview_single,
     )
     coordinator.async_set_updated_data(new_data)
     await hass.async_block_till_done()
+
+
+async def _drive_status(hass, mock_xenia_api, init_integration, status: MachineStatus):
+    """Push a new MA_STATUS through the coordinator and let listeners run."""
+    await _drive_overview(hass, mock_xenia_api, init_integration, MA_STATUS=int(status))
 
 
 # ===========================================================================
@@ -234,3 +238,43 @@ async def test_complete_shot_cancels_afterflow(hass, init_integration):
     tracker._weights = [float(i) for i in range(25)]
     tracker._complete_shot_tracking()
     assert tracker._afterflow_until is None
+
+
+async def test_collect_uses_scale_rate_when_present(
+    hass, init_integration, mock_xenia_api
+):
+    tracker = _get_tracker(hass, init_integration)
+    fields = {
+        "MA_STATUS": int(MachineStatus.BREWING),
+        "PU_SENS_SCALE_RATE": 1.27,
+        "PU_SENS_FLOW_METER_ML": 99.0,
+    }
+    for _ in range(2):
+        await _drive_overview(hass, mock_xenia_api, init_integration, **fields)
+    assert tracker._flow_rates == [1.27]
+
+
+async def test_collect_falls_back_to_ml_key_on_old_firmware(
+    hass, init_integration, mock_xenia_api
+):
+    tracker = _get_tracker(hass, init_integration)
+    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.BREWING)
+    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.BREWING)
+    assert tracker._flow_rates == [OVERVIEW_PAYLOAD["PU_SENS_FLOW_METER_ML"]]
+
+
+async def test_collect_scale_rate_hiccup_falls_back_to_ml_for_sample(
+    hass, init_integration, mock_xenia_api
+):
+    tracker = _get_tracker(hass, init_integration)
+    fields = {"MA_STATUS": int(MachineStatus.BREWING), "PU_SENS_SCALE_RATE": 1.27}
+    await _drive_overview(hass, mock_xenia_api, init_integration, **fields)
+    await _drive_overview(hass, mock_xenia_api, init_integration, **fields)
+    await _drive_overview(
+        hass,
+        mock_xenia_api,
+        init_integration,
+        MA_STATUS=int(MachineStatus.BREWING),
+        PU_SENS_SCALE_RATE="",
+    )
+    assert tracker._flow_rates == [1.27, OVERVIEW_PAYLOAD["PU_SENS_FLOW_METER_ML"]]

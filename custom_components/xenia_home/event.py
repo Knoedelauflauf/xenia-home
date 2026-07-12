@@ -134,8 +134,8 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
         if self._shot_start_time is None:
             return
 
-        data = self.coordinator.data
-        weight = data.overview.scale_weight
+        overview = self.coordinator.data.overview
+        weight = overview.scale_weight
 
         # Scale auto-tare sends 0g after the brew — end afterflow early
         if (
@@ -151,10 +151,17 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
         if not self._is_brewing and self._afterflow_until is not None:
             self._afterflow_samples += 1
 
-        self._brew_group_temps.append(data.overview.bg_sens_temp_a)
-        self._brew_boiler_temps.append(data.overview.bb_sens_temp_a)
-        self._pump_pressures.append(data.overview.pu_sens_press)
-        self._flow_rates.append(data.overview.pu_sens_flow_meter_ml)
+        self._brew_group_temps.append(overview.bg_sens_temp_a)
+        self._brew_boiler_temps.append(overview.bb_sens_temp_a)
+        self._pump_pressures.append(overview.pu_sens_press)
+        # Firmware with scale support reports no usable flow meter data;
+        # the scale rate replaces it as the flow source.
+        flow = (
+            overview.pu_sens_scale_rate
+            if overview.pu_sens_scale_rate is not None
+            else overview.pu_sens_flow_meter_ml
+        )
+        self._flow_rates.append(flow)
         self._weights.append(weight)
         self._timestamps.append(elapsed)
 
