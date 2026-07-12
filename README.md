@@ -106,6 +106,7 @@ reason to.
 - Power, ECO mode, and steam boiler control
 - Brew-group and brew-boiler temperature setpoints
 - Live sensors for temperatures, pressures, electric current, total energy, extractions, and operating hours
+- Scale flow rate sensor (g/s) on firmware that reports it
 - Water tank level monitoring
 - Trigger any on-device script from Home Assistant (by ID or by name)
 - Map each of the six physical switch positions to a script

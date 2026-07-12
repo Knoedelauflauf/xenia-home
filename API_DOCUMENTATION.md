@@ -45,10 +45,17 @@ Comprehensive overview of all real-time sensor data.
 | `PU_SENS_PRESS`           | float  | Pump pressure (bar)                  |
 | `PU_LEVEL_PW_CONTROL`     | uint16 | Pump PWM control                     |
 | `PU_SET_LEVEL_PW_CONTROL` | uint16 | Pump target PWM                      |
-| `PU_SENS_FLOW_METER_ML`   | float  | Flow meter reading (ml/s)            |
+| `PU_SENS_FLOW_METER_ML`   | float  | Flow meter reading (ml/s); on 4.159 it mirrors `PU_SENS_FLOW_METER_FLOWRATE` — on a tank machine both read 0 throughout brewing, with a stale nonzero value while idle |
 | `SB_SENS_PRESS`           | float  | Steam boiler pressure (bar)          |
 | `SB_STATUS`               | uint8  | Steam boiler status (see enum below) |
 | `SCALE_WEIGHT`            | float  | Scale weight (grams)                 |
+| `MA_SET_TIMER_POWERDOWN`  | uint16 | Auto power-down timer (min) *(4.159+)* |
+| `PU_SENS_SCALE_VOLUME`    | float  | Volume from scale, 1 g = 1 ml *(4.159+)* |
+| `PU_SENS_SCALE_RATE`      | float  | Scale weight change rate (g/s) *(4.159+)* |
+| `PU_SENS_FLOW_METER_VOLUME` | float | Flow meter volume (ml) *(4.159+)* |
+| `PU_SENS_FLOW_METER_FLOWRATE` | float | Flow meter rate (ml/s) *(4.159+)* |
+
+Fields marked *(4.159+)* were first observed with firmware 4.159/3.63 and are absent on older firmware (verified on 4.22/3.22). On a Xenia DBL running 4.159, all three flow-meter fields stayed 0 through a real 9.4 bar shot — the DBL presumably has no flow-meter hardware installed; other variants (e.g. the Mahlkönig edition) may report real values here. The scale auto-tares shortly after brew start and again ~2.5 s after brew end.
 
 ---
 
@@ -69,6 +76,9 @@ Configuration values and setpoints.
 | `MA_EXTRACTIONS_START`     | int      | Extraction counter start value |
 | `PSP`                      | int      | ?                              |
 | `POP_UP`                   | int/null | Pop-up message (optional)      |
+| `BG_TEMPERATURE_OFFSET`    | float    | Brew group temperature offset *(4.159+)* |
+| `BB_TEMPERATURE_OFFSET`    | float    | Brew boiler temperature offset *(4.159+)* |
+| `BB_OFFSET_TO_BG`          | float    | Brew boiler offset relative to brew group *(4.159+)* |
 
 ---
 
@@ -155,13 +165,31 @@ Returns machine hardware and firmware information.
 
 **Response Parameters:**
 
-| Parameter          | Type | Description            |
-| ------------------ | ---- | ---------------------- |
-| `MA_TYPE`          | int  | Machine type           |
-| `FW_VERSION_MAJOR` | int  | Firmware major version |
-| `FW_VERSION_MINOR` | int  | Firmware minor version |
-| `ESP_FW_MAJOR`     | int  | ESP firmware major     |
-| `ESP_FW_MINOR`     | int  | ESP firmware minor     |
+| Parameter                       | Type   | Description                                                         |
+| ------------------------------- | ------ | ------------------------------------------------------------------- |
+| `MA_TYPE`                       | int    | Machine type                                                        |
+| `FW_VERSION_MAJOR`              | int    | Firmware major version                                              |
+| `FW_VERSION_MINOR`              | int    | Firmware minor version                                              |
+| `ESP_FW_MAJOR`                  | int    | ESP firmware major                                                  |
+| `ESP_FW_MINOR`                  | int    | ESP firmware minor                                                  |
+| `MA_SUBTYPE`                    | int    | Machine subtype *(4.159+)*                                          |
+| `MA_SN`                         | string | Serial number *(4.159+)*                                            |
+| `MA_MAX_AMPERE`                 | int    | Maximum current draw (A) *(4.159+)*                                 |
+| `MA_SET_TIMER_ECO_MA`           | int    | ECO timer (min) *(4.159+)*                                          |
+| `MA_SET_TIMER_POWERDOWN`        | int    | Auto power-down timer (min) *(4.159+)*                              |
+| `MA_BOILER_START_MODE`          | int    | Steam boiler behavior at power-on *(4.159+)*                        |
+| `MA_FIX_WATER_SUPPLY`           | int    | 1 = fixed water supply, 0 = tank *(4.159+)*                         |
+| `PU_SET_BREW_TIMER_1`           | int    | Brew timer (s) *(4.159+)*                                           |
+| `PU_SET_QUANTITY_MEASUREMENT`   | int    | Quantity measurement mode *(4.159+)*                                |
+| `BT_SCALE_NAME`                 | string | Paired Bluetooth scale name *(4.159+)*                              |
+| `BLE`                           | int    | Bluetooth state *(4.159+)*                                          |
+| `MA_DELAY`                      | int    | Unknown, observed -1 *(4.159+)*                                     |
+| `MA_EXTRACTIONS`                | uint32 | Number of extractions (mirrors overview) *(4.159+)*                 |
+| `MA_OPERATING_HOURS`            | uint32 | Operating hours (mirrors overview) *(4.159+)*                       |
+| `MA_EXTRACTIONS_START`          | int    | Extraction counter start value (mirrors overview_single) *(4.159+)* |
+| `MA_ENERGY_TOTAL_KWH`           | float  | Total energy consumption in kWh (mirrors overview) *(4.159+)*       |
+| `MA_HEATUP_FLUSH_DURATION`      | int    | Heatup flush duration (s) *(4.159+)*                                |
+| `MA_EXTENDED_THERMAL_STABILITY` | int    | Extended thermal stability setting *(4.159+)*                       |
 
 ---
 
@@ -342,13 +370,14 @@ A script can contain multiple weight target commands (command 27), for example a
 
 ## Undocumented Features
 
-The following features exist on the machine but are not controllable via the API:
+As of firmware 4.159/3.63, the following settings are readable via `/api/v2/machine`. A write endpoint presumably exists (the machine's own web UI changes them) but has not been identified yet:
 
-* **ECO timer**: Time until the machine automatically switches to ECO mode
-* **Auto-off timer**: Automatic shutdown
+* **ECO timer** (`MA_SET_TIMER_ECO_MA`): Time until the machine automatically switches to ECO mode
+* **Auto-off timer** (`MA_SET_TIMER_POWERDOWN`): Time until the machine automatically shuts down
+
+The following remain undocumented and device-only, with no known API for reading or writing them:
+
 * **Scheduler / schedules**: Automatic power on/off
-
-These settings must be configured directly on the device.
 
 ---
 
