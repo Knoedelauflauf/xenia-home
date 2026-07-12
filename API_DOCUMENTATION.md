@@ -45,7 +45,7 @@ Comprehensive overview of all real-time sensor data.
 | `PU_SENS_PRESS`           | float  | Pump pressure (bar)                  |
 | `PU_LEVEL_PW_CONTROL`     | uint16 | Pump PWM control                     |
 | `PU_SET_LEVEL_PW_CONTROL` | uint16 | Pump target PWM                      |
-| `PU_SENS_FLOW_METER_ML`   | float  | Flow meter reading (ml)              |
+| `PU_SENS_FLOW_METER_ML`   | float  | Flow meter reading (ml/s)            |
 | `SB_SENS_PRESS`           | float  | Steam boiler pressure (bar)          |
 | `SB_STATUS`               | uint8  | Steam boiler status (see enum below) |
 | `SCALE_WEIGHT`            | float  | Scale weight (grams)                 |
