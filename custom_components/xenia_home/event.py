@@ -77,13 +77,6 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
         self._afterflow_samples = 0
         self._brew_end_time: datetime | None = None
 
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to coordinator updates when added to hass."""
-        await super().async_added_to_hass()
-        self.async_on_remove(
-            self.coordinator.async_add_listener(self._handle_coordinator_update)
-        )
-
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle coordinator updates to track brewing sessions."""
