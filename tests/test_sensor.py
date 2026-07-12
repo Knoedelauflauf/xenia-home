@@ -1,6 +1,8 @@
-"""Tests for sensor.py — eight sensor entities."""
+"""Tests for sensor.py — sensor entities (eight on old firmware, nine on 4.159+)."""
 
 import pytest
+
+from tests.fixtures.api_responses import OVERVIEW_NEW_FW_FIELDS
 
 
 async def test_sensor_entities_snapshot(
@@ -89,3 +91,21 @@ async def test_passthrough_sensor_reads_from_overview(
     await hass.async_block_till_done()
     state = hass.states.get("sensor.xenia_espresso_machine_brewgroup_temperature")
     assert float(state.state) == pytest.approx(88.7)
+
+
+async def test_scale_flow_rate_sensor_created_on_new_firmware(
+    hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
+):
+    mock_xenia_api.set_overview(**OVERVIEW_NEW_FW_FIELDS)
+    mock_xenia_api.register()
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    state = hass.states.get("sensor.xenia_espresso_machine_scale_flow_rate")
+    assert state is not None
+    assert float(state.state) == pytest.approx(1.27)
+    assert state.attributes["unit_of_measurement"] == "g/s"
+
+
+async def test_scale_flow_rate_sensor_absent_on_old_firmware(hass, init_integration):
+    assert hass.states.get("sensor.xenia_espresso_machine_scale_flow_rate") is None

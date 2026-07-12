@@ -44,11 +44,12 @@ class XeniaEntityDescriptionMixinSensor:
 class XeniaSensorEntityDescription(
     SensorEntityDescription, XeniaEntityDescriptionMixinSensor
 ):
-    """Sensor description with optional dynamic entity-category resolution."""
+    """Sensor description with dynamic entity-category and existence resolution."""
 
     entity_category_fn: (
         Callable[[XeniaCoordinatorData], EntityCategory | None] | None
     ) = None
+    exists_fn: Callable[[XeniaCoordinatorData], bool] = lambda data: True
 
 
 SENSOR_TYPES: Final[tuple[XeniaSensorEntityDescription, ...]] = (
@@ -122,6 +123,15 @@ SENSOR_TYPES: Final[tuple[XeniaSensorEntityDescription, ...]] = (
         icon="mdi:clock-outline",
         value_fn=lambda data: data.overview.ma_operating_hours / 60,
     ),
+    XeniaSensorEntityDescription(
+        key="scale_flow_rate",
+        translation_key="scale_flow_rate",
+        native_unit_of_measurement="g/s",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:scale",
+        value_fn=lambda data: data.overview.pu_sens_scale_rate,
+        exists_fn=lambda data: data.overview.pu_sens_scale_rate is not None,
+    ),
 )
 
 
@@ -133,7 +143,9 @@ async def async_setup_entry(
     """Set up the Xenia sensor entities."""
     coordinator = entry.runtime_data.coordinator
     async_add_entities(
-        XeniaSensor(coordinator, description) for description in SENSOR_TYPES
+        XeniaSensor(coordinator, description)
+        for description in SENSOR_TYPES
+        if description.exists_fn(coordinator.data)
     )
 
 

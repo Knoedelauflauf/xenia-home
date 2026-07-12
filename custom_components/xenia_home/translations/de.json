@@ -107,6 +107,9 @@
       },
       "operating_hours": {
         "name": "Betriebszeit"
+      },
+      "scale_flow_rate": {
+        "name": "Waagen-Flussrate"
       }
     },
     "number": {

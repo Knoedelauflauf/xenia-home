@@ -107,6 +107,9 @@
       },
       "operating_hours": {
         "name": "Operating hours"
+      },
+      "scale_flow_rate": {
+        "name": "Scale flow rate"
       }
     },
     "number": {
