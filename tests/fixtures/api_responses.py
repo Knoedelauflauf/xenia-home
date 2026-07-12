@@ -25,6 +25,7 @@ OVERVIEW_PAYLOAD: dict[str, Any] = {
     "BB_SENS_TEMP_A": 130.0,
     "BB_LEVEL_PW_CONTROL": 60,
     "SB_STATUS": 2,
+    "MA_LAST_EXTRACTION_ML": "",
     "SCALE_WEIGHT": 18.5,
 }
 
@@ -61,7 +62,6 @@ SWITCHES_PAYLOAD: dict[str, Any] = {
 # Extra keys firmware 4.159 adds on top of the old payloads. Tests spread
 # these over the canonical payloads to simulate a new-firmware machine.
 OVERVIEW_NEW_FW_FIELDS: dict[str, Any] = {
-    "MA_LAST_EXTRACTION_ML": "",
     "MA_SET_TIMER_POWERDOWN": 10,
     "PU_SENS_SCALE_VOLUME": 18.5,
     "PU_SENS_SCALE_RATE": 1.27,
