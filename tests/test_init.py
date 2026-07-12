@@ -1,6 +1,7 @@
 """Tests for __init__.py — setup, unload, and the execute_script service."""
 
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import device_registry as dr
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -10,6 +11,7 @@ from custom_components.xenia_home import (
     SERVICE_EXECUTE_SCRIPT,
 )
 from custom_components.xenia_home.const import XENIA_DOMAIN
+from tests.fixtures.api_responses import MACHINE_NEW_FW_FIELDS
 
 # ===========================================================================
 # Setup smoke
@@ -159,3 +161,36 @@ async def test_unload_entry_keeps_service_when_other_entries_remain(
     await hass.config_entries.async_unload(init_integration.entry_id)
     await hass.async_block_till_done()
     assert hass.services.has_service(XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT)
+
+
+# ===========================================================================
+# Device info
+# ===========================================================================
+
+
+async def test_device_info_serial_and_mac_new_firmware(
+    hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
+):
+    mock_xenia_api.set_machine(**MACHINE_NEW_FW_FIELDS)
+    mock_xenia_api.register()
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    device_registry = dr.async_get(hass)
+    device = device_registry.async_get_device(
+        identifiers={("xenia_home", "xenia.local")}
+    )
+    assert device is not None
+    assert device.serial_number == "300200000000"
+    assert (dr.CONNECTION_NETWORK_MAC, "aa:bb:cc:dd:ee:ff") in device.connections
+
+
+async def test_device_info_old_firmware_has_no_serial(hass, init_integration):
+    device_registry = dr.async_get(hass)
+    device = device_registry.async_get_device(
+        identifiers={("xenia_home", "xenia.local")}
+    )
+    assert device is not None
+    assert device.serial_number is None
+    assert (dr.CONNECTION_NETWORK_MAC, "aa:bb:cc:dd:ee:ff") in device.connections
