@@ -57,3 +57,21 @@ SWITCHES_PAYLOAD: dict[str, Any] = {
     "SWITCH_SET_LEFT_LEFT_0": 1,
     "SWITCH_SET_LEFT_LEFT_1": 2,
 }
+
+# Extra keys firmware 4.159 adds on top of the old payloads. Tests spread
+# these over the canonical payloads to simulate a new-firmware machine.
+OVERVIEW_NEW_FW_FIELDS: dict[str, Any] = {
+    "MA_LAST_EXTRACTION_ML": "",
+    "MA_SET_TIMER_POWERDOWN": 10,
+    "PU_SENS_SCALE_VOLUME": 18.5,
+    "PU_SENS_SCALE_RATE": 1.27,
+    "PU_SENS_FLOW_METER_VOLUME": 0,
+    "PU_SENS_FLOW_METER_FLOWRATE": 0,
+}
+
+MACHINE_NEW_FW_FIELDS: dict[str, Any] = {
+    "MA_SN": "300200000000",
+    "MA_MAX_AMPERE": 10,
+    "MA_SET_TIMER_ECO_MA": 5,
+    "MA_SET_TIMER_POWERDOWN": 10,
+}

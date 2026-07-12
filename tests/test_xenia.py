@@ -17,6 +17,12 @@ from custom_components.xenia_home.xenia import (
     XeniaOverviewSingleData,
     _safe_int,
 )
+from tests.fixtures.api_responses import (
+    MACHINE_NEW_FW_FIELDS,
+    MACHINE_PAYLOAD,
+    OVERVIEW_NEW_FW_FIELDS,
+    OVERVIEW_PAYLOAD,
+)
 
 HOST = "xenia.local"
 BASE = f"http://{HOST}/api/v2"
@@ -217,6 +223,31 @@ def test_machine_data_fw_version_zero_values_are_valid() -> None:
 
 def test_machine_data_bad_type_defaults_to_none() -> None:
     assert XeniaMachineData.from_dict({"MA_TYPE": "bad"}).ma_type is None
+
+
+def test_overview_new_firmware_fields_parsed() -> None:
+    data = XeniaOverviewData.from_dict({**OVERVIEW_PAYLOAD, **OVERVIEW_NEW_FW_FIELDS})
+    assert data.pu_sens_scale_rate == 1.27
+
+
+def test_overview_old_firmware_fields_are_none() -> None:
+    data = XeniaOverviewData.from_dict(OVERVIEW_PAYLOAD)
+    assert data.pu_sens_scale_rate is None
+
+
+def test_overview_unparseable_new_field_is_none() -> None:
+    data = XeniaOverviewData.from_dict({**OVERVIEW_PAYLOAD, "PU_SENS_SCALE_RATE": ""})
+    assert data.pu_sens_scale_rate is None
+
+
+def test_machine_serial_number_parsed() -> None:
+    data = XeniaMachineData.from_dict({**MACHINE_PAYLOAD, **MACHINE_NEW_FW_FIELDS})
+    assert data.ma_sn == "300200000000"
+
+
+def test_machine_serial_number_absent_or_empty_is_none() -> None:
+    assert XeniaMachineData.from_dict(MACHINE_PAYLOAD).ma_sn is None
+    assert XeniaMachineData.from_dict({**MACHINE_PAYLOAD, "MA_SN": ""}).ma_sn is None
 
 
 # ===========================================================================

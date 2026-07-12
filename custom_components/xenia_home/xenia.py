@@ -74,6 +74,7 @@ class XeniaOverviewData:
     bb_level_pw_control: int
     sb_status: SteamBoilerStatus
     scale_weight: float
+    pu_sens_scale_rate: float | None
 
     @staticmethod
     def from_dict(data: dict) -> XeniaOverviewData:
@@ -105,6 +106,7 @@ class XeniaOverviewData:
             bb_level_pw_control=data.get("BB_LEVEL_PW_CONTROL", 0),
             sb_status=sb_status_enum,
             scale_weight=float(data.get("SCALE_WEIGHT", 0.0)),
+            pu_sens_scale_rate=_optional_float(data, "PU_SENS_SCALE_RATE"),
         )
 
 
@@ -148,6 +150,7 @@ class XeniaMachineData:
     fw_version_minor: int | None
     esp_fw_major: int | None
     esp_fw_minor: int | None
+    ma_sn: str | None
 
     @staticmethod
     def from_dict(data: dict) -> XeniaMachineData:
@@ -158,6 +161,7 @@ class XeniaMachineData:
             fw_version_minor=_safe_int(data.get("FW_VERSION_MINOR")),
             esp_fw_major=_safe_int(data.get("ESP_FW_MAJOR")),
             esp_fw_minor=_safe_int(data.get("ESP_FW_MINOR")),
+            ma_sn=data.get("MA_SN") or None,
         )
 
     def fw_version(self) -> str | None:
@@ -178,6 +182,15 @@ def _safe_int(value: Any) -> int | None:
         return None
     try:
         return int(value)
+    except TypeError, ValueError:
+        return None
+
+
+def _optional_float(data: dict, key: str) -> float | None:
+    if key not in data:
+        return None
+    try:
+        return float(data[key])
     except TypeError, ValueError:
         return None
 
