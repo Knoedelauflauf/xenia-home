@@ -58,6 +58,7 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
     _attr_event_types = ["shot_completed"]
     _afterflow_seconds = 2
     _min_shot_seconds = 10
+    _tare_drop_g = 2.0
 
     def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
         """Initialize the shot tracker."""
@@ -137,15 +138,14 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
         overview = self.coordinator.data.overview
         weight = overview.scale_weight
 
-        # Scale auto-tare sends 0g after the brew — end afterflow early
-        if (
-            weight == 0
-            and self._weights
-            and self._weights[-1] > 0
-            and self._afterflow_until is not None
-        ):
-            self._complete_shot_tracking()
-            return
+        # The machine auto-tares the scale shortly after brew start and
+        # again ~2.5 s after brew end; a big drop is that tare (or the cup
+        # being moved), never real outflow.
+        if self._weights and weight < self._weights[-1] - self._tare_drop_g:
+            if self._afterflow_until is not None:
+                self._complete_shot_tracking()
+                return
+            self._weights = [0.0] * len(self._weights)
 
         elapsed = (dt_util.utcnow() - self._shot_start_time).total_seconds()
         if not self._is_brewing and self._afterflow_until is not None:

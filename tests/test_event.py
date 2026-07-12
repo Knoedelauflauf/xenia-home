@@ -278,3 +278,83 @@ async def test_collect_scale_rate_hiccup_falls_back_to_ml_for_sample(
         PU_SENS_SCALE_RATE="",
     )
     assert tracker._flow_rates == [1.27, OVERVIEW_PAYLOAD["PU_SENS_FLOW_METER_ML"]]
+
+
+# ===========================================================================
+# Auto-tare guard
+# ===========================================================================
+
+
+def _prime_running_shot(tracker, fired):
+    tracker._trigger_event = lambda name, data: fired.append((name, data))
+    tracker._shot_start_time = dt_util.utcnow() - timedelta(seconds=25)
+    tracker._timestamps = [0.0, 5.0, 10.0, 15.0, 20.0]
+    tracker._brew_group_temps = [93.0] * 5
+    tracker._brew_boiler_temps = [130.0] * 5
+    tracker._pump_pressures = [9.0] * 5
+    tracker._flow_rates = [0.0] * 5
+    tracker._weights = [10.0, 20.0, 30.0, 40.0, 42.7]
+
+
+async def test_afterflow_tare_completes_and_discards_drop_sample(
+    hass, init_integration, mock_xenia_api
+):
+    tracker = _get_tracker(hass, init_integration)
+    fired: list = []
+    _prime_running_shot(tracker, fired)
+    tracker._is_brewing = True
+    await _drive_overview(
+        hass,
+        mock_xenia_api,
+        init_integration,
+        MA_STATUS=int(MachineStatus.ON),
+        SCALE_WEIGHT=0.1,
+    )
+    assert len(fired) == 1
+    assert fired[0][1]["weights"][-1] == 42.7
+
+
+async def test_afterflow_small_decrease_does_not_complete(
+    hass, init_integration, mock_xenia_api
+):
+    tracker = _get_tracker(hass, init_integration)
+    fired: list = []
+    _prime_running_shot(tracker, fired)
+    tracker._is_brewing = True
+    await _drive_overview(
+        hass,
+        mock_xenia_api,
+        init_integration,
+        MA_STATUS=int(MachineStatus.ON),
+        SCALE_WEIGHT=42.6,
+    )
+    assert fired == []
+    assert tracker._weights[-1] == 42.6
+
+
+async def test_brewing_start_tare_zeroes_prior_weights(
+    hass, init_integration, mock_xenia_api
+):
+    tracker = _get_tracker(hass, init_integration)
+    await _drive_overview(
+        hass,
+        mock_xenia_api,
+        init_integration,
+        MA_STATUS=int(MachineStatus.BREWING),
+        SCALE_WEIGHT=238.6,
+    )
+    await _drive_overview(
+        hass,
+        mock_xenia_api,
+        init_integration,
+        MA_STATUS=int(MachineStatus.BREWING),
+        SCALE_WEIGHT=238.6,
+    )
+    await _drive_overview(
+        hass,
+        mock_xenia_api,
+        init_integration,
+        MA_STATUS=int(MachineStatus.BREWING),
+        SCALE_WEIGHT=0.0,
+    )
+    assert tracker._weights == [0.0, 0.0]
