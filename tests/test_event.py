@@ -1,8 +1,9 @@
 """Tests for event.py — XeniaShotTracker and ShotData."""
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from homeassistant.helpers.entity_component import DATA_INSTANCES
+from homeassistant.util import dt as dt_util
 import pytest
 
 from custom_components.xenia_home.coordinator import XeniaCoordinatorData
@@ -35,8 +36,8 @@ async def test_event_entities_snapshot(
 
 def test_shot_data_to_dict_has_all_fields() -> None:
     shot = ShotData(
-        start_time="2026-01-01T10:00:00",
-        brew_end_time="2026-01-01T10:00:30",
+        start_time="2026-01-01T10:00:00.000+00:00",
+        brew_end_time="2026-01-01T10:00:30.000+00:00",
         afterflow_seconds=2,
         duration_seconds=30.0,
         timestamps=[0.0, 1.0],
@@ -47,15 +48,15 @@ def test_shot_data_to_dict_has_all_fields() -> None:
         weights=[0.0, 10.0],
     )
     d = shot.to_dict()
-    assert d["start_time"] == "2026-01-01T10:00:00"
+    assert d["start_time"] == "2026-01-01T10:00:00.000+00:00"
     assert d["duration_seconds"] == 30.0
     assert d["timestamps"] == [0.0, 1.0]
-    assert d["brew_end_time"] == "2026-01-01T10:00:30"
+    assert d["brew_end_time"] == "2026-01-01T10:00:30.000+00:00"
 
 
 def test_shot_data_brew_end_time_optional() -> None:
     shot = ShotData(
-        start_time="2026-01-01T10:00:00",
+        start_time="2026-01-01T10:00:00.000+00:00",
         brew_end_time=None,
         afterflow_seconds=2,
         duration_seconds=25.0,
@@ -144,7 +145,7 @@ async def test_start_shot_tracking_clears_lists(hass, init_integration):
     tracker = _get_tracker(hass, init_integration)
     tracker._brew_group_temps = [1.0, 2.0]
     tracker._timestamps = [0.5, 1.5]
-    tracker._brew_end_time = datetime.now()
+    tracker._brew_end_time = dt_util.utcnow()
     tracker._start_shot_tracking()
     assert tracker._brew_group_temps == []
     assert tracker._timestamps == []
@@ -154,7 +155,7 @@ async def test_start_shot_tracking_clears_lists(hass, init_integration):
 
 async def test_start_afterflow_does_not_reset_if_already_active(hass, init_integration):
     tracker = _get_tracker(hass, init_integration)
-    first = datetime.now() + timedelta(seconds=10)
+    first = dt_util.utcnow() + timedelta(seconds=10)
     tracker._afterflow_until = first
     tracker._start_afterflow()
     assert tracker._afterflow_until == first
@@ -162,7 +163,7 @@ async def test_start_afterflow_does_not_reset_if_already_active(hass, init_integ
 
 async def test_cancel_afterflow_clears_state(hass, init_integration):
     tracker = _get_tracker(hass, init_integration)
-    tracker._afterflow_until = datetime.now() + timedelta(seconds=5)
+    tracker._afterflow_until = dt_util.utcnow() + timedelta(seconds=5)
     tracker._afterflow_samples = 3
     tracker._cancel_afterflow()
     assert tracker._afterflow_until is None
@@ -173,7 +174,7 @@ async def test_complete_shot_ignores_short_shots(hass, init_integration):
     tracker = _get_tracker(hass, init_integration)
     fired: list = []
     tracker._trigger_event = lambda name, data: fired.append((name, data))
-    tracker._shot_start_time = datetime.now() - timedelta(seconds=5)
+    tracker._shot_start_time = dt_util.utcnow() - timedelta(seconds=5)
     tracker._timestamps = [0.0, 1.0]
     tracker._brew_group_temps = [93.0, 93.0]
     tracker._brew_boiler_temps = [130.0, 130.0]
@@ -188,7 +189,7 @@ async def test_complete_shot_fires_for_long_enough_shot(hass, init_integration):
     tracker = _get_tracker(hass, init_integration)
     fired: list = []
     tracker._trigger_event = lambda name, data: fired.append((name, data))
-    tracker._shot_start_time = datetime.now() - timedelta(seconds=25)
+    tracker._shot_start_time = dt_util.utcnow() - timedelta(seconds=25)
     tracker._timestamps = [0.0, 5.0, 10.0, 15.0, 20.0]
     tracker._brew_group_temps = [93.0] * 5
     tracker._brew_boiler_temps = [130.0] * 5
@@ -206,7 +207,7 @@ async def test_complete_shot_uses_brew_end_time_for_duration(hass, init_integrat
     tracker = _get_tracker(hass, init_integration)
     fired: list = []
     tracker._trigger_event = lambda name, data: fired.append((name, data))
-    start = datetime.now() - timedelta(seconds=30)
+    start = dt_util.utcnow() - timedelta(seconds=30)
     brew_end = start + timedelta(seconds=25)
     tracker._shot_start_time = start
     tracker._brew_end_time = brew_end
@@ -223,8 +224,8 @@ async def test_complete_shot_uses_brew_end_time_for_duration(hass, init_integrat
 async def test_complete_shot_cancels_afterflow(hass, init_integration):
     tracker = _get_tracker(hass, init_integration)
     tracker._trigger_event = lambda *a, **k: None
-    tracker._afterflow_until = datetime.now() + timedelta(seconds=5)
-    tracker._shot_start_time = datetime.now() - timedelta(seconds=25)
+    tracker._afterflow_until = dt_util.utcnow() + timedelta(seconds=5)
+    tracker._shot_start_time = dt_util.utcnow() - timedelta(seconds=25)
     tracker._timestamps = list(range(25))
     tracker._brew_group_temps = [93.0] * 25
     tracker._brew_boiler_temps = [130.0] * 25

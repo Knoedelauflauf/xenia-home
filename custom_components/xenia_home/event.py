@@ -9,6 +9,7 @@ from homeassistant.components.event import EventEntity
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .const import XENIA_DOMAIN
 from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
@@ -101,7 +102,7 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
             self._collect_shot_data()
             if (
                 self._afterflow_until is not None
-                and datetime.now() >= self._afterflow_until
+                and dt_util.utcnow() >= self._afterflow_until
             ):
                 self._complete_shot_tracking()
 
@@ -110,7 +111,7 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
 
     def _start_shot_tracking(self) -> None:
         """Start tracking a new shot."""
-        self._shot_start_time = datetime.now()
+        self._shot_start_time = dt_util.utcnow()
         self._brew_end_time = None
         self._brew_group_temps = []
         self._brew_boiler_temps = []
@@ -124,8 +125,8 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
         """Start a short afterflow window to capture drips."""
         if self._afterflow_until is not None:
             return
-        self._brew_end_time = datetime.now()
-        self._afterflow_until = datetime.now() + timedelta(
+        self._brew_end_time = dt_util.utcnow()
+        self._afterflow_until = self._brew_end_time + timedelta(
             seconds=self._afterflow_seconds
         )
         self._afterflow_samples = 0
@@ -153,7 +154,7 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
             self._complete_shot_tracking()
             return
 
-        elapsed = (datetime.now() - self._shot_start_time).total_seconds()
+        elapsed = (dt_util.utcnow() - self._shot_start_time).total_seconds()
         if not self._is_brewing and self._afterflow_until is not None:
             self._afterflow_samples += 1
 
@@ -171,7 +172,7 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
             return
         self._cancel_afterflow()
 
-        end_time = datetime.now()
+        end_time = dt_util.utcnow()
         if self._brew_end_time is not None:
             duration = (self._brew_end_time - self._shot_start_time).total_seconds()
         else:
@@ -184,10 +185,14 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
             )
             return
 
+        # Millisecond precision keeps the strings inside the ECMAScript
+        # date-time grammar so frontends can parse them with new Date(...).
         shot_data = ShotData(
-            start_time=self._shot_start_time.isoformat(),
+            start_time=self._shot_start_time.isoformat(timespec="milliseconds"),
             brew_end_time=(
-                self._brew_end_time.isoformat() if self._brew_end_time else None
+                self._brew_end_time.isoformat(timespec="milliseconds")
+                if self._brew_end_time
+                else None
             ),
             afterflow_seconds=self._afterflow_seconds,
             duration_seconds=round(duration, 2),
