@@ -133,10 +133,11 @@ def test_config_data_defaults_are_empty() -> None:
 
 
 def test_runtime_data_holds_both_coordinators() -> None:
-    a, b = MagicMock(), MagicMock()
-    runtime = XeniaRuntimeData(coordinator=a, config_coordinator=b)
+    a, b, c = MagicMock(), MagicMock(), MagicMock()
+    runtime = XeniaRuntimeData(coordinator=a, config_coordinator=b, shot_store=c)
     assert runtime.coordinator is a
     assert runtime.config_coordinator is b
+    assert runtime.shot_store is c
 
 
 # ===========================================================================

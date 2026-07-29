@@ -23,6 +23,7 @@ from .const import (
     DEFAULT_POLL_READY,
     DEFAULT_READY_THRESHOLD,
 )
+from .shot_store import XeniaShotStore
 from .xenia import (
     MachineStatus,
     Xenia,
@@ -67,6 +68,7 @@ class XeniaRuntimeData:
 
     coordinator: XeniaDataUpdateCoordinator
     config_coordinator: XeniaConfigCoordinator
+    shot_store: XeniaShotStore
 
 
 type XeniaConfigEntry = ConfigEntry[XeniaRuntimeData]

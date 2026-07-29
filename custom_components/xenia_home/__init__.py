@@ -17,6 +17,7 @@ from .coordinator import (
     XeniaDataUpdateCoordinator,
     XeniaRuntimeData,
 )
+from .shot_store import XeniaShotStore
 from .xenia import Xenia
 
 _LOGGER = logging.getLogger(__name__)
@@ -91,9 +92,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> boo
     await config_coordinator.async_config_entry_first_refresh()
     await coordinator.async_config_entry_first_refresh()
 
+    shot_store = XeniaShotStore(hass, entry.entry_id)
+    await shot_store.async_load()
+
     entry.runtime_data = XeniaRuntimeData(
         coordinator=coordinator,
         config_coordinator=config_coordinator,
+        shot_store=shot_store,
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

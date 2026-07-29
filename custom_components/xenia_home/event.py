@@ -204,7 +204,12 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
             weights=self._weights,
         )
 
-        self._trigger_event("shot_completed", shot_data.to_dict())
+        payload = shot_data.to_dict()
+        self._trigger_event("shot_completed", payload)
+        self.coordinator.config_entry.async_create_task(
+            self.hass,
+            self.runtime_data.shot_store.async_add_shot(payload),
+        )
 
         final_weight = self._weights[-1] if self._weights else 0.0
         _LOGGER.info(

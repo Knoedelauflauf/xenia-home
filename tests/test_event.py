@@ -358,3 +358,27 @@ async def test_brewing_start_tare_zeroes_prior_weights(
         SCALE_WEIGHT=0.0,
     )
     assert tracker._weights == [0.0, 0.0]
+
+
+async def test_completed_shot_is_persisted_in_store(
+    hass, init_integration, mock_xenia_api
+):
+    tracker = _get_tracker(hass, init_integration)
+    fired: list = []
+    original_trigger = tracker._trigger_event
+    tracker._trigger_event = lambda name, data: (
+        fired.append((name, data)),
+        original_trigger(name, data),
+    )
+    tracker._is_brewing = True
+    tracker._shot_start_time = dt_util.utcnow() - timedelta(seconds=25)
+    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.ON)
+    tracker._afterflow_until = dt_util.utcnow() - timedelta(seconds=1)
+    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.ON)
+    await hass.async_block_till_done()
+
+    store = init_integration.runtime_data.shot_store
+    summaries = store.list_shots()
+    assert len(summaries) == 1
+    shots = await store.async_get_shots([summaries[0]["shot_id"]])
+    assert shots == [{**fired[0][1], "shot_id": summaries[0]["shot_id"]}]
