@@ -59,6 +59,18 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
     _afterflow_seconds = 2
     _min_shot_seconds = 10
     _tare_drop_g = 2.0
+    # Curve arrays stay out of the recorder DB; history is served by the
+    # integration's own shot store, so only the scalars need persisting.
+    _unrecorded_attributes = frozenset(
+        {
+            "timestamps",
+            "brew_group_temps",
+            "brew_boiler_temps",
+            "pump_pressures",
+            "flow_rates",
+            "weights",
+        }
+    )
 
     def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
         """Initialize the shot tracker."""
