@@ -18,6 +18,7 @@ from .coordinator import (
     XeniaRuntimeData,
 )
 from .shot_store import XeniaShotStore
+from .websocket import async_register_commands
 from .xenia import Xenia
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ SERVICE_EXECUTE_SCRIPT_SCHEMA = vol.Schema(
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register the integration's global service."""
+    async_register_commands(hass)
 
     async def handle_execute_script(call: ServiceCall) -> None:
         """Handle the execute_script service call."""

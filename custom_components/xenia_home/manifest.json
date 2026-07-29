@@ -5,7 +5,7 @@
   "issue_tracker": "https://github.com/Knoedelauflauf/xenia-home/issues",
   "version": "0.6.0",
   "requirements": [],
-  "dependencies": [],
+  "dependencies": ["websocket_api"],
   "codeowners": ["@knoedelauflauf"],
   "iot_class": "local_polling",
   "config_flow": true,

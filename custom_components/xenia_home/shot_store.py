@@ -125,10 +125,11 @@ class XeniaShotStore:
 
     async def async_get_shots(self, shot_ids: list[str]) -> list[dict[str, Any]]:
         """Full payloads in request order; unknown ids are omitted."""
+        known_months = {s["month"] for s in self._index["shots"]}
         result = []
         for shot_id in shot_ids:
             month = self._month(shot_id)
-            if month is None:
+            if month is None or month not in known_months:
                 continue
             payload = (await self._load_chunk(month)).get(shot_id)
             if payload is not None:
