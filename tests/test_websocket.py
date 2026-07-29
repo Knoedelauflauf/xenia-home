@@ -163,3 +163,42 @@ async def test_multiple_entries_require_entry_id(
     )
     assert msg["success"]
     assert msg["result"]["shots"] == []
+
+
+async def test_delete_removes_shot_from_api(hass, init_integration, hass_ws_client):
+    keep = shot_payload("2026-07-01T10:00:00.000+00:00")
+    drop = shot_payload("2026-07-02T10:00:00.000+00:00")
+    await _seed(init_integration, keep, drop)
+
+    msg = await _cmd(
+        hass,
+        hass_ws_client,
+        {"type": "xenia_home/shots/delete", "shot_id": drop["start_time"]},
+    )
+    assert msg["success"]
+
+    msg = await _cmd(hass, hass_ws_client, {"type": "xenia_home/shots/list"})
+    assert [s["shot_id"] for s in msg["result"]["shots"]] == [keep["start_time"]]
+
+    msg = await _cmd(
+        hass,
+        hass_ws_client,
+        {
+            "type": "xenia_home/shots/get",
+            "shot_ids": [drop["start_time"], keep["start_time"]],
+        },
+    )
+    assert [s["shot_id"] for s in msg["result"]["shots"]] == [keep["start_time"]]
+
+
+async def test_delete_unknown_shot_errors(hass, init_integration, hass_ws_client):
+    msg = await _cmd(
+        hass,
+        hass_ws_client,
+        {
+            "type": "xenia_home/shots/delete",
+            "shot_id": "2099-01-01T00:00:00.000+00:00",
+        },
+    )
+    assert not msg["success"]
+    assert msg["error"]["code"] == "not_found"
