@@ -17,6 +17,7 @@ from .coordinator import (
     XeniaDataUpdateCoordinator,
     XeniaRuntimeData,
 )
+from .recorder_import import async_import_recorder_shots
 from .shot_store import XeniaShotStore
 from .websocket import async_register_commands
 from .xenia import Xenia
@@ -104,6 +105,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> boo
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    if not shot_store.migrated:
+        entry.async_create_background_task(
+            hass,
+            async_import_recorder_shots(hass, entry, shot_store),
+            "xenia_home_recorder_import",
+        )
     return True
 
 
