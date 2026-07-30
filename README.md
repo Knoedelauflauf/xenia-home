@@ -171,6 +171,10 @@ Result: `{"shots": [...]}` in request order — each entry is the complete
 **`xenia_home/shots/delete`** — remove one shot. Required: `shot_id`.
 Errors with code `not_found` for unknown ids.
 
+All commands error with `entry_not_found` (no or unknown entry),
+`multiple_entries` (several entries loaded but no `entry_id` given), and
+`shots/list` with `invalid_timestamp` for unparseable `after`/`before`.
+
 Live data is unchanged: the `shot_completed` event still carries the full
 payload. Note for recorder-based consumers: from this version on, recorder
 rows of the event entity no longer contain the curve arrays — switch to the
