@@ -1,8 +1,11 @@
 """The recorder must not persist the shot curve arrays."""
 
+import asyncio
 from datetime import timedelta
 from functools import partial
+from unittest.mock import patch
 
+import pytest
 from homeassistant.components.recorder import get_instance, history
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
@@ -11,6 +14,8 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
 )
 
 from custom_components.xenia_home.const import XENIA_DOMAIN
+from custom_components.xenia_home.recorder_import import async_import_recorder_shots
+from custom_components.xenia_home.shot_store import XeniaShotStore
 from custom_components.xenia_home.xenia import MachineStatus
 from tests.fixtures.shots import shot_payload
 from tests.test_event import TRACKER, _drive_status, _get_tracker
@@ -114,3 +119,54 @@ async def test_setup_without_recorder_starts_empty(hass, init_integration):
     store = init_integration.runtime_data.shot_store
     assert store.list_shots() == []
     assert store.migrated
+
+
+async def _store_with_tracker_entity(hass, mock_config_entry):
+    """A loaded store plus a registered event entity, as a real upgrade has."""
+    mock_config_entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    registry.async_get_or_create(
+        "event",
+        XENIA_DOMAIN,
+        f"{XENIA_DOMAIN}_shot_tracker_{mock_config_entry.data['host']}",
+        config_entry=mock_config_entry,
+    )
+    hass.config.components.add("recorder")
+    store = XeniaShotStore(hass, mock_config_entry.entry_id)
+    await store.async_load()
+    return store
+
+
+async def test_cancelled_import_leaves_migrated_false(hass, mock_config_entry):
+    store = await _store_with_tracker_entity(hass, mock_config_entry)
+    entered = asyncio.Event()
+
+    async def _hang(*_args, **_kwargs):
+        entered.set()
+        await asyncio.Event().wait()  # never resolves; only cancellation ends this
+
+    with patch(
+        "custom_components.xenia_home.recorder_import._legacy_shots", side_effect=_hang
+    ):
+        task = hass.async_create_task(
+            async_import_recorder_shots(hass, mock_config_entry, store),
+            "test_cancelled_import",
+        )
+        await entered.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    assert store.migrated is False
+
+
+async def test_genuine_failure_still_marks_migrated(hass, mock_config_entry):
+    store = await _store_with_tracker_entity(hass, mock_config_entry)
+
+    with patch(
+        "custom_components.xenia_home.recorder_import._legacy_shots",
+        side_effect=RuntimeError("boom"),
+    ):
+        await async_import_recorder_shots(hass, mock_config_entry, store)
+
+    assert store.migrated is True
