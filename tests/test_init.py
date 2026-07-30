@@ -123,13 +123,21 @@ async def test_execute_script_id_takes_priority_over_name(
 # ===========================================================================
 
 
-async def test_unload_entry_removes_service_when_last_entry_gone(
-    hass, init_integration
-):
+async def test_unload_entry_keeps_service_registered(hass, init_integration):
+    # async_setup (which registers the service) runs once per HA run, so the
+    # service must survive an unload/reload of the only entry.
     assert hass.services.has_service(XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT)
     await hass.config_entries.async_unload(init_integration.entry_id)
     await hass.async_block_till_done()
-    assert not hass.services.has_service(XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT)
+    assert hass.services.has_service(XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT)
+
+    with pytest.raises(ServiceValidationError, match="No Xenia config entry"):
+        await hass.services.async_call(
+            XENIA_DOMAIN,
+            SERVICE_EXECUTE_SCRIPT,
+            {ATTR_SCRIPT_ID: 10},
+            blocking=True,
+        )
 
 
 async def test_unload_entry_keeps_service_when_other_entries_remain(
