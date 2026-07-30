@@ -134,5 +134,7 @@ async def ws_delete_shot(
         connection.send_result(msg["id"])
     else:
         connection.send_error(
-            msg["id"], "not_found", f"Unknown shot_id {msg['shot_id']}"
+            msg["id"],
+            websocket_api.ERR_NOT_FOUND,
+            f"Unknown shot_id {msg['shot_id']}",
         )

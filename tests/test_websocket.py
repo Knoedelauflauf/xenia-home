@@ -1,5 +1,8 @@
 """Contract tests for the shot history WebSocket API."""
 
+from collections.abc import Iterator
+
+from aioresponses import aioresponses as AioResponses
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -8,12 +11,14 @@ from tests.conftest import MockXeniaApi
 from tests.fixtures.shots import shot_payload
 
 
-@pytest.fixture(autouse=True)
-def _allow_ws_loopback(mock_xenia_api):
-    """hass_ws_client's real localhost connection must bypass aioresponses,
-    which otherwise intercepts every aiohttp request while its mock is active.
+@pytest.fixture
+def mock_xenia_api() -> Iterator[MockXeniaApi]:
+    """Override the conftest fixture: hass_ws_client's real localhost
+    connection must bypass aioresponses, which otherwise intercepts every
+    aiohttp request while its mock is active.
     """
-    mock_xenia_api._mock._passthrough.append("http://127.0.0.1")
+    with AioResponses(passthrough=["http://127.0.0.1"]) as mock:
+        yield MockXeniaApi(mock)
 
 
 async def _cmd(hass, hass_ws_client, msg):
