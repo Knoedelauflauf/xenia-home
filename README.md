@@ -149,7 +149,7 @@ expose a slider on a dashboard.
 The integration stores every completed shot itself (indefinitely, in
 `.storage/`); history does not depend on the recorder and survives recorder
 purges. Other apps can query it over the Home Assistant WebSocket API with any
-authenticated connection — a long-lived access token is enough, no admin
+authenticated connection; a long-lived access token is enough, no admin
 rights required.
 
 Timestamps are millisecond-precision ISO 8601 strings, directly parseable
@@ -157,28 +157,28 @@ with JavaScript's `new Date(...)`. A shot's `shot_id` is its `start_time`.
 Timestamp inputs (`after`/`before`) accept any ISO 8601 string; naive
 timestamps are interpreted in the Home Assistant server's local time zone.
 
-**`xenia_home/shots/list`** — summaries, newest first, one entry per shot.
+**`xenia_home/shots/list`**: summaries, newest first, one entry per shot.
 Optional: `entry_id` (only needed with several Xenia entries), `after` /
 `before` (ISO timestamps, exclusive bounds on `start_time`), `limit`.
 Result: `{"shots": [{"shot_id", "start_time", "brew_end_time",
 "duration_seconds", "final_weight_g"}, ...]}`. Paging, if ever needed, is
 keyset-style: pass the oldest received `start_time` as `before`.
 
-**`xenia_home/shots/get`** — full curves. Required: `shot_ids` (list).
-Result: `{"shots": [...]}` in request order — each entry is the complete
-`shot_completed` event payload plus `shot_id`; unknown ids are omitted.
+**`xenia_home/shots/get`**: full curves. Required: `shot_ids` (list).
+Result: `{"shots": [...]}` in request order; each entry is the complete
+`shot_completed` event payload plus `shot_id`, unknown ids are omitted.
 
-**`xenia_home/shots/delete`** — remove one shot. Required: `shot_id`.
+**`xenia_home/shots/delete`**: remove one shot. Required: `shot_id`.
 Errors with code `not_found` for unknown ids.
 
-All commands error with `entry_not_found` (no or unknown entry),
-`multiple_entries` (several entries loaded but no `entry_id` given), and
-`shots/list` with `invalid_timestamp` for unparseable `after`/`before`.
+All commands error with `not_found` (no or unknown entry) and
+`multiple_entries` (several entries loaded but no `entry_id` given);
+`shots/list` errors with `invalid_format` for unparseable `after`/`before`.
 
 Live data is unchanged: the `shot_completed` event still carries the full
 payload. Note for recorder-based consumers: from this version on, recorder
-rows of the event entity no longer contain the curve arrays — switch to the
-commands above for history.
+rows of the event entity no longer contain the curve arrays, so switch to
+the commands above for history.
 
 ## Frontend card
 

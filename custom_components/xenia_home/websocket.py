@@ -10,6 +10,10 @@ import voluptuous as vol
 from .const import XENIA_DOMAIN
 from .shot_store import XeniaShotStore
 
+# Core has no error code for "several entries but none addressed"; its
+# commands avoid the case with a required entry_id, ours is optional.
+ERR_MULTIPLE_ENTRIES = "multiple_entries"
+
 
 @callback
 def async_register_commands(hass: HomeAssistant) -> None:
@@ -32,19 +36,19 @@ def _resolve_store(
         if entry is None:
             connection.send_error(
                 msg["id"],
-                "entry_not_found",
+                websocket_api.ERR_NOT_FOUND,
                 f"No loaded {XENIA_DOMAIN} entry {entry_id}",
             )
             return None
         return entry.runtime_data.shot_store
     if not entries:
         connection.send_error(
-            msg["id"], "entry_not_found", f"No loaded {XENIA_DOMAIN} entry"
+            msg["id"], websocket_api.ERR_NOT_FOUND, f"No loaded {XENIA_DOMAIN} entry"
         )
         return None
     if len(entries) > 1:
         connection.send_error(
-            msg["id"], "multiple_entries", "Several entries are loaded; pass entry_id"
+            msg["id"], ERR_MULTIPLE_ENTRIES, "Several entries are loaded; pass entry_id"
         )
         return None
     return entries[0].runtime_data.shot_store
@@ -74,7 +78,9 @@ async def ws_list_shots(
             parsed = dt_util.parse_datetime(msg[key])
             if parsed is None:
                 connection.send_error(
-                    msg["id"], "invalid_timestamp", f"Unparseable {key}: {msg[key]}"
+                    msg["id"],
+                    websocket_api.ERR_INVALID_FORMAT,
+                    f"Unparseable {key}: {msg[key]}",
                 )
                 return
             bounds[key] = dt_util.as_utc(parsed)

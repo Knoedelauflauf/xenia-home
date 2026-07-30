@@ -54,10 +54,8 @@ async def async_import_recorder_shots(
                 await store.async_add_shot(payload)
     except Exception:
         _LOGGER.exception("One-time shot import from the recorder failed")
-    # Not in a finally: task cancellation (entry unload / HA restart racing
-    # this background task) must propagate here instead of marking the
-    # import done with nothing imported. It retries next boot; async_add_shot
-    # dedupes by start_time so a partial prior run is not replayed twice.
+    # Deliberately not in a finally: cancellation (unload/restart) must not
+    # mark the import done; it retries next boot and async_add_shot dedupes.
     await store.async_set_migrated()
 
 

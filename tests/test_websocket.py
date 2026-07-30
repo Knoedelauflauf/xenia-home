@@ -103,7 +103,7 @@ async def test_list_rejects_unparseable_timestamp(
         {"type": "xenia_home/shots/list", "after": "gestern"},
     )
     assert not msg["success"]
-    assert msg["error"]["code"] == "invalid_timestamp"
+    assert msg["error"]["code"] == "invalid_format"
 
 
 async def test_get_returns_full_payloads_in_request_order(
@@ -138,7 +138,7 @@ async def test_unknown_entry_id_errors(hass, init_integration, hass_ws_client):
         {"type": "xenia_home/shots/list", "entry_id": "deadbeef"},
     )
     assert not msg["success"]
-    assert msg["error"]["code"] == "entry_not_found"
+    assert msg["error"]["code"] == "not_found"
 
 
 async def test_multiple_entries_require_entry_id(
@@ -215,7 +215,7 @@ async def test_no_loaded_entry_errors_on_every_command(
     ):
         result = await _cmd(hass, hass_ws_client, msg)
         assert not result["success"]
-        assert result["error"]["code"] == "entry_not_found"
+        assert result["error"]["code"] == "not_found"
 
 
 async def test_delete_unknown_shot_errors(hass, init_integration, hass_ws_client):
