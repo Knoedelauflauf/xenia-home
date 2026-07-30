@@ -122,3 +122,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> bo
     if unload_ok and not hass.config_entries.async_loaded_entries(XENIA_DOMAIN):
         hass.services.async_remove(XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT)
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> None:
+    """Delete the entry's shot history files."""
+    store = XeniaShotStore(hass, entry.entry_id)
+    await store.async_load()
+    await store.async_remove()

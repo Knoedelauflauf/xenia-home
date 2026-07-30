@@ -11,7 +11,9 @@ from custom_components.xenia_home import (
     SERVICE_EXECUTE_SCRIPT,
 )
 from custom_components.xenia_home.const import XENIA_DOMAIN
+from custom_components.xenia_home.shot_store import XeniaShotStore
 from tests.fixtures.api_responses import MACHINE_NEW_FW_FIELDS
+from tests.fixtures.shots import shot_payload
 
 # ===========================================================================
 # Setup smoke
@@ -194,3 +196,25 @@ async def test_device_info_old_firmware_has_no_serial(hass, init_integration):
     assert device is not None
     assert device.serial_number is None
     assert (dr.CONNECTION_NETWORK_MAC, "aa:bb:cc:dd:ee:ff") in device.connections
+
+
+# ===========================================================================
+# Removal
+# ===========================================================================
+
+
+async def test_remove_entry_deletes_shot_storage(hass, init_integration):
+    store = init_integration.runtime_data.shot_store
+    await store.async_add_shot(shot_payload())
+    await store.async_set_migrated()
+    assert store.list_shots() != []
+    assert store.migrated is True
+    entry_id = init_integration.entry_id
+
+    await hass.config_entries.async_remove(entry_id)
+    await hass.async_block_till_done()
+
+    fresh_store = XeniaShotStore(hass, entry_id)
+    await fresh_store.async_load()
+    assert fresh_store.list_shots() == []
+    assert fresh_store.migrated is False
