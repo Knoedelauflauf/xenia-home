@@ -1,8 +1,9 @@
 """Contract tests for the persistent shot store."""
 
-from pathlib import Path
+from unittest.mock import patch
 
-from custom_components.xenia_home.const import XENIA_DOMAIN
+from homeassistant.helpers.storage import Store
+
 from custom_components.xenia_home.shot_store import XeniaShotStore
 from tests.fixtures.shots import shot_payload
 
@@ -118,13 +119,8 @@ async def test_migrated_flag_persists(hass):
 
 
 async def test_corrupt_index_is_tolerated(hass):
-    index_path = Path(
-        hass.config.path(".storage", f"{XENIA_DOMAIN}.{ENTRY_ID}.shots_index")
-    )
-    index_path.parent.mkdir(parents=True, exist_ok=True)
-    index_path.write_text("{not json")
-
-    store = await _loaded_store(hass)
+    with patch.object(Store, "async_load", side_effect=OSError("corrupt")):
+        store = await _loaded_store(hass)
     assert store.list_shots() == []
 
     payload = shot_payload()
