@@ -196,6 +196,28 @@ async def test_delete_removes_shot_from_api(hass, init_integration, hass_ws_clie
     assert [s["shot_id"] for s in msg["result"]["shots"]] == [keep["start_time"]]
 
 
+async def test_no_loaded_entry_errors_on_every_command(
+    hass, init_integration, hass_ws_client
+):
+    await hass.config_entries.async_unload(init_integration.entry_id)
+    await hass.async_block_till_done()
+
+    for msg in (
+        {"type": "xenia_home/shots/list"},
+        {
+            "type": "xenia_home/shots/get",
+            "shot_ids": ["2026-07-01T10:00:00.000+00:00"],
+        },
+        {
+            "type": "xenia_home/shots/delete",
+            "shot_id": "2026-07-01T10:00:00.000+00:00",
+        },
+    ):
+        result = await _cmd(hass, hass_ws_client, msg)
+        assert not result["success"]
+        assert result["error"]["code"] == "entry_not_found"
+
+
 async def test_delete_unknown_shot_errors(hass, init_integration, hass_ws_client):
     msg = await _cmd(
         hass,

@@ -126,3 +126,43 @@ async def test_corrupt_index_is_tolerated(hass):
     payload = shot_payload()
     await store.async_add_shot(payload)
     assert [s["shot_id"] for s in store.list_shots()] == [payload["start_time"]]
+
+
+async def test_corrupt_chunk_is_tolerated(hass):
+    store = await _loaded_store(hass)
+    payload = shot_payload()
+    await store.async_add_shot(payload)
+
+    reloaded = await _loaded_store(hass)
+    with patch.object(Store, "async_load", side_effect=OSError("corrupt")):
+        assert await reloaded.async_get_shots([payload["start_time"]]) == []
+
+    # store remains usable after the corrupt read
+    assert [s["shot_id"] for s in reloaded.list_shots()] == [payload["start_time"]]
+    other = shot_payload("2026-08-01T10:00:00.000+00:00")
+    await reloaded.async_add_shot(other)
+    assert {s["shot_id"] for s in reloaded.list_shots()} == {
+        payload["start_time"],
+        other["start_time"],
+    }
+
+
+async def test_add_shot_with_unparseable_start_time_is_ignored(hass):
+    store = await _loaded_store(hass)
+    await store.async_add_shot(shot_payload(start_time="not-a-timestamp"))
+    assert store.list_shots() == []
+
+
+async def test_delete_last_shot_of_month_removes_chunk_file(hass):
+    store = await _loaded_store(hass)
+    june = shot_payload("2026-06-15T08:00:00.000+00:00")
+    july = shot_payload("2026-07-01T10:00:00.000+00:00")
+    await store.async_add_shot(june)
+    await store.async_add_shot(july)
+
+    assert await store.async_delete_shot(june["start_time"]) is True
+
+    reloaded = await _loaded_store(hass)
+    assert [s["shot_id"] for s in reloaded.list_shots()] == [july["start_time"]]
+    shots = await reloaded.async_get_shots([july["start_time"], june["start_time"]])
+    assert [s["shot_id"] for s in shots] == [july["start_time"]]

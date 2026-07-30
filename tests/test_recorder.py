@@ -160,6 +160,20 @@ async def test_cancelled_import_leaves_migrated_false(hass, mock_config_entry):
     assert store.migrated is False
 
 
+async def test_no_tracker_entity_completes_migration_empty(hass, mock_config_entry):
+    # No upgrade path (fresh install skipped the migration) means the entity
+    # registry has no event entity for this entry.
+    mock_config_entry.add_to_hass(hass)
+    hass.config.components.add("recorder")
+    store = XeniaShotStore(hass, mock_config_entry.entry_id)
+    await store.async_load()
+
+    await async_import_recorder_shots(hass, mock_config_entry, store)
+
+    assert store.migrated is True
+    assert store.list_shots() == []
+
+
 async def test_genuine_failure_still_marks_migrated(hass, mock_config_entry):
     store = await _store_with_tracker_entity(hass, mock_config_entry)
 

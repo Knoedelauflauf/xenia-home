@@ -34,7 +34,7 @@ exclude_also = [
     "raise NotImplementedError",
     "\\.\\.\\.",
 ]
-fail_under = 90
+fail_under = 95
 
 # Ruff configuration mirrors home-assistant/core. Only HA-internal aliases
 # (PLATFORM_SCHEMA, helper-module shortenings) have been dropped because this
