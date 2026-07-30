@@ -144,6 +144,38 @@ weight. You can also bind the number entity into automations — for
 example, to step the target down by 0.5 g across a tasting flight, or to
 expose a slider on a dashboard.
 
+## Shot history API
+
+The integration stores every completed shot itself (indefinitely, in
+`.storage/`); history does not depend on the recorder and survives recorder
+purges. Other apps can query it over the Home Assistant WebSocket API with any
+authenticated connection — a long-lived access token is enough, no admin
+rights required.
+
+Timestamps are millisecond-precision ISO 8601 strings, directly parseable
+with JavaScript's `new Date(...)`. A shot's `shot_id` is its `start_time`.
+Timestamp inputs (`after`/`before`) accept any ISO 8601 string; naive
+timestamps are interpreted in the Home Assistant server's local time zone.
+
+**`xenia_home/shots/list`** — summaries, newest first, one entry per shot.
+Optional: `entry_id` (only needed with several Xenia entries), `after` /
+`before` (ISO timestamps, exclusive bounds on `start_time`), `limit`.
+Result: `{"shots": [{"shot_id", "start_time", "brew_end_time",
+"duration_seconds", "final_weight_g"}, ...]}`. Paging, if ever needed, is
+keyset-style: pass the oldest received `start_time` as `before`.
+
+**`xenia_home/shots/get`** — full curves. Required: `shot_ids` (list).
+Result: `{"shots": [...]}` in request order — each entry is the complete
+`shot_completed` event payload plus `shot_id`; unknown ids are omitted.
+
+**`xenia_home/shots/delete`** — remove one shot. Required: `shot_id`.
+Errors with code `not_found` for unknown ids.
+
+Live data is unchanged: the `shot_completed` event still carries the full
+payload. Note for recorder-based consumers: from this version on, recorder
+rows of the event entity no longer contain the curve arrays — switch to the
+commands above for history.
+
 ## Frontend card
 
 For visualizing shot tracking data, check out [xenia-home-card](https://github.com/Knoedelauflauf/xenia-home-card).
@@ -162,6 +194,7 @@ For visualizing shot tracking data, check out [xenia-home-card](https://github.c
 The Xenia espresso machine itself stores no Home Assistant–specific data,
 so no cleanup on the machine is necessary. If you previously enabled weight
 management and let the integration create a new on-device script for you,
-you may optionally delete that script from the machine's web UI. Recorded
-entity history is kept by the Home Assistant recorder until it ages out of
-the recorder's retention window or you purge it manually.
+you may optionally delete that script from the machine's web UI. Shot
+history is stored by the integration and is deleted together with it; other
+recorded entity history is kept by the Home Assistant recorder until it
+ages out of the recorder's retention window or you purge it manually.
