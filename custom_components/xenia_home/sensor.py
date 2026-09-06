@@ -26,7 +26,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.typing import StateType
 
-from .const import CONF_SHOT_TIMER_IDLE_RESET, DEFAULT_SHOT_TIMER_IDLE_RESET
+from .const import (
+    CONF_SHOT_TIMER_IDLE_RESET,
+    CONF_SHOT_TIMER_START_PRESSURE,
+    DEFAULT_SHOT_TIMER_IDLE_RESET,
+    DEFAULT_SHOT_TIMER_START_PRESSURE,
+)
 from .coordinator import (
     XeniaConfigEntry,
     XeniaCoordinatorData,
@@ -223,6 +228,12 @@ class XeniaShotTimerSensor(XeniaEntity, SensorEntity):
     updates without polling the machine any harder, it drives its own
     display refresh via `async_track_time_interval`, independent of the
     coordinator's (much slower) poll interval.
+
+    If `CONF_SHOT_TIMER_START_PRESSURE` is set above 0, the timer doesn't
+    start the instant `BREWING` begins - it waits until `PU_SENS_PRESS`
+    reaches that threshold first (skipping any pre-infusion/ramp-up phase
+    before the pump reaches full pressure). A value of 0 (the default)
+    starts the timer immediately.
     """
 
     _attr_translation_key = "shot_timer"
@@ -239,8 +250,12 @@ class XeniaShotTimerSensor(XeniaEntity, SensorEntity):
         self._idle_reset_seconds: int = coordinator.config_entry.options.get(
             CONF_SHOT_TIMER_IDLE_RESET, DEFAULT_SHOT_TIMER_IDLE_RESET
         )
+        self._start_pressure: float = coordinator.config_entry.options.get(
+            CONF_SHOT_TIMER_START_PRESSURE, DEFAULT_SHOT_TIMER_START_PRESSURE
+        )
         self._previous_status: MachineStatus | None = None
         self._start_monotonic: float | None = None
+        self._waiting_for_pressure: bool = False
         self._frozen_elapsed: int = 0
         self._tick_unsub: Callable[[], None] | None = None
         self._idle_reset_unsub: Callable[[], None] | None = None
@@ -264,7 +279,16 @@ class XeniaShotTimerSensor(XeniaEntity, SensorEntity):
         new_status = self.coordinator.data.overview.ma_status
         self._handle_status_transition(self._previous_status, new_status)
         self._previous_status = new_status
+        if self._waiting_for_pressure and new_status == MachineStatus.BREWING:
+            self._check_start_pressure()
         self.async_write_ha_state()
+
+    def _check_start_pressure(self) -> None:
+        """Start the timer once pump pressure reaches the configured threshold."""
+        if self.coordinator.data.overview.pu_sens_press >= self._start_pressure:
+            self._waiting_for_pressure = False
+            self._start_monotonic = time.monotonic()
+            self._start_ticking()
 
     def _handle_status_transition(
         self, old_status: MachineStatus | None, new_status: MachineStatus
@@ -280,9 +304,14 @@ class XeniaShotTimerSensor(XeniaEntity, SensorEntity):
         if old_status == MachineStatus.BREWING:
             # Brewing just stopped (regardless of what it stopped into):
             # freeze the last live value instead of letting it keep
-            # counting or disappearing immediately.
+            # counting or disappearing immediately. If we were still
+            # waiting for the start pressure threshold (e.g. a very
+            # short/aborted attempt that never reached it),
+            # _current_elapsed() correctly falls back to the still-0
+            # frozen value.
             self._frozen_elapsed = self._current_elapsed()
             self._start_monotonic = None
+            self._waiting_for_pressure = False
             self._stop_ticking()
             # The reset delay is measured from the end of the shot itself,
             # not from whenever DRAINING happens to finish - DRAINING gets
@@ -295,9 +324,15 @@ class XeniaShotTimerSensor(XeniaEntity, SensorEntity):
                 )
 
         if new_status == MachineStatus.BREWING:
-            self._start_monotonic = time.monotonic()
             self._frozen_elapsed = 0
-            self._start_ticking()
+            if self._start_pressure > 0:
+                # Wait for _check_start_pressure() (called from
+                # _handle_coordinator_update) to actually start the clock.
+                self._start_monotonic = None
+                self._waiting_for_pressure = True
+            else:
+                self._start_monotonic = time.monotonic()
+                self._start_ticking()
         elif new_status in (MachineStatus.OFF, MachineStatus.ECO):
             self._frozen_elapsed = 0
         # MachineStatus.DRAINING / ON / UNKNOWN: keep showing the frozen
