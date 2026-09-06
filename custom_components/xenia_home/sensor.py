@@ -26,6 +26,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.typing import StateType
 
+from .const import CONF_SHOT_TIMER_IDLE_RESET, DEFAULT_SHOT_TIMER_IDLE_RESET
 from .coordinator import (
     XeniaConfigEntry,
     XeniaCoordinatorData,
@@ -35,10 +36,6 @@ from .entity import XeniaEntity
 from .xenia import MachineStatus
 
 PARALLEL_UPDATES = 0
-
-# How long the shot timer keeps showing the last shot's duration after
-# brewing stops before it resets to 0.
-SHOT_TIMER_IDLE_RESET_SECONDS: Final = 30
 
 # How often the shot timer's displayed value ticks while actively brewing.
 # Matches the whole-second display resolution - no point ticking faster.
@@ -211,11 +208,12 @@ class XeniaShotTimerSensor(XeniaEntity, SensorEntity):
     Counts up in whole seconds while `MA_STATUS` is `BREWING`, freezes at
     the final value the moment brewing stops (whether that is `DRAINING`
     or anything else), and resets to 0 either immediately when the machine
-    reaches `OFF`/`ECO`, or `SHOT_TIMER_IDLE_RESET_SECONDS` after brewing
-    stopped - measured from the end of the shot itself, not from whenever
-    `DRAINING` happens to finish, so `DRAINING` gets no "free" extra
-    display time beyond the configured delay. `0` is the "no recent shot"
-    value (never `unknown`), matching how other espresso machine
+    reaches `OFF`/`ECO`, or `CONF_SHOT_TIMER_IDLE_RESET` seconds
+    (user-configurable via the options flow, see `config_flow.py`) after
+    brewing stopped - measured from the end of the shot itself, not from
+    whenever `DRAINING` happens to finish, so `DRAINING` gets no "free"
+    extra display time beyond the configured delay. `0` is the "no recent
+    shot" value (never `unknown`), matching how other espresso machine
     integrations model this.
 
     Unlike the declarative `XeniaSensor`/`value_fn` sensors above, this
@@ -238,6 +236,9 @@ class XeniaShotTimerSensor(XeniaEntity, SensorEntity):
         """Initialize the shot timer."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.config_entry.data[CONF_HOST]}_shot_timer"
+        self._idle_reset_seconds: int = coordinator.config_entry.options.get(
+            CONF_SHOT_TIMER_IDLE_RESET, DEFAULT_SHOT_TIMER_IDLE_RESET
+        )
         self._previous_status: MachineStatus | None = None
         self._start_monotonic: float | None = None
         self._frozen_elapsed: int = 0
@@ -290,7 +291,7 @@ class XeniaShotTimerSensor(XeniaEntity, SensorEntity):
             # immediately below anyway.
             if new_status not in (MachineStatus.OFF, MachineStatus.ECO):
                 self._idle_reset_unsub = async_call_later(
-                    self.hass, SHOT_TIMER_IDLE_RESET_SECONDS, self._handle_idle_reset
+                    self.hass, self._idle_reset_seconds, self._handle_idle_reset
                 )
 
         if new_status == MachineStatus.BREWING:

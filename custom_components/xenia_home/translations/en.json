@@ -47,6 +47,7 @@
         "title": "Xenia options",
         "data": {
           "weight_management_enabled": "Enable weight management",
+          "shot_timer_idle_reset": "Shot timer: how long to keep showing the last shot (seconds)",
           "configure_polling": "Configure polling intervals (advanced)"
         }
       },

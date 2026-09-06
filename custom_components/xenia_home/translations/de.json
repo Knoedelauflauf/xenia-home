@@ -47,6 +47,7 @@
         "title": "Xenia Optionen",
         "data": {
           "weight_management_enabled": "Gewichtssteuerung aktivieren",
+          "shot_timer_idle_reset": "Shot-Timer: Anzeigedauer nach Bezugsende (Sekunden)",
           "configure_polling": "Abfrageintervalle konfigurieren (fortgeschritten)"
         }
       },
