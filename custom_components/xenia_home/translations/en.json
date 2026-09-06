@@ -121,6 +121,9 @@
           "draining": "Draining",
           "unknown": "Unknown"
         }
+      },
+      "shot_timer": {
+        "name": "Shot timer"
       }
     },
     "number": {

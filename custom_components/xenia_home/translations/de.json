@@ -121,6 +121,9 @@
           "draining": "Entleert",
           "unknown": "Unbekannt"
         }
+      },
+      "shot_timer": {
+        "name": "Shot-Timer"
       }
     },
     "number": {
