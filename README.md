@@ -81,6 +81,21 @@ machine).
 grams) of the weight target number entity. Defaults: minimum 25 g, maximum
 50 g, step 0.5 g. Pick a range that matches the shots you actually pull.
 
+**Shot timer: start only above this pump pressure.** By default the shot
+timer (see **Features** below) starts counting the instant a shot begins.
+Machines typically ramp up to full pressure over the first few seconds
+(pre-infusion), so if you'd rather the timer reflect only the time spent
+extracting at pressure, set this to the pressure (in bar) you consider "the
+shot has really started". Default: 0 bar, which starts the timer
+immediately.
+
+**Shot timer: how long to keep showing the last shot.** After a shot ends,
+the timer keeps displaying its final duration for this many seconds before
+resetting to 0, so you have time to glance at it. The countdown starts the
+moment brewing stops, not once the machine returns to its ready state — a
+long post-shot draining phase does not extend how long the value stays
+visible beyond this setting. Default: 30 seconds.
+
 **Configure polling intervals (advanced).** Change how often the integration
 asks the machine for new sensor data. Each interval is in seconds with a
 floor of 0.5 s and a default of 1.0 s, and applies to a different state:
@@ -108,6 +123,8 @@ reason to.
 - Live sensors for temperatures, pressures, electric current, total energy, extractions, and operating hours
 - Scale flow rate sensor (g/s) on firmware that reports it
 - Water tank level monitoring
+- Machine status sensor (off/on/eco/brewing/draining/unknown)
+- Live shot timer: counts up while a shot is brewing, freezes at the final duration, then resets to 0 (see **Options** above for the reset delay and optional start-pressure threshold)
 - Trigger any on-device script from Home Assistant (by ID or by name)
 - Map each of the six physical switch positions to a script
 - Shot tracking with per-shot temperature, pressure, flow rate, and final weight
