@@ -83,6 +83,18 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
+async def _async_update_listener(hass: HomeAssistant, entry: XeniaConfigEntry) -> None:
+    """Reload the config entry whenever its options are changed.
+
+    Several option values (poll intervals, the shot timer idle-reset delay
+    and start-pressure threshold, ...) are only read once, at
+    entity/coordinator construction time. Without this listener, saving new
+    options would silently have no effect until the next manual reload or
+    restart.
+    """
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> bool:
     """Set up Xenia from a config entry."""
     host = entry.data[CONF_HOST]
@@ -103,6 +115,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> boo
         config_coordinator=config_coordinator,
         shot_store=shot_store,
     )
+
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
