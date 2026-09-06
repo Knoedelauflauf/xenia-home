@@ -2,6 +2,8 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import timedelta
+import time
 from typing import Final
 
 from homeassistant.components.sensor import (
@@ -19,18 +21,30 @@ from homeassistant.const import (
     UnitOfTemperature,
     UnitOfTime,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.typing import StateType
 
+from .const import (
+    CONF_SHOT_TIMER_IDLE_RESET,
+    CONF_SHOT_TIMER_START_PRESSURE,
+    DEFAULT_SHOT_TIMER_IDLE_RESET,
+    DEFAULT_SHOT_TIMER_START_PRESSURE,
+)
 from .coordinator import (
     XeniaConfigEntry,
     XeniaCoordinatorData,
     XeniaDataUpdateCoordinator,
 )
 from .entity import XeniaEntity
+from .xenia import MachineStatus
 
 PARALLEL_UPDATES = 0
+
+# How often the shot timer's displayed value ticks while actively brewing.
+# Matches the whole-second display resolution - no point ticking faster.
+SHOT_TIMER_TICK_INTERVAL: Final = timedelta(seconds=1)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -132,6 +146,14 @@ SENSOR_TYPES: Final[tuple[XeniaSensorEntityDescription, ...]] = (
         value_fn=lambda data: data.overview.pu_sens_scale_rate,
         exists_fn=lambda data: data.overview.pu_sens_scale_rate is not None,
     ),
+    XeniaSensorEntityDescription(
+        key="machine_status",
+        translation_key="machine_status",
+        device_class=SensorDeviceClass.ENUM,
+        options=[status.name.lower() for status in MachineStatus],
+        icon="mdi:coffee-maker",
+        value_fn=lambda data: data.overview.ma_status.name.lower(),
+    ),
 )
 
 
@@ -142,11 +164,13 @@ async def async_setup_entry(
 ) -> None:
     """Set up the Xenia sensor entities."""
     coordinator = entry.runtime_data.coordinator
-    async_add_entities(
+    entities: list[SensorEntity] = [
         XeniaSensor(coordinator, description)
         for description in SENSOR_TYPES
         if description.exists_fn(coordinator.data)
-    )
+    ]
+    entities.append(XeniaShotTimerSensor(coordinator))
+    async_add_entities(entities)
 
 
 class XeniaSensor(XeniaEntity, SensorEntity):
@@ -181,3 +205,181 @@ class XeniaSensor(XeniaEntity, SensorEntity):
         if self.entity_description.entity_category_fn is not None:
             return self.entity_description.entity_category_fn(self.coordinator.data)
         return super().entity_category
+
+
+class XeniaShotTimerSensor(XeniaEntity, SensorEntity):
+    """Live shot timer.
+
+    Counts up in whole seconds while `MA_STATUS` is `BREWING`, freezes at
+    the final value the moment brewing stops (whether that is `DRAINING`
+    or anything else), and resets to 0 either immediately when the machine
+    reaches `OFF`/`ECO`, or `CONF_SHOT_TIMER_IDLE_RESET` seconds
+    (user-configurable via the options flow, see `config_flow.py`) after
+    brewing stopped - measured from the end of the shot itself, not from
+    whenever `DRAINING` happens to finish, so `DRAINING` gets no "free"
+    extra display time beyond the configured delay. `0` is the "no recent
+    shot" value (never `unknown`), matching how other espresso machine
+    integrations model this.
+
+    Unlike the declarative `XeniaSensor`/`value_fn` sensors above, this
+    value cannot be derived from a single coordinator snapshot alone - it
+    depends on *when* status transitions happened, so it keeps that
+    bookkeeping locally instead of in the coordinator. To show live
+    updates without polling the machine any harder, it drives its own
+    display refresh via `async_track_time_interval`, independent of the
+    coordinator's (much slower) poll interval.
+
+    If `CONF_SHOT_TIMER_START_PRESSURE` is set above 0, the timer doesn't
+    start the instant `BREWING` begins - it waits until `PU_SENS_PRESS`
+    reaches that threshold first (skipping any pre-infusion/ramp-up phase
+    before the pump reaches full pressure). A value of 0 (the default)
+    starts the timer immediately.
+    """
+
+    _attr_translation_key = "shot_timer"
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 0
+    _attr_icon = "mdi:timer-outline"
+
+    def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
+        """Initialize the shot timer."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.config_entry.data[CONF_HOST]}_shot_timer"
+        self._idle_reset_seconds: int = coordinator.config_entry.options.get(
+            CONF_SHOT_TIMER_IDLE_RESET, DEFAULT_SHOT_TIMER_IDLE_RESET
+        )
+        self._start_pressure: float = coordinator.config_entry.options.get(
+            CONF_SHOT_TIMER_START_PRESSURE, DEFAULT_SHOT_TIMER_START_PRESSURE
+        )
+        self._previous_status: MachineStatus | None = None
+        self._start_monotonic: float | None = None
+        self._waiting_for_pressure: bool = False
+        self._frozen_elapsed: int = 0
+        self._tick_unsub: Callable[[], None] | None = None
+        self._idle_reset_unsub: Callable[[], None] | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Prime the transition bookkeeping from whatever state we start in."""
+        await super().async_added_to_hass()
+        current_status = self.coordinator.data.overview.ma_status
+        self._handle_status_transition(None, current_status)
+        self._previous_status = current_status
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Cancel any pending timers so they don't outlive the entity."""
+        self._stop_ticking()
+        self._cancel_idle_reset()
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """React to a fresh `MA_STATUS` reading from the coordinator."""
+        new_status = self.coordinator.data.overview.ma_status
+        self._handle_status_transition(self._previous_status, new_status)
+        self._previous_status = new_status
+        if self._waiting_for_pressure and new_status == MachineStatus.BREWING:
+            self._check_start_pressure()
+        self.async_write_ha_state()
+
+    def _check_start_pressure(self) -> None:
+        """Start the timer once pump pressure reaches the configured threshold."""
+        if self.coordinator.data.overview.pu_sens_press >= self._start_pressure:
+            self._waiting_for_pressure = False
+            self._start_monotonic = time.monotonic()
+            self._start_ticking()
+
+    def _handle_status_transition(
+        self, old_status: MachineStatus | None, new_status: MachineStatus
+    ) -> None:
+        """Update start/freeze/reset bookkeeping for an `old -> new` transition."""
+        if old_status == new_status:
+            return
+
+        # Cancel any pending reset unconditionally; it gets re-armed below
+        # exactly once, at the moment brewing actually stops.
+        self._cancel_idle_reset()
+
+        if old_status == MachineStatus.BREWING:
+            # Brewing just stopped (regardless of what it stopped into):
+            # freeze the last live value instead of letting it keep
+            # counting or disappearing immediately. If we were still
+            # waiting for the start pressure threshold (e.g. a very
+            # short/aborted attempt that never reached it),
+            # _current_elapsed() correctly falls back to the still-0
+            # frozen value.
+            self._frozen_elapsed = self._current_elapsed()
+            self._start_monotonic = None
+            self._waiting_for_pressure = False
+            self._stop_ticking()
+            # The reset delay is measured from the end of the shot itself,
+            # not from whenever DRAINING happens to finish - DRAINING gets
+            # no "free" extra display time beyond it. Skip arming it if
+            # we're headed straight to OFF/ECO, since those reset
+            # immediately below anyway.
+            if new_status not in (MachineStatus.OFF, MachineStatus.ECO):
+                self._idle_reset_unsub = async_call_later(
+                    self.hass, self._idle_reset_seconds, self._handle_idle_reset
+                )
+
+        if new_status == MachineStatus.BREWING:
+            self._frozen_elapsed = 0
+            if self._start_pressure > 0:
+                # Wait for _check_start_pressure() (called from
+                # _handle_coordinator_update) to actually start the clock.
+                self._start_monotonic = None
+                self._waiting_for_pressure = True
+            else:
+                self._start_monotonic = time.monotonic()
+                self._start_ticking()
+        elif new_status in (MachineStatus.OFF, MachineStatus.ECO):
+            self._frozen_elapsed = 0
+        # MachineStatus.DRAINING / ON / UNKNOWN: keep showing the frozen
+        # value until the reset timer armed above fires.
+
+    def _current_elapsed(self) -> int:
+        """Return the number of full seconds elapsed, else the frozen value.
+
+        Truncates rather than rounds - like a stopwatch, `3` means "3 full
+        seconds have passed", not "closer to 3 than to 4". Rounding would
+        make the display jump to the next second early.
+        """
+        if self._start_monotonic is None:
+            return self._frozen_elapsed
+        return int(time.monotonic() - self._start_monotonic)
+
+    @callback
+    def _handle_idle_reset(self, _now) -> None:
+        """Reset to 0 after a sustained idle period."""
+        self._idle_reset_unsub = None
+        self._frozen_elapsed = 0
+        self.async_write_ha_state()
+
+    @callback
+    def _cancel_idle_reset(self) -> None:
+        if self._idle_reset_unsub is not None:
+            self._idle_reset_unsub()
+            self._idle_reset_unsub = None
+
+    @callback
+    def _start_ticking(self) -> None:
+        if self._tick_unsub is None:
+            self._tick_unsub = async_track_time_interval(
+                self.hass, self._handle_tick, SHOT_TIMER_TICK_INTERVAL
+            )
+
+    @callback
+    def _stop_ticking(self) -> None:
+        if self._tick_unsub is not None:
+            self._tick_unsub()
+            self._tick_unsub = None
+
+    @callback
+    def _handle_tick(self, _now) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> StateType:
+        """Return the current or frozen shot duration in seconds."""
+        return self._current_elapsed()

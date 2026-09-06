@@ -47,6 +47,8 @@
         "title": "Xenia Optionen",
         "data": {
           "weight_management_enabled": "Gewichtssteuerung aktivieren",
+          "shot_timer_start_pressure": "Shot-Timer: Startet erst ab Pumpendruck (bar, 0 = sofort)",
+          "shot_timer_idle_reset": "Shot-Timer: Anzeigedauer nach Bezugsende (Sekunden)",
           "configure_polling": "Abfrageintervalle konfigurieren (fortgeschritten)"
         }
       },
@@ -110,6 +112,20 @@
       },
       "scale_flow_rate": {
         "name": "Waagen-Flussrate"
+      },
+      "machine_status": {
+        "name": "Maschinenstatus",
+        "state": {
+          "off": "Aus",
+          "on": "Ein",
+          "eco": "Eco",
+          "brewing": "Brüht",
+          "draining": "Entleert",
+          "unknown": "Unbekannt"
+        }
+      },
+      "shot_timer": {
+        "name": "Shot-Timer"
       }
     },
     "number": {

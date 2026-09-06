@@ -14,6 +14,11 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import (
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+)
 import voluptuous as vol
 
 from .const import (
@@ -24,6 +29,8 @@ from .const import (
     CONF_POLL_IDLE,
     CONF_POLL_READY,
     CONF_READY_THRESHOLD,
+    CONF_SHOT_TIMER_IDLE_RESET,
+    CONF_SHOT_TIMER_START_PRESSURE,
     CONF_WEIGHT_MANAGEMENT_ENABLED,
     CONF_WEIGHT_MAX,
     CONF_WEIGHT_MIN,
@@ -36,6 +43,8 @@ from .const import (
     DEFAULT_READY_THRESHOLD,
     DEFAULT_SCRIPT_INSTRUCTION,
     DEFAULT_SCRIPT_NAME,
+    DEFAULT_SHOT_TIMER_IDLE_RESET,
+    DEFAULT_SHOT_TIMER_START_PRESSURE,
     DEFAULT_WEIGHT_MAX,
     DEFAULT_WEIGHT_MIN,
     DEFAULT_WEIGHT_STEP,
@@ -174,6 +183,8 @@ class XeniaOptionsFlow(OptionsFlow):
         self._configure_polling: bool = False
         self._managed_script_id: int | None = None
         self._weight_data: dict[str, Any] = {}
+        self._shot_timer_idle_reset: int = DEFAULT_SHOT_TIMER_IDLE_RESET
+        self._shot_timer_start_pressure: float = DEFAULT_SHOT_TIMER_START_PRESSURE
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -181,6 +192,8 @@ class XeniaOptionsFlow(OptionsFlow):
         """Show the options entry form and route to weight or polling flow."""
         if user_input is not None:
             self._configure_polling = user_input.get(CONF_CONFIGURE_POLLING, False)
+            self._shot_timer_idle_reset = user_input[CONF_SHOT_TIMER_IDLE_RESET]
+            self._shot_timer_start_pressure = user_input[CONF_SHOT_TIMER_START_PRESSURE]
             if not user_input.get(CONF_WEIGHT_MANAGEMENT_ENABLED):
                 # Disable weight management — strip polling keys if toggle off
                 self._weight_data = {
@@ -191,6 +204,8 @@ class XeniaOptionsFlow(OptionsFlow):
                     new_data = {
                         **self.config_entry.options,
                         **self._weight_data,
+                        CONF_SHOT_TIMER_IDLE_RESET: self._shot_timer_idle_reset,
+                        CONF_SHOT_TIMER_START_PRESSURE: self._shot_timer_start_pressure,
                     }
                     for key in POLLING_OPTION_KEYS:
                         new_data.pop(key, None)
@@ -206,11 +221,45 @@ class XeniaOptionsFlow(OptionsFlow):
         current_polling = any(
             key in self.config_entry.options for key in POLLING_OPTION_KEYS
         )
+        current_shot_timer_idle_reset = self.config_entry.options.get(
+            CONF_SHOT_TIMER_IDLE_RESET, DEFAULT_SHOT_TIMER_IDLE_RESET
+        )
+        current_shot_timer_start_pressure = self.config_entry.options.get(
+            CONF_SHOT_TIMER_START_PRESSURE, DEFAULT_SHOT_TIMER_START_PRESSURE
+        )
         schema = vol.Schema(
             {
                 vol.Required(
                     CONF_WEIGHT_MANAGEMENT_ENABLED, default=current_weight
                 ): bool,
+                vol.Required(
+                    CONF_SHOT_TIMER_START_PRESSURE,
+                    default=current_shot_timer_start_pressure,
+                ): vol.All(
+                    NumberSelector(
+                        NumberSelectorConfig(
+                            min=0,
+                            step=0.1,
+                            mode=NumberSelectorMode.BOX,
+                            unit_of_measurement="bar",
+                        )
+                    ),
+                    vol.Coerce(float),
+                ),
+                vol.Required(
+                    CONF_SHOT_TIMER_IDLE_RESET,
+                    default=current_shot_timer_idle_reset,
+                ): vol.All(
+                    NumberSelector(
+                        NumberSelectorConfig(
+                            min=0,
+                            step=1,
+                            mode=NumberSelectorMode.BOX,
+                            unit_of_measurement="s",
+                        )
+                    ),
+                    vol.Coerce(int),
+                ),
                 vol.Required(CONF_CONFIGURE_POLLING, default=current_polling): bool,
             }
         )
@@ -275,7 +324,12 @@ class XeniaOptionsFlow(OptionsFlow):
             }
             if self._configure_polling:
                 return await self.async_step_configure_polling()
-            new_data = {**self.config_entry.options, **self._weight_data}
+            new_data = {
+                **self.config_entry.options,
+                **self._weight_data,
+                CONF_SHOT_TIMER_IDLE_RESET: self._shot_timer_idle_reset,
+                CONF_SHOT_TIMER_START_PRESSURE: self._shot_timer_start_pressure,
+            }
             for key in POLLING_OPTION_KEYS:
                 new_data.pop(key, None)
             return self.async_create_entry(data=new_data)
@@ -310,6 +364,8 @@ class XeniaOptionsFlow(OptionsFlow):
             new_data = {
                 **self.config_entry.options,
                 **self._weight_data,
+                CONF_SHOT_TIMER_IDLE_RESET: self._shot_timer_idle_reset,
+                CONF_SHOT_TIMER_START_PRESSURE: self._shot_timer_start_pressure,
                 **polling_data,
             }
             return self.async_create_entry(data=new_data)

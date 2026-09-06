@@ -28,6 +28,14 @@ DEFAULT_WEIGHT_STEP = 0.5
 DEFAULT_SCRIPT_NAME = "HA Espresso"
 DEFAULT_SCRIPT_INSTRUCTION = "1;13;3 70 5000;12 5000;27 40;17;7;"
 
+CONF_SHOT_TIMER_IDLE_RESET = "shot_timer_idle_reset"
+DEFAULT_SHOT_TIMER_IDLE_RESET = 30
+
+# Pump pressure (bar) the shot timer waits for before it starts counting,
+# once BREWING begins. 0 means "start immediately", skipping the wait.
+CONF_SHOT_TIMER_START_PRESSURE = "shot_timer_start_pressure"
+DEFAULT_SHOT_TIMER_START_PRESSURE = 0.0
+
 CONF_CONFIGURE_POLLING = "configure_polling"
 CONF_POLL_BREWING = "poll_interval_brewing"
 CONF_POLL_ACTIVE = "poll_interval_active"
