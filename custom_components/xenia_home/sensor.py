@@ -29,6 +29,7 @@ from .coordinator import (
     XeniaDataUpdateCoordinator,
 )
 from .entity import XeniaEntity
+from .xenia import MachineStatus
 
 PARALLEL_UPDATES = 0
 
@@ -131,6 +132,14 @@ SENSOR_TYPES: Final[tuple[XeniaSensorEntityDescription, ...]] = (
         icon="mdi:scale",
         value_fn=lambda data: data.overview.pu_sens_scale_rate,
         exists_fn=lambda data: data.overview.pu_sens_scale_rate is not None,
+    ),
+    XeniaSensorEntityDescription(
+        key="machine_status",
+        translation_key="machine_status",
+        device_class=SensorDeviceClass.ENUM,
+        options=[status.name.lower() for status in MachineStatus],
+        icon="mdi:coffee-maker",
+        value_fn=lambda data: data.overview.ma_status.name.lower(),
     ),
 )
 

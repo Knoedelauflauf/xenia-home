@@ -110,6 +110,17 @@
       },
       "scale_flow_rate": {
         "name": "Waagen-Flussrate"
+      },
+      "machine_status": {
+        "name": "Maschinenstatus",
+        "state": {
+          "off": "Aus",
+          "on": "Ein",
+          "eco": "Eco",
+          "brewing": "Brüht",
+          "draining": "Entleert",
+          "unknown": "Unbekannt"
+        }
       }
     },
     "number": {
