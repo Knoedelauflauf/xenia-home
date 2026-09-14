@@ -111,6 +111,7 @@ reason to.
 - Status sensor (off/on/eco/brewing/draining)
 - Shot start time sensor, set while a shot is brewing (see **Shot timer** below)
 - Trigger any on-device script from Home Assistant (by ID or by name)
+- Stop the script currently running on the machine
 - Map each of the six physical switch positions to a script
 - Shot tracking with per-shot temperature, pressure, flow rate, and final weight
 - Optional weight-target management for a chosen script (see **Options** above)
@@ -206,6 +207,12 @@ action: xenia_home.execute_script
 data:
   script_name: "Espresso 18g"
 ```
+
+To stop whatever script is currently running, press the "Stop script"
+button entity — from a dashboard, or via `button.press` in an automation.
+There's no dedicated action for it: the machine's stop endpoint takes no
+script ID, so `button.press` on the entity does the same thing a service
+would.
 
 ## Weight management
 

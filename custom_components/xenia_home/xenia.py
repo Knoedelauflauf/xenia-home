@@ -238,11 +238,26 @@ class Xenia:
         """Turn the steam boiler off."""
         await self._toggle_sb(False)
 
+    async def _get(self, path: str, timeout: int = 10) -> bytes:
+        url = f"http://{self._host}/api/v2/{path}"
+        async with self._session.get(
+            url,
+            timeout=ClientTimeout(total=timeout),
+            # The firmware answers an unknown path with a redirect to
+            # index.html, which followed would look like a successful GET.
+            allow_redirects=False,
+        ) as resp:
+            if resp.status >= 300:
+                raise ClientResponseError(
+                    resp.request_info,
+                    resp.history,
+                    status=resp.status,
+                    headers=resp.headers,
+                )
+            return await resp.read()
+
     async def _get_overview_raw(self) -> dict[str, Any]:
-        url = f"http://{self._host}/api/v2/overview"
-        async with self._session.get(url, timeout=ClientTimeout(total=10)) as resp:
-            resp.raise_for_status()
-            return await resp.json()
+        return json.loads(await self._get("overview"))
 
     async def get_overview(self) -> XeniaOverviewData:
         """Fetch and decode the fast-changing overview payload."""
@@ -250,17 +265,13 @@ class Xenia:
 
     async def get_overview_single(self) -> XeniaOverviewSingleData:
         """Fetch and decode the setpoint / configuration overview payload."""
-        url = f"http://{self._host}/api/v2/overview_single"
-        async with self._session.get(url, timeout=ClientTimeout(total=10)) as resp:
-            resp.raise_for_status()
-            return XeniaOverviewSingleData.from_dict(await resp.json())
+        return XeniaOverviewSingleData.from_dict(
+            json.loads(await self._get("overview_single"))
+        )
 
     async def get_machine(self) -> XeniaMachineData:
         """Fetch and decode the machine identification and firmware payload."""
-        url = f"http://{self._host}/api/v2/machine"
-        async with self._session.get(url, timeout=ClientTimeout(total=10)) as resp:
-            resp.raise_for_status()
-            return XeniaMachineData.from_dict(await resp.json())
+        return XeniaMachineData.from_dict(json.loads(await self._get("machine")))
 
     async def _post(self, path: str, data: str, timeout: int = 5) -> bytes:
         url = f"http://{self._host}/api/v2/{path}"
@@ -303,10 +314,7 @@ class Xenia:
 
     async def get_scripts(self) -> dict[int, str]:
         """Get available scripts as {id: title} dict."""
-        url = f"http://{self._host}/api/v2/scripts/list"
-        async with self._session.get(url, timeout=ClientTimeout(total=10)) as resp:
-            resp.raise_for_status()
-            data = await resp.json()
+        data = json.loads(await self._get("scripts/list"))
         index_list = data.get("index_list", [])
         title_list = data.get("title_list", [])
         return dict(zip(index_list, title_list, strict=False))
@@ -316,12 +324,13 @@ class Xenia:
         data = f'{{"ID":{script_id}}}'
         await self._post("scripts/execute", data)
 
+    async def stop_script(self) -> None:
+        """Stop the currently running script."""
+        await self._get("scripts/stop")
+
     async def get_switches(self) -> dict[str, int]:
         """Get switch-to-script mappings."""
-        url = f"http://{self._host}/api/v2/switches"
-        async with self._session.get(url, timeout=ClientTimeout(total=10)) as resp:
-            resp.raise_for_status()
-            return await resp.json()
+        return json.loads(await self._get("switches"))
 
     async def read_script(self, script_id: int) -> dict[str, str]:
         """Read a script's content by ID.

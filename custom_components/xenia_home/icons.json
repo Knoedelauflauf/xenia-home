@@ -11,6 +11,9 @@
     "button": {
       "execute_script": {
         "default": "mdi:play"
+      },
+      "stop_script": {
+        "default": "mdi:stop"
       }
     },
     "event": {

@@ -371,6 +371,12 @@ async def test_redirected_post_raises(mock_api, xenia) -> None:
         await xenia.sb_turn_on()
 
 
+async def test_redirected_get_raises(mock_api, xenia) -> None:
+    mock_api.get(f"{BASE}/overview", status=301, headers={"Location": "/index.html"})
+    with pytest.raises(ClientResponseError):
+        await xenia.get_overview()
+
+
 # ===========================================================================
 # Temperature setters
 # ===========================================================================
@@ -478,6 +484,18 @@ async def test_update_script_uses_edit_enabled(mock_api, xenia) -> None:
     assert "5" in body
 
 
+async def test_stop_script_hits_stop_endpoint(mock_api, xenia) -> None:
+    mock_api.get(f"{BASE}/scripts/stop", status=200)
+    await xenia.stop_script()
+    assert ("GET", _yarl(f"{BASE}/scripts/stop")) in mock_api.requests
+
+
+async def test_stop_script_raises_on_http_error(mock_api, xenia) -> None:
+    mock_api.get(f"{BASE}/scripts/stop", status=500)
+    with pytest.raises(ClientResponseError):
+        await xenia.stop_script()
+
+
 async def test_get_switches_returns_dict(mock_api, xenia) -> None:
     mock_api.get(
         f"{BASE}/switches",
@@ -513,6 +531,7 @@ async def test_set_switch_preserves_other_keys(mock_api, xenia) -> None:
         ("get", "scripts/list", {}, "get_scripts", ()),
         ("get", "switches", {}, "get_switches", ()),
         ("post", "scripts/execute", {}, "execute_script", (1,)),
+        ("get", "scripts/stop", {}, "stop_script", ()),
         ("post", "scripts/read", {}, "read_script", (1,)),
         ("post", "scripts/create", {}, "create_script", ("name", "instr")),
         ("post", "scripts/create", {}, "update_script", (1, "name", "instr")),
@@ -549,6 +568,7 @@ async def test_http_500_raises(
         ("set_bg_set_temp", (90.0,), "inc_dec", "post"),
         ("set_bb_set_temp", (130.0,), "inc_dec_bb", "post"),
         ("execute_script", (1,), "scripts/execute", "post"),
+        ("stop_script", (), "scripts/stop", "get"),
         ("read_script", (1,), "scripts/read", "post"),
         ("create_script", ("n", "i"), "scripts/create", "post"),
         ("update_script", (1, "n", "i"), "scripts/create", "post"),

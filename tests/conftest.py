@@ -151,6 +151,10 @@ class MockXeniaApi:
     def expect_execute_script(self) -> None:
         self._mock.post(self._url("scripts/execute"), status=200, repeat=True)
 
+    def expect_stop_script(self) -> None:
+        # Unlike the other mutating calls, /scripts/stop is a GET.
+        self._mock.get(self._url("scripts/stop"), status=200, repeat=True)
+
     def expect_set_switch(self) -> None:
         # set_switch first does a GET then a POST to /switches
         self._mock.post(self._url("switches"), status=200, repeat=True)
@@ -177,6 +181,9 @@ class MockXeniaApi:
 
     def post_count(self, path: str) -> int:
         return len(self._mock.requests.get(("POST", yarl.URL(self._url(path))), []))
+
+    def get_count(self, path: str) -> int:
+        return len(self._mock.requests.get(("GET", yarl.URL(self._url(path))), []))
 
 
 @pytest.fixture

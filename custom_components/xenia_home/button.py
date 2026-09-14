@@ -19,7 +19,12 @@ async def async_setup_entry(
 ) -> None:
     """Set up Xenia button entities."""
     coordinator = entry.runtime_data.coordinator
-    async_add_entities([XeniaExecuteScriptButton(coordinator)])
+    async_add_entities(
+        [
+            XeniaExecuteScriptButton(coordinator),
+            XeniaStopScriptButton(coordinator),
+        ]
+    )
 
 
 class XeniaExecuteScriptButton(XeniaEntity, ButtonEntity):
@@ -40,3 +45,20 @@ class XeniaExecuteScriptButton(XeniaEntity, ButtonEntity):
         selected_script_id = config_coordinator.selected_script_id
         if selected_script_id is not None and selected_script_id > 0:
             await self.coordinator.xenia.execute_script(selected_script_id)
+
+
+class XeniaStopScriptButton(XeniaEntity, ButtonEntity):
+    """Button to stop the currently running script."""
+
+    _attr_translation_key = "stop_script"
+
+    def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
+        """Initialize the button."""
+        super().__init__(coordinator)
+        self._attr_unique_id = (
+            f"{XENIA_DOMAIN}_stop_script_{coordinator.config_entry.data[CONF_HOST]}"
+        )
+
+    async def async_press(self) -> None:
+        """Stop the currently running script."""
+        await self.coordinator.xenia.stop_script()

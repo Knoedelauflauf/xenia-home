@@ -282,6 +282,29 @@ Executes a script by ID.
 
 ---
 
+### `/api/v2/scripts/stop`
+
+Stops the script currently running on the machine. Not listed under
+https://www.xenia-espresso.de/api.html (which does not cover scripts at
+all) — only documented via the Object Pascal example on
+https://www.xenia-espresso.de/api-beispiel/:
+
+```pascal
+http.get('http://'+sipAdresse+'/api/v2/scripts/stop');
+```
+
+**Method:** GET, no parameters/body.
+
+**Response:**
+```json
+{"B": false}
+```
+
+`B` is `false` regardless of machine state; its meaning is unknown. Rely
+on the HTTP status, not this field.
+
+---
+
 ### `/api/v2/switches`
 
 **GET** — Returns switch-to-script mappings.

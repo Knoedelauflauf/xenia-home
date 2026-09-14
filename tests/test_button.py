@@ -3,6 +3,7 @@
 import pytest
 
 BUTTON_ENTITY_ID = "button.xenia_espresso_machine_execute_script"
+STOP_BUTTON_ENTITY_ID = "button.xenia_espresso_machine_stop_script"
 
 
 async def test_button_entities_snapshot(
@@ -27,9 +28,9 @@ async def test_button_entities_snapshot(
 # ===========================================================================
 
 
-async def _press_button(hass) -> None:
+async def _press_button(hass, entity_id: str = BUTTON_ENTITY_ID) -> None:
     await hass.services.async_call(
-        "button", "press", {"entity_id": BUTTON_ENTITY_ID}, blocking=True
+        "button", "press", {"entity_id": entity_id}, blocking=True
     )
     await hass.async_block_till_done()
 
@@ -60,3 +61,11 @@ async def test_button_press_executes_builtin_script_id_one(
     init_integration.runtime_data.config_coordinator.selected_script_id = 1
     await _press_button(hass)
     mock_xenia_api.assert_post_called_with("scripts/execute", "1")
+
+
+async def test_stop_button_press_calls_stop_script(
+    hass, init_integration, mock_xenia_api
+):
+    mock_xenia_api.expect_stop_script()
+    await _press_button(hass, STOP_BUTTON_ENTITY_ID)
+    assert mock_xenia_api.get_count("scripts/stop") == 1

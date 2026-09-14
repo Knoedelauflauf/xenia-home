@@ -185,6 +185,9 @@
     "button": {
       "execute_script": {
         "name": "Skript ausführen"
+      },
+      "stop_script": {
+        "name": "Skript stoppen"
       }
     },
     "event": {
