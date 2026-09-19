@@ -208,11 +208,8 @@ data:
   script_name: "Espresso 18g"
 ```
 
-To stop whatever script is currently running, press the "Stop script"
-button entity — from a dashboard, or via `button.press` in an automation.
-There's no dedicated action for it: the machine's stop endpoint takes no
-script ID, so `button.press` on the entity does the same thing a service
-would.
+To stop the script currently running, press the "Stop script" button
+entity, from a dashboard or via `button.press` in an automation.
 
 ## Weight management
 

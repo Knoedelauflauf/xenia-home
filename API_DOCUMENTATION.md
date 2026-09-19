@@ -284,10 +284,9 @@ Executes a script by ID.
 
 ### `/api/v2/scripts/stop`
 
-Stops the script currently running on the machine. Not listed under
-https://www.xenia-espresso.de/api.html (which does not cover scripts at
-all) — only documented via the Object Pascal example on
-https://www.xenia-espresso.de/api-beispiel/:
+Stops the script currently running on the machine. Not listed on
+https://www.xenia-espresso.de/api.html, only shown in the Object Pascal
+example on https://www.xenia-espresso.de/api-beispiel/:
 
 ```pascal
 http.get('http://'+sipAdresse+'/api/v2/scripts/stop');
