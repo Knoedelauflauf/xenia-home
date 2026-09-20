@@ -1,0 +1,69 @@
+# serializer version: 1
+# name: test_diagnostics
+  dict({
+    'config': dict({
+      'machine': dict({
+        'esp_fw_major': 1,
+        'esp_fw_minor': 5,
+        'fw_version_major': 2,
+        'fw_version_minor': 3,
+        'ma_sn': None,
+        'ma_type': 1,
+      }),
+      'managed_script_instruction': None,
+      'managed_script_name': None,
+      'scripts': dict({
+        '0': 'None',
+        '1': 'Espresso',
+        '10': 'MyShot',
+        '2': 'Espresso endless',
+        '20': 'Lungo',
+      }),
+      'switches': dict({
+        'SWITCH_SET_LEFT_LEFT_0': 1,
+        'SWITCH_SET_LEFT_LEFT_1': 2,
+      }),
+    }),
+    'entry': dict({
+      'data': dict({
+        'host': '**REDACTED**',
+      }),
+      'options': dict({
+      }),
+    }),
+    'overview': dict({
+      'bb_level_pw_control': 60,
+      'bb_sens_temp_a': 130.0,
+      'bg_level_pw_control': 50,
+      'bg_sens_temp_a': 93.0,
+      'ma_clock': 0,
+      'ma_cur_pwr': 3.2,
+      'ma_energy_total_kwh': 42.5,
+      'ma_extractions': 1234,
+      'ma_max_pwr': 16,
+      'ma_operating_hours': 720,
+      'ma_status': 1,
+      'pu_level_pw_control': 80,
+      'pu_sens_flow_meter_ml': 12.3,
+      'pu_sens_press': 9.1,
+      'pu_sens_scale_rate': None,
+      'pu_set_level_pw_control': 80,
+      'sb_sens_press': 1.2,
+      'sb_status': 2,
+      'scale_weight': 18.5,
+    }),
+    'overview_single': dict({
+      'bb_set_temp': 130.0,
+      'bg_set_temp': 93.5,
+      'ma_extractions_start': 100,
+      'ma_mac': '**REDACTED**',
+      'pop_up': None,
+      'psp': 0,
+      'pu_sens_water_tank_level': 1,
+      'pu_set_press': 9.0,
+      'sb_set_press': 1.5,
+    }),
+    'power_on_behavior': 'steam_off',
+    'shot_count': 0,
+  })
+# ---
