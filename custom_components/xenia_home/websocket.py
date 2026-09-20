@@ -120,6 +120,7 @@ async def ws_get_shots(
     )
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): f"{XENIA_DOMAIN}/shots/delete",

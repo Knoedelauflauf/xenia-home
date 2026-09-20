@@ -21,8 +21,8 @@ def mock_xenia_api() -> Iterator[MockXeniaApi]:
         yield MockXeniaApi(mock)
 
 
-async def _cmd(hass, hass_ws_client, msg):
-    client = await hass_ws_client(hass)
+async def _cmd(hass, hass_ws_client, msg, **client_kwargs):
+    client = await hass_ws_client(hass, **client_kwargs)
     await client.send_json_auto_id(msg)
     return await client.receive_json()
 
@@ -216,6 +216,23 @@ async def test_no_loaded_entry_errors_on_every_command(
         result = await _cmd(hass, hass_ws_client, msg)
         assert not result["success"]
         assert result["error"]["code"] == "not_found"
+
+
+async def test_delete_requires_admin(
+    hass, init_integration, hass_ws_client, hass_read_only_access_token
+):
+    shot = shot_payload("2026-07-01T10:00:00.000+00:00")
+    await _seed(init_integration, shot)
+    msg = await _cmd(
+        hass,
+        hass_ws_client,
+        {"type": "xenia_home/shots/delete", "shot_id": shot["start_time"]},
+        access_token=hass_read_only_access_token,
+    )
+    assert not msg["success"]
+    assert msg["error"]["code"] == "unauthorized"
+    msg = await _cmd(hass, hass_ws_client, {"type": "xenia_home/shots/list"})
+    assert len(msg["result"]["shots"]) == 1
 
 
 async def test_delete_unknown_shot_errors(hass, init_integration, hass_ws_client):
