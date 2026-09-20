@@ -1,9 +1,14 @@
 """Tests for select.py — power-on-behavior, script, and switch-config selects."""
 
+from datetime import timedelta
+
 from homeassistant.core import State
 from homeassistant.exceptions import ServiceValidationError
 import pytest
-from pytest_homeassistant_custom_component.common import mock_restore_cache
+from pytest_homeassistant_custom_component.common import (
+    async_fire_time_changed,
+    mock_restore_cache,
+)
 
 from custom_components.xenia_home.const import CONF_POWER_ON_BEHAVIOR, PowerOnBehavior
 
@@ -170,3 +175,15 @@ async def test_switch_config_select_assigns_script_via_xenia(
     await hass.async_block_till_done()
     mock_xenia_api.assert_post_called_with("switches", "SWITCH_SET_LEFT_LEFT_0")
     mock_xenia_api.assert_post_called_with("switches", "10")
+
+
+async def test_script_rename_reaches_the_select_without_a_reload(
+    hass, init_integration, mock_xenia_api, freezer
+):
+    mock_xenia_api.set_scripts({10: "MyShot renamed", 20: "Lungo"})
+    freezer.tick(timedelta(hours=1, seconds=1))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    options = hass.states.get(SCRIPT).attributes["options"]
+    assert "MyShot renamed" in options
+    assert "MyShot" not in options

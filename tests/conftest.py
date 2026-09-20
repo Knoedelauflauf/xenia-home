@@ -60,10 +60,10 @@ class MockXeniaApi:
         self._machine = {**MACHINE_PAYLOAD, **fields}
 
     def set_scripts(self, scripts: dict[int, str]) -> None:
-        self._scripts = {
-            "index_list": list(scripts.keys()),
-            "title_list": list(scripts.values()),
-        }
+        # In place, so it also changes the response after register().
+        self._scripts.clear()
+        self._scripts["index_list"] = list(scripts.keys())
+        self._scripts["title_list"] = list(scripts.values())
 
     def set_switches(self, switches: dict[str, int]) -> None:
         self._switches = dict(switches)
