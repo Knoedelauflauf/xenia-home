@@ -195,20 +195,20 @@
     "write_failed": {
       "message": "Die Xenia Espressomaschine hat die Anfrage nicht angenommen: {error}"
     },
-    "entry_not_found": {
-      "message": "Es gibt keinen Xenia-Konfigurationseintrag mit dieser ID."
+    "script_required": {
+      "message": "Entweder script_id oder script_name ist erforderlich."
+    },
+    "script_not_found": {
+      "message": "Das Skript '{script_name}' wurde auf der Maschine nicht gefunden."
+    },
+    "update_failed": {
+      "message": "Das Abrufen der Daten von der Xenia Espressomaschine ist fehlgeschlagen: {error}"
     },
     "entry_not_loaded": {
       "message": "Der Xenia-Konfigurationseintrag ist nicht geladen."
     },
     "multiple_entries": {
       "message": "Es sind mehrere Xenia-Maschinen eingerichtet. Gib config_entry_id an, um eine auszuwählen."
-    },
-    "script_required": {
-      "message": "Entweder script_id oder script_name ist erforderlich."
-    },
-    "script_not_found": {
-      "message": "Das Skript '{script_name}' wurde auf der Maschine nicht gefunden."
     }
   }
 }

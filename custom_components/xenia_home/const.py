@@ -29,12 +29,9 @@ DEFAULT_WEIGHT_STEP = 0.5
 DEFAULT_SCRIPT_NAME = "HA Espresso"
 DEFAULT_SCRIPT_INSTRUCTION = "1;13;3 70 5000;12 5000;27 40;17;7;"
 
-POLL_INTERVAL_BREWING = timedelta(seconds=1)
-POLL_INTERVAL_HEATING = timedelta(seconds=1)
-POLL_INTERVAL_READY = timedelta(seconds=1)
+# Active: on, brewing, or draining. Idle: eco or off.
+POLL_INTERVAL_ACTIVE = timedelta(seconds=1)
 POLL_INTERVAL_IDLE = timedelta(seconds=5)
-# Both boilers within this many degrees of their setpoint count as ready.
-READY_THRESHOLD = 2.0
 
 # Options of earlier releases, stripped at setup.
 REMOVED_OPTION_KEYS = (

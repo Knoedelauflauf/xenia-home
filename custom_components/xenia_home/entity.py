@@ -41,12 +41,9 @@ class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
         super().__init__(coordinator)
 
     async def async_added_to_hass(self) -> None:
-        """Also listen to the config coordinator.
-
-        A coordinator only polls while it has listeners, and every entity
-        reads config data (scripts, switches, machine info).
-        """
+        """Subscribe to the config coordinator as well."""
         await super().async_added_to_hass()
+        # A coordinator only polls while it has listeners.
         self.async_on_remove(
             self.runtime_data.config_coordinator.async_add_listener(
                 self._handle_coordinator_update

@@ -4,7 +4,6 @@ import asyncio
 import logging
 from typing import Any
 
-from aiohttp import ClientError
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -30,6 +29,7 @@ from .const import (
     DEFAULT_WEIGHT_STEP,
     XENIA_DOMAIN,
 )
+from .errors import REQUEST_ERRORS
 from .script_parser import COMMAND_WEIGHT_TARGET, parse_instruction
 from .xenia import Xenia
 
@@ -70,7 +70,7 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
         try:
             if not await asyncio.wait_for(xenia.device_connected(), timeout=8):
                 return "cannot_connect"
-        except TimeoutError, ClientError, OSError:
+        except REQUEST_ERRORS:
             return "cannot_connect"
         return None
 
@@ -195,7 +195,7 @@ class XeniaOptionsFlow(OptionsFlow):
 
         try:
             all_scripts = await xenia.get_scripts()
-        except ClientError, OSError, TimeoutError:
+        except REQUEST_ERRORS:
             return self.async_abort(reason="cannot_connect")
 
         weight_scripts: dict[str, str] = {}
@@ -206,7 +206,7 @@ class XeniaOptionsFlow(OptionsFlow):
                 parsed = parse_instruction(instruction)
                 if parsed.has_command(COMMAND_WEIGHT_TARGET):
                     weight_scripts[str(script_id)] = title
-            except ClientError, OSError, TimeoutError:
+            except REQUEST_ERRORS:
                 _LOGGER.debug("Could not read script %s, skipping", script_id)
 
         current_id = self.config_entry.options.get(CONF_MANAGED_SCRIPT_ID)
@@ -262,7 +262,7 @@ class XeniaOptionsFlow(OptionsFlow):
             await xenia.create_script(DEFAULT_SCRIPT_NAME, DEFAULT_SCRIPT_INSTRUCTION)
             # Re-fetch script list to find the newly created script
             scripts = await xenia.get_scripts()
-        except ClientError, OSError, TimeoutError:
+        except REQUEST_ERRORS:
             return self.async_abort(reason="cannot_connect")
 
         # Find the new script by name

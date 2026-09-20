@@ -48,25 +48,32 @@ class MockXeniaApi:
     def _url(self, path: str) -> str:
         return f"http://{self._host}/api/v2/{path}"
 
-    # ---- setters (must be called before init_integration) ----
+    # ---- setters (change the payloads in place, so they work at any time) ----
 
     def set_overview(self, **fields: Any) -> None:
-        self._overview = {**OVERVIEW_PAYLOAD, **fields}
+        self._overview.clear()
+        self._overview.update({**OVERVIEW_PAYLOAD, **fields})
 
     def set_overview_single(self, **fields: Any) -> None:
-        self._overview_single = {**OVERVIEW_SINGLE_PAYLOAD, **fields}
+        self._overview_single.clear()
+        self._overview_single.update({**OVERVIEW_SINGLE_PAYLOAD, **fields})
 
     def set_machine(self, **fields: Any) -> None:
-        self._machine = {**MACHINE_PAYLOAD, **fields}
+        self._machine.clear()
+        self._machine.update({**MACHINE_PAYLOAD, **fields})
 
     def set_scripts(self, scripts: dict[int, str]) -> None:
-        # In place, so it also changes the response after register().
         self._scripts.clear()
         self._scripts["index_list"] = list(scripts.keys())
         self._scripts["title_list"] = list(scripts.values())
 
     def set_switches(self, switches: dict[str, int]) -> None:
-        self._switches = dict(switches)
+        self._switches.clear()
+        self._switches.update(switches)
+
+    def for_host(self, host: str) -> "MockXeniaApi":
+        """Return a second mock for another machine on the same session."""
+        return MockXeniaApi(self._mock, host)
 
     def set_read_script(self, script_id: int, content: str, title: str) -> None:
         """Register a canned response for POST /scripts/read.
@@ -196,9 +203,9 @@ class MockXeniaApi:
 def mock_xenia_api() -> Iterator[MockXeniaApi]:
     """Provides a MockXeniaApi backed by aioresponses for one test.
 
-    Use the setters (`set_overview`, `set_scripts`, ...) and the `expect_*`
-    methods BEFORE calling `init_integration`. After the integration is set
-    up, only `assert_*` and `post_count` are useful.
+    Setters (`set_overview`, `set_scripts`, ...) change the responses at any
+    time, also after `init_integration`. `expect_*` and `fail_*` register the
+    mutating endpoints; `assert_*`, `post_count`, and `get_count` inspect calls.
     """
     with AioResponses() as mock:
         yield MockXeniaApi(mock)
@@ -241,13 +248,10 @@ async def init_integration(
 ) -> MockConfigEntry:
     """Register all default API responses, set up the integration, return entry.
 
-    Tests inject this and the integration is fully loaded by the time
-    the test body starts running. To customize API responses, inject
-    `mock_xenia_api` separately and call its setters BEFORE this fixture
-    runs — pytest resolves fixtures in dependency order, but for predictable
-    ordering, put `mock_xenia_api` and any setter calls in a separate
-    fixture or set them as the first lines of the test body before any
-    `await`. See test files for examples.
+    Tests inject this and the integration is fully loaded by the time the
+    test body starts running. Responses that must differ from the defaults at
+    setup time need their own fixture that calls the setters before
+    `register()`; see `init_with_weight` in test_number.py.
     """
     mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)

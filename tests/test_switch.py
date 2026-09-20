@@ -247,13 +247,20 @@ async def test_steam_boiler_turn_off_calls_toggle_sb(
 
 
 @pytest.mark.parametrize(
-    ("entity_id", "service"),
-    [(POWER, "turn_on"), (POWER, "turn_off"), (ECO, "turn_on"), (ECO, "turn_off")],
+    ("entity_id", "service", "path"),
+    [
+        (POWER, "turn_on", "machine/control"),
+        (POWER, "turn_off", "machine/control"),
+        (ECO, "turn_on", "machine/control"),
+        (ECO, "turn_off", "machine/control"),
+        (STEAM_BOILER, "turn_on", "toggle/sb"),
+        (STEAM_BOILER, "turn_off", "toggle/sb"),
+    ],
 )
 async def test_switch_raises_translated_error_when_machine_refuses(
-    hass, init_integration, mock_xenia_api, entity_id, service
+    hass, init_integration, mock_xenia_api, entity_id, service, path
 ):
-    mock_xenia_api.fail_post("machine/control")
+    mock_xenia_api.fail_post(path)
     with pytest.raises(HomeAssistantError) as exc_info:
         await hass.services.async_call(
             "switch", service, {"entity_id": entity_id}, blocking=True

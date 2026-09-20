@@ -1,16 +1,13 @@
 """Tests for coordinator.py — fast and config coordinators."""
 
-from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.helpers.update_coordinator import UpdateFailed
 import pytest
 
 from custom_components.xenia_home.const import (
-    POLL_INTERVAL_BREWING,
-    POLL_INTERVAL_HEATING,
+    POLL_INTERVAL_ACTIVE,
     POLL_INTERVAL_IDLE,
-    POLL_INTERVAL_READY,
 )
 from custom_components.xenia_home.coordinator import (
     BUILTIN_SCRIPTS,
@@ -159,16 +156,19 @@ async def test_data_coordinator_raises_update_failed_on_overview_error() -> None
     xenia = _make_xenia_mock()
     xenia.get_overview = AsyncMock(side_effect=OSError("net"))
     coordinator = _make_data_coordinator(xenia=xenia)
-    with pytest.raises(UpdateFailed, match="Xenia fetch failed"):
+    with pytest.raises(UpdateFailed) as exc_info:
         await coordinator._async_update_data()
+    assert exc_info.value.translation_key == "update_failed"
+    assert exc_info.value.translation_placeholders == {"error": "OSError: net"}
 
 
 async def test_data_coordinator_raises_update_failed_on_single_error() -> None:
     xenia = _make_xenia_mock()
     xenia.get_overview_single = AsyncMock(side_effect=TimeoutError())
     coordinator = _make_data_coordinator(xenia=xenia)
-    with pytest.raises(UpdateFailed, match="Xenia fetch failed: TimeoutError"):
+    with pytest.raises(UpdateFailed) as exc_info:
         await coordinator._async_update_data()
+    assert exc_info.value.translation_placeholders == {"error": "TimeoutError"}
 
 
 # ===========================================================================
@@ -179,8 +179,9 @@ async def test_data_coordinator_raises_update_failed_on_single_error() -> None:
 @pytest.mark.parametrize(
     ("ma_status", "expected"),
     [
-        (MachineStatus.BREWING, POLL_INTERVAL_BREWING),
-        (MachineStatus.DRAINING, POLL_INTERVAL_BREWING),
+        (MachineStatus.ON, POLL_INTERVAL_ACTIVE),
+        (MachineStatus.BREWING, POLL_INTERVAL_ACTIVE),
+        (MachineStatus.DRAINING, POLL_INTERVAL_ACTIVE),
         (MachineStatus.ECO, POLL_INTERVAL_IDLE),
         (MachineStatus.OFF, POLL_INTERVAL_IDLE),
         (MachineStatus.UNKNOWN, POLL_INTERVAL_IDLE),
@@ -191,34 +192,6 @@ async def test_polling_interval_per_state(ma_status, expected) -> None:
     coordinator = _make_data_coordinator(xenia=xenia)
     await coordinator._async_update_data()
     assert coordinator.update_interval == expected
-
-
-async def test_polling_interval_ready_when_temps_within_threshold() -> None:
-    xenia = _make_xenia_mock(
-        overview={
-            "MA_STATUS": MachineStatus.ON,
-            "BG_SENS_TEMP_A": 93.0,
-            "BB_SENS_TEMP_A": 130.0,
-        },
-        overview_single={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
-    )
-    coordinator = _make_data_coordinator(xenia=xenia)
-    await coordinator._async_update_data()
-    assert coordinator.update_interval == POLL_INTERVAL_READY
-
-
-async def test_polling_interval_heating_when_temps_outside_threshold() -> None:
-    xenia = _make_xenia_mock(
-        overview={
-            "MA_STATUS": MachineStatus.ON,
-            "BG_SENS_TEMP_A": 50.0,
-            "BB_SENS_TEMP_A": 100.0,
-        },
-        overview_single={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
-    )
-    coordinator = _make_data_coordinator(xenia=xenia)
-    await coordinator._async_update_data()
-    assert coordinator.update_interval == POLL_INTERVAL_HEATING
 
 
 # ===========================================================================
@@ -269,8 +242,9 @@ async def test_config_coordinator_raises_update_failed_on_any_error(
     xenia = _make_xenia_mock()
     setattr(xenia, broken_attr, AsyncMock(side_effect=exc))
     coordinator = _make_config_coordinator(xenia=xenia)
-    with pytest.raises(UpdateFailed, match="Xenia config fetch failed"):
+    with pytest.raises(UpdateFailed) as exc_info:
         await coordinator._async_update_data()
+    assert exc_info.value.translation_key == "update_failed"
 
 
 async def test_config_coordinator_reads_managed_script_when_enabled() -> None:

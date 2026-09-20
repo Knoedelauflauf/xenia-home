@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import logging
 
-from aiohttp import ClientError
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -14,13 +13,11 @@ from .const import (
     CONF_MANAGED_SCRIPT_ID,
     CONF_WEIGHT_MANAGEMENT_ENABLED,
     DEFAULT_POWER_ON_BEHAVIOR,
-    POLL_INTERVAL_BREWING,
-    POLL_INTERVAL_HEATING,
+    POLL_INTERVAL_ACTIVE,
     POLL_INTERVAL_IDLE,
-    POLL_INTERVAL_READY,
-    READY_THRESHOLD,
+    XENIA_DOMAIN,
 )
-from .errors import describe_error
+from .errors import REQUEST_ERRORS, describe_error
 from .shot_store import XeniaShotStore
 from .xenia import (
     MachineStatus,
@@ -100,27 +97,21 @@ class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
         try:
             overview = await self.xenia.get_overview()
             overview_single = await self.xenia.get_overview_single()
-        except (ClientError, OSError, TimeoutError) as err:
-            raise UpdateFailed(f"Xenia fetch failed: {describe_error(err)}") from err
+        except REQUEST_ERRORS as err:
+            raise UpdateFailed(
+                translation_domain=XENIA_DOMAIN,
+                translation_key="update_failed",
+                translation_placeholders={"error": describe_error(err)},
+            ) from err
 
-        match overview.ma_status:
-            case MachineStatus.BREWING | MachineStatus.DRAINING:
-                self.update_interval = POLL_INTERVAL_BREWING
-            case MachineStatus.ON:
-                bg_ready = (
-                    abs(overview.bg_sens_temp_a - overview_single.bg_set_temp)
-                    <= READY_THRESHOLD
-                )
-                bb_ready = (
-                    abs(overview.bb_sens_temp_a - overview_single.bb_set_temp)
-                    <= READY_THRESHOLD
-                )
-                if bg_ready and bb_ready:
-                    self.update_interval = POLL_INTERVAL_READY
-                else:
-                    self.update_interval = POLL_INTERVAL_HEATING
-            case _:
-                self.update_interval = POLL_INTERVAL_IDLE
+        if overview.ma_status in (
+            MachineStatus.ON,
+            MachineStatus.BREWING,
+            MachineStatus.DRAINING,
+        ):
+            self.update_interval = POLL_INTERVAL_ACTIVE
+        else:
+            self.update_interval = POLL_INTERVAL_IDLE
 
         shot_start_time = None
         if overview.ma_status == MachineStatus.BREWING:
@@ -159,9 +150,11 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
             machine = await self.xenia.get_machine()
             user_scripts = await self.xenia.get_scripts()
             switches = await self.xenia.get_switches()
-        except (ClientError, OSError, TimeoutError) as err:
+        except REQUEST_ERRORS as err:
             raise UpdateFailed(
-                f"Xenia config fetch failed: {describe_error(err)}"
+                translation_domain=XENIA_DOMAIN,
+                translation_key="update_failed",
+                translation_placeholders={"error": describe_error(err)},
             ) from err
         scripts = {**BUILTIN_SCRIPTS, **user_scripts}
 
@@ -173,7 +166,7 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
             if script_id is not None:
                 try:
                     script_data = await self.xenia.read_script(int(script_id))
-                except (ClientError, OSError, TimeoutError) as err:
+                except REQUEST_ERRORS as err:
                     _LOGGER.warning(
                         "Failed to read managed script %s: %s", script_id, err
                     )

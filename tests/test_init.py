@@ -8,13 +8,14 @@ from homeassistant.helpers import device_registry as dr
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.xenia_home import (
+from custom_components.xenia_home.services import (
     ATTR_SCRIPT_ID,
     ATTR_SCRIPT_NAME,
     SERVICE_EXECUTE_SCRIPT,
 )
 from custom_components.xenia_home.const import CONF_WEIGHT_MIN, XENIA_DOMAIN
 from custom_components.xenia_home.shot_store import XeniaShotStore
+from tests.conftest import MockXeniaApi
 from tests.fixtures.api_responses import MACHINE_NEW_FW_FIELDS
 from tests.fixtures.shots import shot_payload
 
@@ -136,17 +137,10 @@ async def test_unload_entry_keeps_service_registered(hass, init_integration):
     await hass.async_block_till_done()
     assert hass.services.has_service(XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT)
 
-    with pytest.raises(ServiceValidationError) as exc_info:
-        await hass.services.async_call(
-            XENIA_DOMAIN,
-            SERVICE_EXECUTE_SCRIPT,
-            {ATTR_SCRIPT_ID: 10},
-            blocking=True,
-        )
-    assert exc_info.value.translation_key == "entry_not_loaded"
 
-
-async def _add_second_entry(hass, mock_xenia_api) -> MockConfigEntry:
+async def _add_second_entry(
+    hass, mock_xenia_api
+) -> tuple[MockConfigEntry, MockXeniaApi]:
     second = MockConfigEntry(
         domain=XENIA_DOMAIN,
         title="xenia2.local",
@@ -154,21 +148,12 @@ async def _add_second_entry(hass, mock_xenia_api) -> MockConfigEntry:
         data={"host": "xenia2.local"},
         options={},
     )
-    for endpoint in ("overview", "overview_single", "machine", "switches"):
-        mock_xenia_api._mock.get(
-            f"http://xenia2.local/api/v2/{endpoint}",
-            payload={"MA_STATUS": 1} if endpoint == "overview" else {},
-            repeat=True,
-        )
-    mock_xenia_api._mock.get(
-        "http://xenia2.local/api/v2/scripts/list",
-        payload={"index_list": [], "title_list": []},
-        repeat=True,
-    )
+    second_api = mock_xenia_api.for_host("xenia2.local")
+    second_api.register()
     second.add_to_hass(hass)
     await hass.config_entries.async_setup(second.entry_id)
     await hass.async_block_till_done()
-    return second
+    return second, second_api
 
 
 async def test_unload_entry_keeps_service_when_other_entries_remain(
@@ -196,6 +181,16 @@ async def test_execute_script_raises_translated_error_when_machine_refuses(
     assert exc_info.value.translation_key == "write_failed"
 
 
+async def test_execute_script_without_loaded_entry(hass, init_integration):
+    await hass.config_entries.async_unload(init_integration.entry_id)
+    await hass.async_block_till_done()
+    with pytest.raises(ServiceValidationError) as exc_info:
+        await hass.services.async_call(
+            XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT, {ATTR_SCRIPT_ID: 10}, blocking=True
+        )
+    assert exc_info.value.translation_key == "entry_not_loaded"
+
+
 async def test_execute_script_with_unknown_config_entry_id(hass, init_integration):
     with pytest.raises(ServiceValidationError) as exc_info:
         await hass.services.async_call(
@@ -204,20 +199,7 @@ async def test_execute_script_with_unknown_config_entry_id(hass, init_integratio
             {ATTR_CONFIG_ENTRY_ID: "nope", ATTR_SCRIPT_ID: 10},
             blocking=True,
         )
-    assert exc_info.value.translation_key == "entry_not_found"
-
-
-async def test_execute_script_with_unloaded_config_entry_id(hass, init_integration):
-    await hass.config_entries.async_unload(init_integration.entry_id)
-    await hass.async_block_till_done()
-    with pytest.raises(ServiceValidationError) as exc_info:
-        await hass.services.async_call(
-            XENIA_DOMAIN,
-            SERVICE_EXECUTE_SCRIPT,
-            {ATTR_CONFIG_ENTRY_ID: init_integration.entry_id, ATTR_SCRIPT_ID: 10},
-            blocking=True,
-        )
-    assert exc_info.value.translation_key == "entry_not_loaded"
+    assert exc_info.value.translation_key == "service_config_entry_not_found"
 
 
 async def test_execute_script_needs_config_entry_id_with_several_machines(
@@ -234,10 +216,8 @@ async def test_execute_script_needs_config_entry_id_with_several_machines(
 async def test_execute_script_config_entry_id_picks_the_machine(
     hass, init_integration, mock_xenia_api
 ):
-    second = await _add_second_entry(hass, mock_xenia_api)
-    mock_xenia_api._mock.post(
-        "http://xenia2.local/api/v2/scripts/execute", status=200, repeat=True
-    )
+    second, second_api = await _add_second_entry(hass, mock_xenia_api)
+    second_api.expect_execute_script()
     await hass.services.async_call(
         XENIA_DOMAIN,
         SERVICE_EXECUTE_SCRIPT,
@@ -245,6 +225,7 @@ async def test_execute_script_config_entry_id_picks_the_machine(
         blocking=True,
     )
     await hass.async_block_till_done()
+    second_api.assert_post_called_with("scripts/execute", "1")
     assert mock_xenia_api.post_count("scripts/execute") == 0
 
 
@@ -304,7 +285,7 @@ async def test_remove_entry_deletes_shot_storage(hass, init_integration):
 
 
 # ===========================================================================
-# Options update listener
+# Setup-time options migration and the options update listener
 # ===========================================================================
 
 

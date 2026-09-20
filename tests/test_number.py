@@ -179,10 +179,11 @@ async def test_set_temp_raises_translated_error_when_machine_refuses(
     assert exc_info.value.translation_key == "write_failed"
 
 
+@pytest.mark.parametrize("path", ["scripts/read", "scripts/create"])
 async def test_weight_number_raises_translated_error_when_machine_refuses(
-    hass, init_with_weight, mock_xenia_api
+    hass, init_with_weight, mock_xenia_api, path
 ):
-    mock_xenia_api.fail_post("scripts/create")
+    mock_xenia_api.fail_post(path)
     with pytest.raises(HomeAssistantError) as exc_info:
         await hass.services.async_call(
             "number",

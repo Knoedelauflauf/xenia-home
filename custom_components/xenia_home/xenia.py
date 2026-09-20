@@ -6,7 +6,14 @@ import json
 import logging
 from typing import Any
 
-from aiohttp import ClientError, ClientResponseError, ClientSession, ClientTimeout
+from aiohttp import (
+    ClientError,
+    ClientPayloadError,
+    ClientResponse,
+    ClientResponseError,
+    ClientSession,
+    ClientTimeout,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -196,6 +203,28 @@ def _optional_float(data: dict, key: str) -> float | None:
         return None
 
 
+# The firmware answers an unknown path with a redirect to index.html, which
+# followed would look like a success, so requests below send
+# allow_redirects=False and any 3xx counts as an error.
+def _raise_for_status(resp: ClientResponse) -> None:
+    if resp.status >= 300:
+        raise ClientResponseError(
+            resp.request_info,
+            resp.history,
+            status=resp.status,
+            headers=resp.headers,
+            message=resp.reason or "",
+        )
+
+
+def _json(body: bytes) -> Any:
+    """Decode a response body, turning bad JSON into a ClientError."""
+    try:
+        return json.loads(body)
+    except ValueError as err:
+        raise ClientPayloadError(f"Invalid JSON from the machine: {err}") from err
+
+
 class Xenia:
     """Async HTTP client for the Xenia espresso machine local API (v2)."""
 
@@ -243,21 +272,13 @@ class Xenia:
         async with self._session.get(
             url,
             timeout=ClientTimeout(total=timeout),
-            # The firmware answers an unknown path with a redirect to
-            # index.html, which followed would look like a successful GET.
             allow_redirects=False,
         ) as resp:
-            if resp.status >= 300:
-                raise ClientResponseError(
-                    resp.request_info,
-                    resp.history,
-                    status=resp.status,
-                    headers=resp.headers,
-                )
+            _raise_for_status(resp)
             return await resp.read()
 
     async def _get_overview_raw(self) -> dict[str, Any]:
-        return json.loads(await self._get("overview"))
+        return _json(await self._get("overview"))
 
     async def get_overview(self) -> XeniaOverviewData:
         """Fetch and decode the fast-changing overview payload."""
@@ -266,12 +287,12 @@ class Xenia:
     async def get_overview_single(self) -> XeniaOverviewSingleData:
         """Fetch and decode the setpoint / configuration overview payload."""
         return XeniaOverviewSingleData.from_dict(
-            json.loads(await self._get("overview_single"))
+            _json(await self._get("overview_single"))
         )
 
     async def get_machine(self) -> XeniaMachineData:
         """Fetch and decode the machine identification and firmware payload."""
-        return XeniaMachineData.from_dict(json.loads(await self._get("machine")))
+        return XeniaMachineData.from_dict(_json(await self._get("machine")))
 
     async def _post(self, path: str, data: str, timeout: int = 5) -> bytes:
         url = f"http://{self._host}/api/v2/{path}"
@@ -281,17 +302,9 @@ class Xenia:
             data=data,
             headers=headers,
             timeout=ClientTimeout(total=timeout),
-            # The firmware answers an unknown path with a redirect to
-            # index.html, which followed would look like a successful POST.
             allow_redirects=False,
         ) as resp:
-            if resp.status >= 300:
-                raise ClientResponseError(
-                    resp.request_info,
-                    resp.history,
-                    status=resp.status,
-                    headers=resp.headers,
-                )
+            _raise_for_status(resp)
             return await resp.read()
 
     async def _control_machine(self, action: int) -> None:
@@ -314,7 +327,7 @@ class Xenia:
 
     async def get_scripts(self) -> dict[int, str]:
         """Get available scripts as {id: title} dict."""
-        data = json.loads(await self._get("scripts/list"))
+        data = _json(await self._get("scripts/list"))
         index_list = data.get("index_list", [])
         title_list = data.get("title_list", [])
         return dict(zip(index_list, title_list, strict=False))
@@ -330,7 +343,7 @@ class Xenia:
 
     async def get_switches(self) -> dict[str, int]:
         """Get switch-to-script mappings."""
-        return json.loads(await self._get("switches"))
+        return _json(await self._get("switches"))
 
     async def read_script(self, script_id: int) -> dict[str, str]:
         """Read a script's content by ID.
@@ -339,7 +352,7 @@ class Xenia:
         """
         file_name = f"{script_id:03d}"
         data = f'{{"FILE_NAME":"{file_name}"}}'
-        return json.loads(await self._post("scripts/read", data, timeout=10))
+        return _json(await self._post("scripts/read", data, timeout=10))
 
     async def create_script(self, name: str, instruction: str) -> None:
         """Create a new script on the machine."""

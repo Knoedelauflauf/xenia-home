@@ -2,103 +2,31 @@
 
 import logging
 
-from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import ATTR_CONFIG_ENTRY_ID, CONF_HOST
-from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.const import CONF_HOST
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.selector import ConfigEntrySelector
 from homeassistant.helpers.typing import ConfigType
-import voluptuous as vol
 
-from .const import CONF_POWER_ON_BEHAVIOR, PLATFORMS, REMOVED_OPTION_KEYS, XENIA_DOMAIN
+from .const import CONF_POWER_ON_BEHAVIOR, PLATFORMS, REMOVED_OPTION_KEYS
 from .coordinator import (
     XeniaConfigCoordinator,
     XeniaConfigEntry,
     XeniaDataUpdateCoordinator,
     XeniaRuntimeData,
 )
-from .errors import machine_write
 from .recorder_import import async_import_recorder_shots
+from .services import async_setup_services
 from .shot_store import XeniaShotStore
 from .websocket import async_register_commands
 from .xenia import Xenia
 
 _LOGGER = logging.getLogger(__name__)
 
-SERVICE_EXECUTE_SCRIPT = "execute_script"
-ATTR_SCRIPT_ID = "script_id"
-ATTR_SCRIPT_NAME = "script_name"
-
-SERVICE_EXECUTE_SCRIPT_SCHEMA = vol.Schema(
-    {
-        vol.Optional(ATTR_CONFIG_ENTRY_ID): ConfigEntrySelector(
-            {"integration": XENIA_DOMAIN}
-        ),
-        vol.Optional(ATTR_SCRIPT_ID): vol.Coerce(int),
-        vol.Optional(ATTR_SCRIPT_NAME): str,
-    }
-)
-
-
-def _resolve_entry(hass: HomeAssistant, call: ServiceCall) -> XeniaConfigEntry:
-    """Return the addressed config entry, or the only loaded one."""
-    if (entry_id := call.data.get(ATTR_CONFIG_ENTRY_ID)) is not None:
-        entry = hass.config_entries.async_get_entry(entry_id)
-        if entry is None or entry.domain != XENIA_DOMAIN:
-            raise ServiceValidationError(
-                translation_domain=XENIA_DOMAIN, translation_key="entry_not_found"
-            )
-        if entry.state is not ConfigEntryState.LOADED:
-            raise ServiceValidationError(
-                translation_domain=XENIA_DOMAIN, translation_key="entry_not_loaded"
-            )
-        return entry
-    entries = hass.config_entries.async_loaded_entries(XENIA_DOMAIN)
-    if not entries:
-        raise ServiceValidationError(
-            translation_domain=XENIA_DOMAIN, translation_key="entry_not_loaded"
-        )
-    if len(entries) > 1:
-        raise ServiceValidationError(
-            translation_domain=XENIA_DOMAIN, translation_key="multiple_entries"
-        )
-    return entries[0]
-
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register the integration's global service."""
+    """Register the integration's actions and websocket commands."""
     async_register_commands(hass)
-
-    async def handle_execute_script(call: ServiceCall) -> None:
-        """Handle the execute_script service call."""
-        runtime = _resolve_entry(hass, call).runtime_data
-        script_id = call.data.get(ATTR_SCRIPT_ID)
-        script_name = call.data.get(ATTR_SCRIPT_NAME)
-        if script_id is None and script_name is None:
-            raise ServiceValidationError(
-                translation_domain=XENIA_DOMAIN, translation_key="script_required"
-            )
-        if script_id is None:
-            scripts = runtime.config_coordinator.data.scripts
-            script_id = next(
-                (sid for sid, title in scripts.items() if title == script_name), None
-            )
-            if script_id is None:
-                raise ServiceValidationError(
-                    translation_domain=XENIA_DOMAIN,
-                    translation_key="script_not_found",
-                    translation_placeholders={"script_name": str(script_name)},
-                )
-        async with machine_write():
-            await runtime.coordinator.xenia.execute_script(script_id)
-
-    hass.services.async_register(
-        XENIA_DOMAIN,
-        SERVICE_EXECUTE_SCRIPT,
-        handle_execute_script,
-        schema=SERVICE_EXECUTE_SCRIPT_SCHEMA,
-    )
+    async_setup_services(hass)
     return True
 
 
@@ -127,13 +55,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> boo
         config_coordinator=config_coordinator,
         shot_store=shot_store,
     )
-    # Older releases kept the power-on select value and the polling intervals
-    # in the options; strip them before the update listener is added, or this
-    # reloads the entry.
+    # Strip before the update listener is added, or this reloads the entry.
     options = {k: v for k, v in entry.options.items() if k not in REMOVED_OPTION_KEYS}
     if CONF_POWER_ON_BEHAVIOR in options:
         entry.runtime_data.power_on_behavior = options.pop(CONF_POWER_ON_BEHAVIOR)
-    if options != dict(entry.options):
+    if options != entry.options:
         hass.config_entries.async_update_entry(entry, options=options)
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))

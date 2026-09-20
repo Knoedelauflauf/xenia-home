@@ -85,7 +85,8 @@ grams) of the weight target number entity. Defaults: minimum 25 g, maximum
 on or brewing and every five seconds while it is in eco mode or off. The
 brewing interval sets the time resolution of shot tracking. To poll at a
 different rate, disable **Polling for updates** in the entry's system options
-and call `homeassistant.update_entity` from an automation.
+and call `homeassistant.update_entity` from an automation. The script and
+switch names are then refreshed only when the entry is reloaded.
 
 ## Features
 

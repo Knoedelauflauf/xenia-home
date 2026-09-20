@@ -179,9 +179,7 @@ class SwitchConfigSelect(XeniaEntity, SelectEntity):
         config_coordinator = self.runtime_data.config_coordinator
         scripts = config_coordinator.data.scripts
         script_id = next((sid for sid, title in scripts.items() if title == option), 0)
-        # Update the switch assignment
         async with machine_write():
             await self.coordinator.xenia.set_switch(self._switch_key, script_id)
-        # Refresh config data
         await config_coordinator.async_request_refresh()
         self.async_write_ha_state()

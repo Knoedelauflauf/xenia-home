@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from aiohttp import ClientResponseError, ClientSession
+from aiohttp import ClientError, ClientResponseError, ClientSession
 from aioresponses import aioresponses as AioResponses
 import pytest
 from yarl import URL
@@ -484,16 +484,10 @@ async def test_update_script_uses_edit_enabled(mock_api, xenia) -> None:
     assert "5" in body
 
 
-async def test_stop_script_hits_stop_endpoint(mock_api, xenia) -> None:
-    mock_api.get(f"{BASE}/scripts/stop", status=200)
-    await xenia.stop_script()
-    assert ("GET", _yarl(f"{BASE}/scripts/stop")) in mock_api.requests
-
-
-async def test_stop_script_raises_on_http_error(mock_api, xenia) -> None:
-    mock_api.get(f"{BASE}/scripts/stop", status=500)
-    with pytest.raises(ClientResponseError):
-        await xenia.stop_script()
+async def test_non_json_body_raises_client_error(mock_api, xenia) -> None:
+    mock_api.get(f"{BASE}/overview", status=200, body="<html></html>")
+    with pytest.raises(ClientError):
+        await xenia.get_overview()
 
 
 async def test_get_switches_returns_dict(mock_api, xenia) -> None:

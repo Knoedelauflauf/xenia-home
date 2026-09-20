@@ -195,7 +195,6 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
         script_id = options.get(CONF_MANAGED_SCRIPT_ID)
         if script_id is None:
             return
-        # Read fresh from machine to avoid stale data
         async with machine_write():
             script_data = await self.coordinator.xenia.read_script(int(script_id))
         instruction = script_data.get("Content")
