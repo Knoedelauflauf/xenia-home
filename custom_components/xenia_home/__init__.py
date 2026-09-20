@@ -7,7 +7,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
-from .const import CONF_POWER_ON_BEHAVIOR, PLATFORMS, REMOVED_OPTION_KEYS
+from .const import (
+    CONF_POWER_ON_BEHAVIOR,
+    PLATFORMS,
+    REMOVED_OPTION_KEYS,
+    PowerOnBehavior,
+)
 from .coordinator import (
     XeniaConfigCoordinator,
     XeniaConfigEntry,
@@ -58,7 +63,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> boo
     # Strip before the update listener is added, or this reloads the entry.
     options = {k: v for k, v in entry.options.items() if k not in REMOVED_OPTION_KEYS}
     if CONF_POWER_ON_BEHAVIOR in options:
-        entry.runtime_data.power_on_behavior = options.pop(CONF_POWER_ON_BEHAVIOR)
+        entry.runtime_data.power_on_behavior = PowerOnBehavior(
+            options.pop(CONF_POWER_ON_BEHAVIOR)
+        )
     if options != entry.options:
         hass.config_entries.async_update_entry(entry, options=options)
 

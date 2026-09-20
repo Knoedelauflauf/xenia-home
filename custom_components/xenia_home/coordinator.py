@@ -12,10 +12,10 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_MANAGED_SCRIPT_ID,
     CONF_WEIGHT_MANAGEMENT_ENABLED,
-    DEFAULT_POWER_ON_BEHAVIOR,
     POLL_INTERVAL_ACTIVE,
     POLL_INTERVAL_IDLE,
     XENIA_DOMAIN,
+    PowerOnBehavior,
 )
 from .errors import REQUEST_ERRORS, describe_error
 from .shot_store import XeniaShotStore
@@ -65,7 +65,7 @@ class XeniaRuntimeData:
     coordinator: XeniaDataUpdateCoordinator
     config_coordinator: XeniaConfigCoordinator
     shot_store: XeniaShotStore
-    power_on_behavior: str = DEFAULT_POWER_ON_BEHAVIOR
+    power_on_behavior: PowerOnBehavior = PowerOnBehavior.STEAM_OFF
 
 
 type XeniaConfigEntry = ConfigEntry[XeniaRuntimeData]

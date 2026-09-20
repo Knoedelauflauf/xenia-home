@@ -53,5 +53,3 @@ class PowerOnBehavior(StrEnum):
 
 
 POWER_ON_BEHAVIOR_OPTIONS: list[str] = [e.value for e in PowerOnBehavior]
-
-DEFAULT_POWER_ON_BEHAVIOR = PowerOnBehavior.STEAM_OFF.value

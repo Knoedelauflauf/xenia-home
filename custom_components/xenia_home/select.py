@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import POWER_ON_BEHAVIOR_OPTIONS, XENIA_DOMAIN
+from .const import POWER_ON_BEHAVIOR_OPTIONS, XENIA_DOMAIN, PowerOnBehavior
 from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
 from .entity import XeniaEntity
 from .errors import machine_write
@@ -92,7 +92,7 @@ class PowerOnBehaviorSelect(XeniaEntity, SelectEntity, RestoreEntity):
         await super().async_added_to_hass()
         state = await self.async_get_last_state()
         if state is not None and state.state in POWER_ON_BEHAVIOR_OPTIONS:
-            self.runtime_data.power_on_behavior = state.state
+            self.runtime_data.power_on_behavior = PowerOnBehavior(state.state)
 
     @property
     def current_option(self) -> str:
@@ -101,7 +101,7 @@ class PowerOnBehaviorSelect(XeniaEntity, SelectEntity, RestoreEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Handle option selection."""
-        self.runtime_data.power_on_behavior = option
+        self.runtime_data.power_on_behavior = PowerOnBehavior(option)
         self.async_write_ha_state()
 
 

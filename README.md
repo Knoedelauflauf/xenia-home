@@ -103,6 +103,10 @@ switch names are then refreshed only when the entry is reloaded.
 - Shot tracking with per-shot temperature, pressure, flow rate, and final weight
 - Optional weight-target management for a chosen script (see **Options** above)
 
+The electric current sensor is the controller's raw reading. It does not
+drop to zero while the machine is off (about 1.3 A on a DBL), and the energy
+counter does not move then.
+
 ## Shot timer
 
 The integration does not count seconds itself. The shot start time sensor
@@ -212,7 +216,7 @@ expose a slider on a dashboard.
 ## Shot history API
 
 The integration stores every completed shot itself (indefinitely, in
-`.storage/`); history does not depend on the recorder and survives recorder
+`.storage/xenia_home/`); history does not depend on the recorder and survives recorder
 purges. Other apps can query it over the Home Assistant WebSocket API with any
 authenticated connection; a long-lived access token is enough, no admin
 rights required.

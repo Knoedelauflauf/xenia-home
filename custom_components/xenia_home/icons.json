@@ -83,5 +83,10 @@
         "default": "mdi:kettle-steam"
       }
     }
+  },
+  "services": {
+    "execute_script": {
+      "service": "mdi:play"
+    }
   }
 }
