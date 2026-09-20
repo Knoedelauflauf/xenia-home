@@ -12,18 +12,13 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_MANAGED_SCRIPT_ID,
-    CONF_POLL_ACTIVE,
-    CONF_POLL_BREWING,
-    CONF_POLL_IDLE,
-    CONF_POLL_READY,
-    CONF_READY_THRESHOLD,
     CONF_WEIGHT_MANAGEMENT_ENABLED,
-    DEFAULT_POLL_ACTIVE,
-    DEFAULT_POLL_BREWING,
-    DEFAULT_POLL_IDLE,
-    DEFAULT_POLL_READY,
     DEFAULT_POWER_ON_BEHAVIOR,
-    DEFAULT_READY_THRESHOLD,
+    POLL_INTERVAL_BREWING,
+    POLL_INTERVAL_HEATING,
+    POLL_INTERVAL_IDLE,
+    POLL_INTERVAL_READY,
+    READY_THRESHOLD,
 )
 from .errors import describe_error
 from .shot_store import XeniaShotStore
@@ -95,26 +90,10 @@ class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
             hass,
             _LOGGER,
             name=f"{config_entry.entry_id}_data",
-            update_interval=timedelta(seconds=1),
+            update_interval=POLL_INTERVAL_IDLE,
             config_entry=config_entry,
         )
         self.xenia = xenia
-        opts = config_entry.options
-        self._interval_brewing = timedelta(
-            seconds=opts.get(CONF_POLL_BREWING, DEFAULT_POLL_BREWING)
-        )
-        self._interval_active = timedelta(
-            seconds=opts.get(CONF_POLL_ACTIVE, DEFAULT_POLL_ACTIVE)
-        )
-        self._interval_ready = timedelta(
-            seconds=opts.get(CONF_POLL_READY, DEFAULT_POLL_READY)
-        )
-        self._interval_idle = timedelta(
-            seconds=opts.get(CONF_POLL_IDLE, DEFAULT_POLL_IDLE)
-        )
-        self._ready_threshold: float = opts.get(
-            CONF_READY_THRESHOLD, DEFAULT_READY_THRESHOLD
-        )
 
     async def _async_update_data(self) -> XeniaCoordinatorData:
         """Fetch data and adjust the polling interval based on machine state."""
@@ -126,22 +105,22 @@ class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
 
         match overview.ma_status:
             case MachineStatus.BREWING | MachineStatus.DRAINING:
-                self.update_interval = self._interval_brewing
+                self.update_interval = POLL_INTERVAL_BREWING
             case MachineStatus.ON:
                 bg_ready = (
                     abs(overview.bg_sens_temp_a - overview_single.bg_set_temp)
-                    <= self._ready_threshold
+                    <= READY_THRESHOLD
                 )
                 bb_ready = (
                     abs(overview.bb_sens_temp_a - overview_single.bb_set_temp)
-                    <= self._ready_threshold
+                    <= READY_THRESHOLD
                 )
                 if bg_ready and bb_ready:
-                    self.update_interval = self._interval_ready
+                    self.update_interval = POLL_INTERVAL_READY
                 else:
-                    self.update_interval = self._interval_active
+                    self.update_interval = POLL_INTERVAL_HEATING
             case _:
-                self.update_interval = self._interval_idle
+                self.update_interval = POLL_INTERVAL_IDLE
 
         shot_start_time = None
         if overview.ma_status == MachineStatus.BREWING:

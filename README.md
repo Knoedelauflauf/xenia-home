@@ -81,25 +81,11 @@ machine).
 grams) of the weight target number entity. Defaults: minimum 25 g, maximum
 50 g, step 0.5 g. Pick a range that matches the shots you actually pull.
 
-**Configure polling intervals (advanced).** Change how often the integration
-asks the machine for new sensor data. Each interval is in seconds with a
-floor of 0.5 s and a default of 1.0 s, and applies to a different state:
-
-- **Brewing** — polled while a shot is being pulled. This interval also
-  determines the time resolution of shot tracking; lower values give finer
-  shot detail at the cost of more network traffic.
-- **Heating up** — polled while the machine is warming and not yet at the
-  ready temperature.
-- **Ready** — polled while the machine is at temperature and idle.
-- **Idle (eco/off)** — polled when the machine is in ECO mode or powered
-  off.
-- **Ready temperature threshold (°C)** — the brew-boiler temperature
-  difference at or below which the machine is considered ready (and
-  switches from the *heating up* interval to the *ready* interval).
-  Default: 2.0 °C.
-
-The defaults work well for most users; only touch these if you have a clear
-reason to.
+**Polling.** The integration polls the machine once per second while it is
+on or brewing and every five seconds while it is in eco mode or off. The
+brewing interval sets the time resolution of shot tracking. To poll at a
+different rate, disable **Polling for updates** in the entry's system options
+and call `homeassistant.update_entity` from an automation.
 
 ## Features
 

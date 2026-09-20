@@ -1,5 +1,6 @@
 """Constants for the Xenia espresso machine integration."""
 
+from datetime import timedelta
 from enum import StrEnum
 
 from homeassistant.const import Platform
@@ -28,24 +29,21 @@ DEFAULT_WEIGHT_STEP = 0.5
 DEFAULT_SCRIPT_NAME = "HA Espresso"
 DEFAULT_SCRIPT_INSTRUCTION = "1;13;3 70 5000;12 5000;27 40;17;7;"
 
-CONF_CONFIGURE_POLLING = "configure_polling"
-CONF_POLL_BREWING = "poll_interval_brewing"
-CONF_POLL_ACTIVE = "poll_interval_active"
-CONF_POLL_READY = "poll_interval_ready"
-CONF_POLL_IDLE = "poll_interval_idle"
-CONF_READY_THRESHOLD = "ready_threshold"
-DEFAULT_POLL_BREWING = 1.0
-DEFAULT_POLL_ACTIVE = 1.0
-DEFAULT_POLL_READY = 1.0
-DEFAULT_POLL_IDLE = 1.0
-DEFAULT_READY_THRESHOLD = 2.0
+POLL_INTERVAL_BREWING = timedelta(seconds=1)
+POLL_INTERVAL_HEATING = timedelta(seconds=1)
+POLL_INTERVAL_READY = timedelta(seconds=1)
+POLL_INTERVAL_IDLE = timedelta(seconds=5)
+# Both boilers within this many degrees of their setpoint count as ready.
+READY_THRESHOLD = 2.0
 
-POLLING_OPTION_KEYS = (
-    CONF_POLL_BREWING,
-    CONF_POLL_ACTIVE,
-    CONF_POLL_READY,
-    CONF_POLL_IDLE,
-    CONF_READY_THRESHOLD,
+# Options of earlier releases, stripped at setup.
+REMOVED_OPTION_KEYS = (
+    "configure_polling",
+    "poll_interval_brewing",
+    "poll_interval_active",
+    "poll_interval_ready",
+    "poll_interval_idle",
+    "ready_threshold",
 )
 
 

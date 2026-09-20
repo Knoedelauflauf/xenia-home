@@ -13,7 +13,7 @@ from custom_components.xenia_home import (
     ATTR_SCRIPT_NAME,
     SERVICE_EXECUTE_SCRIPT,
 )
-from custom_components.xenia_home.const import CONF_POLL_IDLE, XENIA_DOMAIN
+from custom_components.xenia_home.const import CONF_WEIGHT_MIN, XENIA_DOMAIN
 from custom_components.xenia_home.shot_store import XeniaShotStore
 from tests.fixtures.api_responses import MACHINE_NEW_FW_FIELDS
 from tests.fixtures.shots import shot_payload
@@ -308,13 +308,29 @@ async def test_remove_entry_deletes_shot_storage(hass, init_integration):
 # ===========================================================================
 
 
+async def test_setup_strips_polling_options_of_older_releases(
+    hass,
+    enable_custom_integrations,
+    mock_xenia_api,
+    mock_config_entry_factory_with_options,
+):
+    entry = mock_config_entry_factory_with_options(
+        {"poll_interval_idle": 10.0, "ready_threshold": 3.0, CONF_WEIGHT_MIN: 20.0}
+    )
+    mock_xenia_api.register()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert dict(entry.options) == {CONF_WEIGHT_MIN: 20.0}
+
+
 async def test_options_change_reloads_entry(hass, init_integration):
     with patch.object(
         hass.config_entries, "async_reload", wraps=hass.config_entries.async_reload
     ) as reload:
         hass.config_entries.async_update_entry(
             init_integration,
-            options={**init_integration.options, CONF_POLL_IDLE: 5.0},
+            options={**init_integration.options, CONF_WEIGHT_MIN: 20.0},
         )
         await hass.async_block_till_done()
     reload.assert_called_once_with(init_integration.entry_id)

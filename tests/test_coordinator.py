@@ -7,15 +7,10 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 import pytest
 
 from custom_components.xenia_home.const import (
-    CONF_POLL_ACTIVE,
-    CONF_POLL_BREWING,
-    CONF_POLL_IDLE,
-    CONF_POLL_READY,
-    CONF_READY_THRESHOLD,
-    DEFAULT_POLL_ACTIVE,
-    DEFAULT_POLL_BREWING,
-    DEFAULT_POLL_IDLE,
-    DEFAULT_POLL_READY,
+    POLL_INTERVAL_BREWING,
+    POLL_INTERVAL_HEATING,
+    POLL_INTERVAL_IDLE,
+    POLL_INTERVAL_READY,
 )
 from custom_components.xenia_home.coordinator import (
     BUILTIN_SCRIPTS,
@@ -177,41 +172,25 @@ async def test_data_coordinator_raises_update_failed_on_single_error() -> None:
 
 
 # ===========================================================================
-# Dynamic polling intervals — REAL test of the match statement
-#
-# Trick: pass distinct overrides for all four CONF_POLL_* keys so the
-# four expected intervals differ and the assertion truly distinguishes
-# them. With the production defaults of (1.0, 1.0, 1.0, 1.0), tests
-# cannot tell brewing from idle.
+# Polling interval per machine state
 # ===========================================================================
 
 
-POLL_OPTS_DISTINCT = {
-    CONF_POLL_BREWING: 0.5,
-    CONF_POLL_ACTIVE: 2.0,
-    CONF_POLL_READY: 5.0,
-    CONF_POLL_IDLE: 10.0,
-    CONF_READY_THRESHOLD: 2.0,
-}
-
-
 @pytest.mark.parametrize(
-    ("ma_status", "expected_seconds"),
+    ("ma_status", "expected"),
     [
-        (MachineStatus.BREWING, 0.5),
-        (MachineStatus.DRAINING, 0.5),
-        (MachineStatus.ECO, 10.0),
-        (MachineStatus.OFF, 10.0),
-        (MachineStatus.UNKNOWN, 10.0),
+        (MachineStatus.BREWING, POLL_INTERVAL_BREWING),
+        (MachineStatus.DRAINING, POLL_INTERVAL_BREWING),
+        (MachineStatus.ECO, POLL_INTERVAL_IDLE),
+        (MachineStatus.OFF, POLL_INTERVAL_IDLE),
+        (MachineStatus.UNKNOWN, POLL_INTERVAL_IDLE),
     ],
 )
-async def test_polling_interval_per_state_with_distinct_options(
-    ma_status, expected_seconds
-) -> None:
+async def test_polling_interval_per_state(ma_status, expected) -> None:
     xenia = _make_xenia_mock(overview={"MA_STATUS": ma_status})
-    coordinator = _make_data_coordinator(xenia=xenia, **POLL_OPTS_DISTINCT)
+    coordinator = _make_data_coordinator(xenia=xenia)
     await coordinator._async_update_data()
-    assert coordinator.update_interval == timedelta(seconds=expected_seconds)
+    assert coordinator.update_interval == expected
 
 
 async def test_polling_interval_ready_when_temps_within_threshold() -> None:
@@ -223,12 +202,12 @@ async def test_polling_interval_ready_when_temps_within_threshold() -> None:
         },
         overview_single={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
     )
-    coordinator = _make_data_coordinator(xenia=xenia, **POLL_OPTS_DISTINCT)
+    coordinator = _make_data_coordinator(xenia=xenia)
     await coordinator._async_update_data()
-    assert coordinator.update_interval == timedelta(seconds=5.0)  # READY
+    assert coordinator.update_interval == POLL_INTERVAL_READY
 
 
-async def test_polling_interval_active_when_temps_outside_threshold() -> None:
+async def test_polling_interval_heating_when_temps_outside_threshold() -> None:
     xenia = _make_xenia_mock(
         overview={
             "MA_STATUS": MachineStatus.ON,
@@ -237,48 +216,9 @@ async def test_polling_interval_active_when_temps_outside_threshold() -> None:
         },
         overview_single={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
     )
-    coordinator = _make_data_coordinator(xenia=xenia, **POLL_OPTS_DISTINCT)
-    await coordinator._async_update_data()
-    assert coordinator.update_interval == timedelta(seconds=2.0)  # ACTIVE
-
-
-async def test_polling_interval_zero_threshold_requires_exact_match() -> None:
-    """Threshold 0 means even 0.5°C off counts as ACTIVE."""
-    xenia = _make_xenia_mock(
-        overview={
-            "MA_STATUS": MachineStatus.ON,
-            "BG_SENS_TEMP_A": 93.0,
-            "BB_SENS_TEMP_A": 130.0,
-        },
-        overview_single={"BG_SET_TEMP": 93.5, "BB_SET_TEMP": 130.0},
-    )
-    opts = {**POLL_OPTS_DISTINCT, CONF_READY_THRESHOLD: 0.0}
-    coordinator = _make_data_coordinator(xenia=xenia, **opts)
-    await coordinator._async_update_data()
-    assert coordinator.update_interval == timedelta(seconds=2.0)  # ACTIVE
-
-
-async def test_polling_interval_uses_defaults_when_options_absent() -> None:
-    """With no options, all four defaults are equal — interval becomes default."""
-    xenia = _make_xenia_mock(overview={"MA_STATUS": MachineStatus.BREWING})
     coordinator = _make_data_coordinator(xenia=xenia)
     await coordinator._async_update_data()
-    assert coordinator.update_interval == timedelta(seconds=DEFAULT_POLL_BREWING)
-
-
-def test_default_poll_constants_are_documented_to_be_equal() -> None:
-    """Guard the contract that all four poll defaults stay numerically equal.
-
-    If this fails, the parametrized distinct-options tests above may need
-    review — they intentionally rely on the four defaults being interchangeable
-    for the "no options" case but distinct under explicit overrides.
-    """
-    assert (
-        DEFAULT_POLL_BREWING
-        == DEFAULT_POLL_ACTIVE
-        == DEFAULT_POLL_READY
-        == DEFAULT_POLL_IDLE
-    )
+    assert coordinator.update_interval == POLL_INTERVAL_HEATING
 
 
 # ===========================================================================

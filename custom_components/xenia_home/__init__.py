@@ -11,7 +11,7 @@ from homeassistant.helpers.selector import ConfigEntrySelector
 from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
 
-from .const import CONF_POWER_ON_BEHAVIOR, PLATFORMS, XENIA_DOMAIN
+from .const import CONF_POWER_ON_BEHAVIOR, PLATFORMS, REMOVED_OPTION_KEYS, XENIA_DOMAIN
 from .coordinator import (
     XeniaConfigCoordinator,
     XeniaConfigEntry,
@@ -127,11 +127,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> boo
         config_coordinator=config_coordinator,
         shot_store=shot_store,
     )
-    if CONF_POWER_ON_BEHAVIOR in entry.options:
-        # Releases before 0.7.0 kept the select value here; strip it before the
-        # update listener is added, or this reloads the entry.
-        options = dict(entry.options)
+    # Older releases kept the power-on select value and the polling intervals
+    # in the options; strip them before the update listener is added, or this
+    # reloads the entry.
+    options = {k: v for k, v in entry.options.items() if k not in REMOVED_OPTION_KEYS}
+    if CONF_POWER_ON_BEHAVIOR in options:
         entry.runtime_data.power_on_behavior = options.pop(CONF_POWER_ON_BEHAVIOR)
+    if options != dict(entry.options):
         hass.config_entries.async_update_entry(entry, options=options)
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))

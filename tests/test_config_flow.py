@@ -8,13 +8,7 @@ import yarl
 
 from custom_components.xenia_home.config_flow import CREATE_NEW_SCRIPT
 from custom_components.xenia_home.const import (
-    CONF_CONFIGURE_POLLING,
     CONF_MANAGED_SCRIPT_ID,
-    CONF_POLL_ACTIVE,
-    CONF_POLL_BREWING,
-    CONF_POLL_IDLE,
-    CONF_POLL_READY,
-    CONF_READY_THRESHOLD,
     CONF_WEIGHT_MANAGEMENT_ENABLED,
     CONF_WEIGHT_MAX,
     CONF_WEIGHT_MIN,
@@ -156,63 +150,17 @@ async def test_options_init_shows_form_when_no_input(hass, init_integration):
     assert result["step_id"] == "init"
 
 
-async def test_options_disable_weight_and_polling_creates_entry(hass, init_integration):
+async def test_options_disable_weight_creates_entry(hass, init_integration):
     result = await hass.config_entries.options.async_init(init_integration.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
             CONF_WEIGHT_MANAGEMENT_ENABLED: False,
-            CONF_CONFIGURE_POLLING: False,
         },
     )
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_WEIGHT_MANAGEMENT_ENABLED] is False
     assert result["data"][CONF_MANAGED_SCRIPT_ID] is None
-
-
-async def test_options_enable_polling_only_shows_polling_form(hass, init_integration):
-    result = await hass.config_entries.options.async_init(init_integration.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_WEIGHT_MANAGEMENT_ENABLED: False,
-            CONF_CONFIGURE_POLLING: True,
-        },
-    )
-    assert result["type"] == data_entry_flow.FlowResultType.FORM
-    assert result["step_id"] == "configure_polling"
-
-
-async def test_options_disabling_polling_strips_polling_keys(
-    hass,
-    enable_custom_integrations,
-    mock_xenia_api,
-    mock_config_entry_factory_with_options,
-):
-    entry = mock_config_entry_factory_with_options(
-        {
-            CONF_POLL_BREWING: 0.5,
-            CONF_POLL_IDLE: 10.0,
-            CONF_READY_THRESHOLD: 3.0,
-        }
-    )
-    mock_xenia_api.register()
-    entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_WEIGHT_MANAGEMENT_ENABLED: False,
-            CONF_CONFIGURE_POLLING: False,
-        },
-    )
-    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
-    assert CONF_POLL_BREWING not in result["data"]
-    assert CONF_POLL_IDLE not in result["data"]
-    assert CONF_READY_THRESHOLD not in result["data"]
 
 
 # ===========================================================================
@@ -245,7 +193,6 @@ async def test_options_select_script_shows_weight_scripts_only(
         result["flow_id"],
         user_input={
             CONF_WEIGHT_MANAGEMENT_ENABLED: True,
-            CONF_CONFIGURE_POLLING: False,
         },
     )
     assert result["type"] == data_entry_flow.FlowResultType.FORM
@@ -265,7 +212,6 @@ async def test_options_select_existing_script_proceeds_to_configure_weight(
         result["flow_id"],
         user_input={
             CONF_WEIGHT_MANAGEMENT_ENABLED: True,
-            CONF_CONFIGURE_POLLING: False,
         },
     )
     result = await hass.config_entries.options.async_configure(
@@ -300,7 +246,6 @@ async def test_options_create_new_script_calls_api(
         result["flow_id"],
         user_input={
             CONF_WEIGHT_MANAGEMENT_ENABLED: True,
-            CONF_CONFIGURE_POLLING: False,
         },
     )
     result = await hass.config_entries.options.async_configure(
@@ -329,7 +274,6 @@ async def test_options_configure_weight_creates_entry(
         result["flow_id"],
         user_input={
             CONF_WEIGHT_MANAGEMENT_ENABLED: True,
-            CONF_CONFIGURE_POLLING: False,
         },
     )
     result = await hass.config_entries.options.async_configure(
@@ -353,45 +297,11 @@ async def test_options_configure_weight_creates_entry(
 
 
 # ===========================================================================
-# Options flow — configure_polling step
+# Full end-to-end: weight
 # ===========================================================================
 
 
-async def test_options_configure_polling_creates_entry_with_values(
-    hass, init_integration
-):
-    result = await hass.config_entries.options.async_init(init_integration.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_WEIGHT_MANAGEMENT_ENABLED: False,
-            CONF_CONFIGURE_POLLING: True,
-        },
-    )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_POLL_BREWING: 0.5,
-            CONF_POLL_ACTIVE: 2.0,
-            CONF_POLL_READY: 5.0,
-            CONF_POLL_IDLE: 10.0,
-            CONF_READY_THRESHOLD: 3.0,
-        },
-    )
-    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
-    data = result["data"]
-    assert data[CONF_POLL_BREWING] == 0.5
-    assert data[CONF_READY_THRESHOLD] == 3.0
-
-
-# ===========================================================================
-# Full end-to-end: weight + polling
-# ===========================================================================
-
-
-async def test_options_full_flow_weight_and_polling(
-    hass, init_integration, mock_xenia_api
-):
+async def test_options_full_flow_weight(hass, init_integration, mock_xenia_api):
     mock_xenia_api._mock.post(
         mock_xenia_api._url("scripts/read"),
         payload={"Content": "1;13;27 45;7;", "Title": "MyShot"},
@@ -400,10 +310,7 @@ async def test_options_full_flow_weight_and_polling(
     result = await hass.config_entries.options.async_init(init_integration.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        user_input={
-            CONF_WEIGHT_MANAGEMENT_ENABLED: True,
-            CONF_CONFIGURE_POLLING: True,
-        },
+        user_input={CONF_WEIGHT_MANAGEMENT_ENABLED: True},
     )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], user_input={CONF_MANAGED_SCRIPT_ID: "10"}
@@ -416,20 +323,7 @@ async def test_options_full_flow_weight_and_polling(
             CONF_WEIGHT_STEP: 0.5,
         },
     )
-    assert result["type"] == data_entry_flow.FlowResultType.FORM
-    assert result["step_id"] == "configure_polling"
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_POLL_BREWING: 0.5,
-            CONF_POLL_ACTIVE: 2.0,
-            CONF_POLL_READY: 5.0,
-            CONF_POLL_IDLE: 10.0,
-            CONF_READY_THRESHOLD: 3.0,
-        },
-    )
     assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
     data = result["data"]
     assert data[CONF_MANAGED_SCRIPT_ID] == 10
     assert data[CONF_WEIGHT_MIN] == 25.0
-    assert data[CONF_POLL_BREWING] == 0.5

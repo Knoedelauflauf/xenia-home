@@ -50,8 +50,7 @@
       "init": {
         "title": "Xenia Optionen",
         "data": {
-          "weight_management_enabled": "Gewichtssteuerung aktivieren",
-          "configure_polling": "Abfrageintervalle konfigurieren (fortgeschritten)"
+          "weight_management_enabled": "Gewichtssteuerung aktivieren"
         }
       },
       "select_script": {
@@ -68,17 +67,6 @@
           "weight_min": "Mindestgewicht (g)",
           "weight_max": "Maximalgewicht (g)",
           "weight_step": "Schrittweite (g)"
-        }
-      },
-      "configure_polling": {
-        "title": "Abfrageintervalle",
-        "description": "Konfiguriere wie oft deine Maschine in jedem Zustand abgefragt wird (in Sekunden). Das Brühintervall bestimmt auch die Auflösung deiner Bezugsdaten.",
-        "data": {
-          "poll_interval_brewing": "Brühen",
-          "poll_interval_active": "Aufheizen",
-          "poll_interval_ready": "Betriebsbereit",
-          "poll_interval_idle": "Ruhezustand (Eco/Aus)",
-          "ready_threshold": "Betriebsbereit-Temperaturschwelle (\u00b0C)"
         }
       }
     },

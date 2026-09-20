@@ -17,29 +17,17 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 
 from .const import (
-    CONF_CONFIGURE_POLLING,
     CONF_MANAGED_SCRIPT_ID,
-    CONF_POLL_ACTIVE,
-    CONF_POLL_BREWING,
-    CONF_POLL_IDLE,
-    CONF_POLL_READY,
-    CONF_READY_THRESHOLD,
     CONF_WEIGHT_MANAGEMENT_ENABLED,
     CONF_WEIGHT_MAX,
     CONF_WEIGHT_MIN,
     CONF_WEIGHT_STEP,
     DEFAULT_HOST,
-    DEFAULT_POLL_ACTIVE,
-    DEFAULT_POLL_BREWING,
-    DEFAULT_POLL_IDLE,
-    DEFAULT_POLL_READY,
-    DEFAULT_READY_THRESHOLD,
     DEFAULT_SCRIPT_INSTRUCTION,
     DEFAULT_SCRIPT_NAME,
     DEFAULT_WEIGHT_MAX,
     DEFAULT_WEIGHT_MIN,
     DEFAULT_WEIGHT_STEP,
-    POLLING_OPTION_KEYS,
     XENIA_DOMAIN,
 )
 from .script_parser import COMMAND_WEIGHT_TARGET, parse_instruction
@@ -155,54 +143,36 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
 
 
 class XeniaOptionsFlow(OptionsFlow):
-    """Options flow for Xenia weight management and polling configuration."""
-
-    _MIN_POLL_INTERVAL = 0.5
+    """Options flow for Xenia weight management."""
 
     def __init__(self) -> None:
         """Initialize options flow."""
         super().__init__()
-        self._configure_polling: bool = False
         self._managed_script_id: int | None = None
         self._weight_data: dict[str, Any] = {}
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Show the options entry form and route to weight or polling flow."""
+        """Show the options entry form and route to the weight flow."""
         if user_input is not None:
-            self._configure_polling = user_input.get(CONF_CONFIGURE_POLLING, False)
             if not user_input.get(CONF_WEIGHT_MANAGEMENT_ENABLED):
-                # Disable weight management — strip polling keys if toggle off
-                self._weight_data = {
+                new_data = {
+                    **self.config_entry.options,
                     CONF_WEIGHT_MANAGEMENT_ENABLED: False,
                     CONF_MANAGED_SCRIPT_ID: None,
                 }
-                if not self._configure_polling:
-                    new_data = {
-                        **self.config_entry.options,
-                        **self._weight_data,
-                    }
-                    for key in POLLING_OPTION_KEYS:
-                        new_data.pop(key, None)
-                    return self.async_create_entry(data=new_data)
-                return await self.async_step_configure_polling()
-            # Enabled — proceed to script selection
+                return self.async_create_entry(data=new_data)
             return await self.async_step_select_script()
 
         current_weight = self.config_entry.options.get(
             CONF_WEIGHT_MANAGEMENT_ENABLED, False
-        )
-        # Default the polling toggle to True if any polling key already exists
-        current_polling = any(
-            key in self.config_entry.options for key in POLLING_OPTION_KEYS
         )
         schema = vol.Schema(
             {
                 vol.Required(
                     CONF_WEIGHT_MANAGEMENT_ENABLED, default=current_weight
                 ): bool,
-                vol.Required(CONF_CONFIGURE_POLLING, default=current_polling): bool,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)
@@ -264,11 +234,7 @@ class XeniaOptionsFlow(OptionsFlow):
                 CONF_WEIGHT_MAX: user_input[CONF_WEIGHT_MAX],
                 CONF_WEIGHT_STEP: user_input[CONF_WEIGHT_STEP],
             }
-            if self._configure_polling:
-                return await self.async_step_configure_polling()
             new_data = {**self.config_entry.options, **self._weight_data}
-            for key in POLLING_OPTION_KEYS:
-                new_data.pop(key, None)
             return self.async_create_entry(data=new_data)
 
         current_min = self.config_entry.options.get(CONF_WEIGHT_MIN, DEFAULT_WEIGHT_MIN)
@@ -285,55 +251,6 @@ class XeniaOptionsFlow(OptionsFlow):
             }
         )
         return self.async_show_form(step_id="configure_weight", data_schema=schema)
-
-    async def async_step_configure_polling(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Configure per-state polling intervals."""
-        if user_input is not None:
-            polling_data = {
-                CONF_POLL_BREWING: user_input[CONF_POLL_BREWING],
-                CONF_POLL_ACTIVE: user_input[CONF_POLL_ACTIVE],
-                CONF_POLL_READY: user_input[CONF_POLL_READY],
-                CONF_POLL_IDLE: user_input[CONF_POLL_IDLE],
-                CONF_READY_THRESHOLD: user_input[CONF_READY_THRESHOLD],
-            }
-            new_data = {
-                **self.config_entry.options,
-                **self._weight_data,
-                **polling_data,
-            }
-            return self.async_create_entry(data=new_data)
-
-        opts = self.config_entry.options
-        poll_validator = vol.All(
-            vol.Coerce(float), vol.Range(min=self._MIN_POLL_INTERVAL)
-        )
-        schema = vol.Schema(
-            {
-                vol.Required(
-                    CONF_POLL_BREWING,
-                    default=opts.get(CONF_POLL_BREWING, DEFAULT_POLL_BREWING),
-                ): poll_validator,
-                vol.Required(
-                    CONF_POLL_ACTIVE,
-                    default=opts.get(CONF_POLL_ACTIVE, DEFAULT_POLL_ACTIVE),
-                ): poll_validator,
-                vol.Required(
-                    CONF_POLL_READY,
-                    default=opts.get(CONF_POLL_READY, DEFAULT_POLL_READY),
-                ): poll_validator,
-                vol.Required(
-                    CONF_POLL_IDLE,
-                    default=opts.get(CONF_POLL_IDLE, DEFAULT_POLL_IDLE),
-                ): poll_validator,
-                vol.Required(
-                    CONF_READY_THRESHOLD,
-                    default=opts.get(CONF_READY_THRESHOLD, DEFAULT_READY_THRESHOLD),
-                ): vol.All(vol.Coerce(float), vol.Range(min=0)),
-            }
-        )
-        return self.async_show_form(step_id="configure_polling", data_schema=schema)
 
     async def _create_new_script(self) -> ConfigFlowResult:
         """Create a new script on the machine and store its ID."""
