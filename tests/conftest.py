@@ -48,6 +48,10 @@ class MockXeniaApi:
     def _url(self, path: str) -> str:
         return f"http://{self._host}/api/v2/{path}"
 
+    def for_host(self, host: str) -> "MockXeniaApi":
+        """Return a second mock for another machine on the same session."""
+        return MockXeniaApi(self._mock, host)
+
     # ---- setters (change the payloads in place, so they work at any time) ----
 
     def set_overview(self, **fields: Any) -> None:
@@ -70,10 +74,6 @@ class MockXeniaApi:
     def set_switches(self, switches: dict[str, int]) -> None:
         self._switches.clear()
         self._switches.update(switches)
-
-    def for_host(self, host: str) -> "MockXeniaApi":
-        """Return a second mock for another machine on the same session."""
-        return MockXeniaApi(self._mock, host)
 
     def set_read_script(self, script_id: int, content: str, title: str) -> None:
         """Register a canned response for POST /scripts/read.

@@ -6,7 +6,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -14,10 +14,9 @@ from .const import (
     CONF_WEIGHT_MANAGEMENT_ENABLED,
     POLL_INTERVAL_ACTIVE,
     POLL_INTERVAL_IDLE,
-    XENIA_DOMAIN,
     PowerOnBehavior,
 )
-from .errors import REQUEST_ERRORS, describe_error
+from .errors import REQUEST_ERRORS, update_failed
 from .shot_store import XeniaShotStore
 from .xenia import (
     MachineStatus,
@@ -98,11 +97,7 @@ class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
             overview = await self.xenia.get_overview()
             overview_single = await self.xenia.get_overview_single()
         except REQUEST_ERRORS as err:
-            raise UpdateFailed(
-                translation_domain=XENIA_DOMAIN,
-                translation_key="update_failed",
-                translation_placeholders={"error": describe_error(err)},
-            ) from err
+            raise update_failed(err) from err
 
         if overview.ma_status in (
             MachineStatus.ON,
@@ -151,11 +146,7 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
             user_scripts = await self.xenia.get_scripts()
             switches = await self.xenia.get_switches()
         except REQUEST_ERRORS as err:
-            raise UpdateFailed(
-                translation_domain=XENIA_DOMAIN,
-                translation_key="update_failed",
-                translation_placeholders={"error": describe_error(err)},
-            ) from err
+            raise update_failed(err) from err
         scripts = {**BUILTIN_SCRIPTS, **user_scripts}
 
         managed_instruction: str | None = None

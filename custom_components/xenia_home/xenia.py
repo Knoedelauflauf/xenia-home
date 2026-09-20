@@ -203,10 +203,11 @@ def _optional_float(data: dict, key: str) -> float | None:
         return None
 
 
-# The firmware answers an unknown path with a redirect to index.html, which
-# followed would look like a success, so requests below send
-# allow_redirects=False and any 3xx counts as an error.
 def _raise_for_status(resp: ClientResponse) -> None:
+    """Raise a ClientResponseError for anything but a 2xx status."""
+    # The firmware answers an unknown path with a redirect to index.html, which
+    # followed would look like a success, so callers send allow_redirects=False
+    # and any 3xx counts as an error.
     if resp.status >= 300:
         raise ClientResponseError(
             resp.request_info,
