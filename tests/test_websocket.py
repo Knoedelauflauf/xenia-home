@@ -1,24 +1,10 @@
 """Contract tests for the shot history WebSocket API."""
 
-from collections.abc import Iterator
-
-from aioresponses import aioresponses as AioResponses
-import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.xenia_home.const import XENIA_DOMAIN
 from tests.conftest import MockXeniaApi
 from tests.fixtures.shots import shot_payload
-
-
-@pytest.fixture
-def mock_xenia_api() -> Iterator[MockXeniaApi]:
-    """Override the conftest fixture: hass_ws_client's real localhost
-    connection must bypass aioresponses, which otherwise intercepts every
-    aiohttp request while its mock is active.
-    """
-    with AioResponses(passthrough=["http://127.0.0.1"]) as mock:
-        yield MockXeniaApi(mock)
 
 
 async def _cmd(hass, hass_ws_client, msg, **client_kwargs):
@@ -144,7 +130,7 @@ async def test_unknown_entry_id_errors(hass, init_integration, hass_ws_client):
 async def test_multiple_entries_require_entry_id(
     hass, init_integration, mock_xenia_api, hass_ws_client
 ):
-    second_api = MockXeniaApi(mock_xenia_api._mock, "xenia2.local")
+    second_api = mock_xenia_api.for_host("xenia2.local")
     second_api.register()
     second_entry = MockConfigEntry(
         domain=XENIA_DOMAIN,
@@ -218,21 +204,31 @@ async def test_no_loaded_entry_errors_on_every_command(
         assert result["error"]["code"] == "not_found"
 
 
-async def test_delete_requires_admin(
+async def test_non_admin_can_read_but_not_delete(
     hass, init_integration, hass_ws_client, hass_read_only_access_token
 ):
     shot = shot_payload("2026-07-01T10:00:00.000+00:00")
     await _seed(init_integration, shot)
+    token = hass_read_only_access_token
     msg = await _cmd(
         hass,
         hass_ws_client,
         {"type": "xenia_home/shots/delete", "shot_id": shot["start_time"]},
-        access_token=hass_read_only_access_token,
+        access_token=token,
     )
     assert not msg["success"]
     assert msg["error"]["code"] == "unauthorized"
-    msg = await _cmd(hass, hass_ws_client, {"type": "xenia_home/shots/list"})
-    assert len(msg["result"]["shots"]) == 1
+    msg = await _cmd(
+        hass, hass_ws_client, {"type": "xenia_home/shots/list"}, access_token=token
+    )
+    assert [s["shot_id"] for s in msg["result"]["shots"]] == [shot["start_time"]]
+    msg = await _cmd(
+        hass,
+        hass_ws_client,
+        {"type": "xenia_home/shots/get", "shot_ids": [shot["start_time"]]},
+        access_token=token,
+    )
+    assert msg["success"]
 
 
 async def test_delete_unknown_shot_errors(hass, init_integration, hass_ws_client):

@@ -266,3 +266,4 @@ async def test_switch_raises_translated_error_when_machine_refuses(
             "switch", service, {"entity_id": entity_id}, blocking=True
         )
     assert exc_info.value.translation_key == "write_failed"
+    assert "Internal Server Error" in exc_info.value.translation_placeholders["error"]

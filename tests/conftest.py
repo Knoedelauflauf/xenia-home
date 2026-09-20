@@ -31,8 +31,7 @@ class MockXeniaApi:
     def __init__(self, mock: AioResponses, host: str = DEFAULT_HOST) -> None:
         self._mock = mock
         self._host = host
-        # Default everything to the canonical payloads. Tests override via
-        # setters before init_integration runs.
+        # Default everything to the canonical payloads.
         self._overview: dict[str, Any] = dict(OVERVIEW_PAYLOAD)
         self._overview_single: dict[str, Any] = dict(OVERVIEW_SINGLE_PAYLOAD)
         self._machine: dict[str, Any] = dict(MACHINE_PAYLOAD)
@@ -52,7 +51,7 @@ class MockXeniaApi:
         """Return a second mock for another machine on the same session."""
         return MockXeniaApi(self._mock, host)
 
-    # ---- setters (change the payloads in place, so they work at any time) ----
+    # ---- setters ----
 
     def set_overview(self, **fields: Any) -> None:
         self._overview.clear()
@@ -76,14 +75,9 @@ class MockXeniaApi:
         self._switches.update(switches)
 
     def set_read_script(self, script_id: int, content: str, title: str) -> None:
-        """Register a canned response for POST /scripts/read.
+        """Register the response for POST /scripts/read; served in registration order.
 
-        LIMITATION: aioresponses cannot inspect the POST body, so if multiple
-        scripts are registered the responses are served in registration order
-        on each call, regardless of which script_id the production code
-        requests. For most tests this does not matter because only one
-        read_script call happens. Tests that need per-call control should
-        register their own callbacks via mock_xenia_api._mock.post(...).
+        aioresponses cannot inspect the POST body.
         """
         self._read_script_responses[script_id] = {
             "Content": content,
@@ -207,7 +201,8 @@ def mock_xenia_api() -> Iterator[MockXeniaApi]:
     time, also after `init_integration`. `expect_*` and `fail_*` register the
     mutating endpoints; `assert_*`, `post_count`, and `get_count` inspect calls.
     """
-    with AioResponses() as mock:
+    # hass_client and hass_ws_client talk to localhost for real.
+    with AioResponses(passthrough=["http://127.0.0.1"]) as mock:
         yield MockXeniaApi(mock)
 
 
@@ -246,12 +241,10 @@ async def init_integration(
     mock_config_entry: MockConfigEntry,
     mock_xenia_api: MockXeniaApi,
 ) -> MockConfigEntry:
-    """Register all default API responses, set up the integration, return entry.
+    """Set up the integration with the default responses and return the entry.
 
-    Tests inject this and the integration is fully loaded by the time the
-    test body starts running. Responses that must differ from the defaults at
-    setup time need their own fixture that calls the setters before
-    `register()`; see `init_with_weight` in test_number.py.
+    Responses that must differ at setup time need their own fixture that calls
+    the setters before `register()`; see `init_with_weight` in test_number.py.
     """
     mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)

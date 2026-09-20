@@ -30,7 +30,8 @@ def _get_entry(hass: HomeAssistant, call: ServiceCall) -> XeniaConfigEntry:
     """Return the addressed config entry, or the only loaded one."""
     if (entry_id := call.data.get(ATTR_CONFIG_ENTRY_ID)) is not None:
         return service.async_get_config_entry(hass, XENIA_DOMAIN, entry_id)
-    # The core helper resolves a missing entry_id itself from HA 2026.7 on.
+    # Drop this fallback once the minimum HA is 2026.7; async_get_config_entry
+    # then accepts a missing entry_id.
     entries = hass.config_entries.async_loaded_entries(XENIA_DOMAIN)
     if not entries:
         raise ServiceValidationError(

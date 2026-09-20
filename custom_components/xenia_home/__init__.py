@@ -4,13 +4,16 @@ import logging
 
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     CONF_POWER_ON_BEHAVIOR,
     PLATFORMS,
+    POWER_ON_BEHAVIOR_OPTIONS,
     REMOVED_OPTION_KEYS,
+    XENIA_DOMAIN,
     PowerOnBehavior,
 )
 from .coordinator import (
@@ -26,6 +29,8 @@ from .websocket import async_register_commands
 from .xenia import Xenia
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(XENIA_DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -62,10 +67,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> boo
     )
     # Strip before the update listener is added, or this reloads the entry.
     options = {k: v for k, v in entry.options.items() if k not in REMOVED_OPTION_KEYS}
-    if CONF_POWER_ON_BEHAVIOR in options:
-        entry.runtime_data.power_on_behavior = PowerOnBehavior(
-            options.pop(CONF_POWER_ON_BEHAVIOR)
-        )
+    if (
+        value := options.pop(CONF_POWER_ON_BEHAVIOR, None)
+    ) in POWER_ON_BEHAVIOR_OPTIONS:
+        entry.runtime_data.power_on_behavior = PowerOnBehavior(value)
     if options != entry.options:
         hass.config_entries.async_update_entry(entry, options=options)
 

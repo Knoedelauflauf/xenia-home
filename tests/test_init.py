@@ -53,7 +53,7 @@ async def test_execute_script_by_id_calls_xenia(hass, init_integration, mock_xen
         blocking=True,
     )
     await hass.async_block_till_done()
-    mock_xenia_api.assert_post_called_with("scripts/execute", "10")
+    mock_xenia_api.assert_post_called_with("scripts/execute", '"ID":10}')
 
 
 async def test_execute_script_by_name_resolves_id(
@@ -68,7 +68,7 @@ async def test_execute_script_by_name_resolves_id(
     )
     await hass.async_block_till_done()
     # Default SCRIPTS_PAYLOAD maps MyShot -> 10
-    mock_xenia_api.assert_post_called_with("scripts/execute", "10")
+    mock_xenia_api.assert_post_called_with("scripts/execute", '"ID":10}')
 
 
 async def test_execute_script_by_builtin_name_works(
@@ -83,7 +83,7 @@ async def test_execute_script_by_builtin_name_works(
     )
     await hass.async_block_till_done()
     # BUILTIN_SCRIPTS maps Espresso -> 1
-    mock_xenia_api.assert_post_called_with("scripts/execute", "1")
+    mock_xenia_api.assert_post_called_with("scripts/execute", '"ID":1}')
 
 
 async def test_execute_script_with_no_args_raises_validation_error(
@@ -121,7 +121,7 @@ async def test_execute_script_id_takes_priority_over_name(
     )
     await hass.async_block_till_done()
     # ID 2 (Espresso endless) wins over name MyShot (would be 10)
-    mock_xenia_api.assert_post_called_with("scripts/execute", "2")
+    mock_xenia_api.assert_post_called_with("scripts/execute", '"ID":2}')
 
 
 # ===========================================================================
@@ -191,6 +191,19 @@ async def test_execute_script_without_loaded_entry(hass, init_integration):
     assert exc_info.value.translation_key == "entry_not_loaded"
 
 
+async def test_execute_script_with_unloaded_config_entry_id(hass, init_integration):
+    await hass.config_entries.async_unload(init_integration.entry_id)
+    await hass.async_block_till_done()
+    with pytest.raises(ServiceValidationError) as exc_info:
+        await hass.services.async_call(
+            XENIA_DOMAIN,
+            SERVICE_EXECUTE_SCRIPT,
+            {ATTR_CONFIG_ENTRY_ID: init_integration.entry_id, ATTR_SCRIPT_ID: 10},
+            blocking=True,
+        )
+    assert exc_info.value.translation_key == "service_config_entry_not_loaded"
+
+
 async def test_execute_script_with_unknown_config_entry_id(hass, init_integration):
     with pytest.raises(ServiceValidationError) as exc_info:
         await hass.services.async_call(
@@ -225,7 +238,7 @@ async def test_execute_script_config_entry_id_picks_the_machine(
         blocking=True,
     )
     await hass.async_block_till_done()
-    second_api.assert_post_called_with("scripts/execute", "1")
+    second_api.assert_post_called_with("scripts/execute", '"ID":1}')
     assert mock_xenia_api.post_count("scripts/execute") == 0
 
 

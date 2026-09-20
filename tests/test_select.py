@@ -89,6 +89,17 @@ async def test_power_on_behavior_is_restored_after_restart(
     assert hass.states.get(POWER_ON_BEHAVIOR).state == PowerOnBehavior.STEAM_ON.value
 
 
+async def test_power_on_behavior_ignores_an_unusable_restored_state(
+    hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
+):
+    mock_restore_cache(hass, (State(POWER_ON_BEHAVIOR, "unavailable"),))
+    mock_xenia_api.register()
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get(POWER_ON_BEHAVIOR).state == PowerOnBehavior.STEAM_OFF.value
+
+
 async def test_power_on_behavior_stays_available_without_machine(
     hass, init_integration
 ):
@@ -159,13 +170,6 @@ async def test_switch_config_select_assigns_script_via_xenia(
     hass, init_integration, mock_xenia_api
 ):
     mock_xenia_api.expect_set_switch()
-    # The set_switch implementation does a GET + POST to /switches.
-    # The GET must return the current switches dict so it can be modified.
-    mock_xenia_api._mock.get(
-        mock_xenia_api._url("switches"),
-        payload={"SWITCH_SET_LEFT_LEFT_0": 1, "SWITCH_SET_LEFT_LEFT_1": 2},
-        repeat=True,
-    )
     await hass.services.async_call(
         "select",
         "select_option",

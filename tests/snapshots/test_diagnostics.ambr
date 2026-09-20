@@ -7,7 +7,7 @@
         'esp_fw_minor': 5,
         'fw_version_major': 2,
         'fw_version_minor': 3,
-        'ma_sn': None,
+        'ma_sn': '**REDACTED**',
         'ma_type': 1,
       }),
       'managed_script_instruction': None,
@@ -29,6 +29,7 @@
         'host': '**REDACTED**',
       }),
       'options': dict({
+        'weight_min': 20.0,
       }),
     }),
     'overview': dict({
@@ -64,6 +65,6 @@
       'sb_set_press': 1.5,
     }),
     'power_on_behavior': 'steam_off',
-    'shot_count': 0,
+    'shot_count': 1,
   })
 # ---
