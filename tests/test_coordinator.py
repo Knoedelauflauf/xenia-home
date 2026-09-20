@@ -170,9 +170,9 @@ async def test_data_coordinator_raises_update_failed_on_overview_error() -> None
 
 async def test_data_coordinator_raises_update_failed_on_single_error() -> None:
     xenia = _make_xenia_mock()
-    xenia.get_overview_single = AsyncMock(side_effect=TimeoutError("timeout"))
+    xenia.get_overview_single = AsyncMock(side_effect=TimeoutError())
     coordinator = _make_data_coordinator(xenia=xenia)
-    with pytest.raises(UpdateFailed, match="Xenia fetch failed"):
+    with pytest.raises(UpdateFailed, match="Xenia fetch failed: TimeoutError"):
         await coordinator._async_update_data()
 
 

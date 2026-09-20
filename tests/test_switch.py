@@ -1,5 +1,6 @@
 """Tests for switch.py — XeniaPowerSwitch, XeniaEcoSwitch, XeniaSteamBoilerSwitch."""
 
+from homeassistant.exceptions import HomeAssistantError
 import pytest
 
 from custom_components.xenia_home.const import PowerOnBehavior
@@ -243,3 +244,18 @@ async def test_steam_boiler_turn_off_calls_toggle_sb(
     )
     await hass.async_block_till_done()
     mock_xenia_api.assert_post_called_with("toggle/sb", '"TOGGLE":false')
+
+
+@pytest.mark.parametrize(
+    ("entity_id", "service"),
+    [(POWER, "turn_on"), (POWER, "turn_off"), (ECO, "turn_on"), (ECO, "turn_off")],
+)
+async def test_switch_raises_translated_error_when_machine_refuses(
+    hass, init_integration, mock_xenia_api, entity_id, service
+):
+    mock_xenia_api.fail_post("machine/control")
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await hass.services.async_call(
+            "switch", service, {"entity_id": entity_id}, blocking=True
+        )
+    assert exc_info.value.translation_key == "write_failed"

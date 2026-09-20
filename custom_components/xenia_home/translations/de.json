@@ -4,6 +4,10 @@
       "name": "Skript ausführen",
       "description": "Führt ein Skript auf der Xenia Espressomaschine aus.",
       "fields": {
+        "config_entry_id": {
+          "name": "Konfigurationseintrag",
+          "description": "Die zu verwendende Xenia-Maschine. Nur nötig, wenn mehrere eingerichtet sind."
+        },
         "script_id": {
           "name": "Skript-ID",
           "description": "Die ID des auszuführenden Skripts."
@@ -197,6 +201,26 @@
           "shot_completed": "Bezug abgeschlossen"
         }
       }
+    }
+  },
+  "exceptions": {
+    "write_failed": {
+      "message": "Die Xenia Espressomaschine hat die Anfrage nicht angenommen: {error}"
+    },
+    "entry_not_found": {
+      "message": "Es gibt keinen Xenia-Konfigurationseintrag mit dieser ID."
+    },
+    "entry_not_loaded": {
+      "message": "Der Xenia-Konfigurationseintrag ist nicht geladen."
+    },
+    "multiple_entries": {
+      "message": "Es sind mehrere Xenia-Maschinen eingerichtet. Gib config_entry_id an, um eine auszuwählen."
+    },
+    "script_required": {
+      "message": "Entweder script_id oder script_name ist erforderlich."
+    },
+    "script_not_found": {
+      "message": "Das Skript '{script_name}' wurde auf der Maschine nicht gefunden."
     }
   }
 }

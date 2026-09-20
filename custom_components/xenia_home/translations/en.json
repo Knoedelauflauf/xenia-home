@@ -4,6 +4,10 @@
       "name": "Execute script",
       "description": "Execute a script on the Xenia espresso machine.",
       "fields": {
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "The Xenia machine to use. Only needed when several are set up."
+        },
         "script_id": {
           "name": "Script ID",
           "description": "The ID of the script to execute."
@@ -197,6 +201,26 @@
           "shot_completed": "Shot completed"
         }
       }
+    }
+  },
+  "exceptions": {
+    "write_failed": {
+      "message": "The Xenia espresso machine did not accept the request: {error}"
+    },
+    "entry_not_found": {
+      "message": "No Xenia config entry with this ID exists."
+    },
+    "entry_not_loaded": {
+      "message": "The Xenia config entry is not loaded."
+    },
+    "multiple_entries": {
+      "message": "Several Xenia machines are set up. Pass config_entry_id to pick one."
+    },
+    "script_required": {
+      "message": "Either script_id or script_name is required."
+    },
+    "script_not_found": {
+      "message": "Script '{script_name}' was not found on the machine."
     }
   }
 }

@@ -1,5 +1,6 @@
 """Tests for number.py — temperature setters and weight target."""
 
+from homeassistant.exceptions import HomeAssistantError
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -162,3 +163,31 @@ async def test_weight_number_set_reads_fresh_then_writes_back(
     # The update_script POST goes to the same /scripts/create URL.
     mock_xenia_api.assert_post_called_with("scripts/create", "27 50")
     mock_xenia_api.assert_post_called_with("scripts/create", "Enabled")
+
+
+async def test_set_temp_raises_translated_error_when_machine_refuses(
+    hass, init_integration, mock_xenia_api
+):
+    mock_xenia_api.fail_post("inc_dec")
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await hass.services.async_call(
+            "number",
+            "set_value",
+            {"entity_id": BREW_GROUP_ENTITY, "value": 93.5},
+            blocking=True,
+        )
+    assert exc_info.value.translation_key == "write_failed"
+
+
+async def test_weight_number_raises_translated_error_when_machine_refuses(
+    hass, init_with_weight, mock_xenia_api
+):
+    mock_xenia_api.fail_post("scripts/create")
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await hass.services.async_call(
+            "number",
+            "set_value",
+            {"entity_id": WEIGHT_ENTITY, "value": 50.0},
+            blocking=True,
+        )
+    assert exc_info.value.translation_key == "write_failed"

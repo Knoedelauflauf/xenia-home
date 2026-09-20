@@ -2,7 +2,8 @@
 
 from unittest.mock import patch
 
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.const import ATTR_CONFIG_ENTRY_ID
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -87,22 +88,24 @@ async def test_execute_script_by_builtin_name_works(
 async def test_execute_script_with_no_args_raises_validation_error(
     hass, init_integration
 ):
-    with pytest.raises(ServiceValidationError, match="script_id or script_name"):
+    with pytest.raises(ServiceValidationError) as exc_info:
         await hass.services.async_call(
             XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT, {}, blocking=True
         )
+    assert exc_info.value.translation_key == "script_required"
 
 
 async def test_execute_script_with_unknown_name_raises_validation_error(
     hass, init_integration
 ):
-    with pytest.raises(ServiceValidationError, match="not found"):
+    with pytest.raises(ServiceValidationError) as exc_info:
         await hass.services.async_call(
             XENIA_DOMAIN,
             SERVICE_EXECUTE_SCRIPT,
             {ATTR_SCRIPT_NAME: "Ghost"},
             blocking=True,
         )
+    assert exc_info.value.translation_key == "script_not_found"
 
 
 async def test_execute_script_id_takes_priority_over_name(
@@ -133,19 +136,17 @@ async def test_unload_entry_keeps_service_registered(hass, init_integration):
     await hass.async_block_till_done()
     assert hass.services.has_service(XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT)
 
-    with pytest.raises(ServiceValidationError, match="No Xenia config entry"):
+    with pytest.raises(ServiceValidationError) as exc_info:
         await hass.services.async_call(
             XENIA_DOMAIN,
             SERVICE_EXECUTE_SCRIPT,
             {ATTR_SCRIPT_ID: 10},
             blocking=True,
         )
+    assert exc_info.value.translation_key == "entry_not_loaded"
 
 
-async def test_unload_entry_keeps_service_when_other_entries_remain(
-    hass, init_integration, mock_xenia_api
-):
-    # Register a second integration entry against a second host
+async def _add_second_entry(hass, mock_xenia_api) -> MockConfigEntry:
     second = MockConfigEntry(
         domain=XENIA_DOMAIN,
         title="xenia2.local",
@@ -153,7 +154,6 @@ async def test_unload_entry_keeps_service_when_other_entries_remain(
         data={"host": "xenia2.local"},
         options={},
     )
-    # Mock the second host's API endpoints
     for endpoint in ("overview", "overview_single", "machine", "switches"):
         mock_xenia_api._mock.get(
             f"http://xenia2.local/api/v2/{endpoint}",
@@ -168,11 +168,84 @@ async def test_unload_entry_keeps_service_when_other_entries_remain(
     second.add_to_hass(hass)
     await hass.config_entries.async_setup(second.entry_id)
     await hass.async_block_till_done()
+    return second
 
-    # Now unload the first — service must stay
+
+async def test_unload_entry_keeps_service_when_other_entries_remain(
+    hass, init_integration, mock_xenia_api
+):
+    await _add_second_entry(hass, mock_xenia_api)
     await hass.config_entries.async_unload(init_integration.entry_id)
     await hass.async_block_till_done()
     assert hass.services.has_service(XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT)
+
+
+# ===========================================================================
+# execute_script: addressing a machine and machine errors
+# ===========================================================================
+
+
+async def test_execute_script_raises_translated_error_when_machine_refuses(
+    hass, init_integration, mock_xenia_api
+):
+    mock_xenia_api.fail_post("scripts/execute")
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await hass.services.async_call(
+            XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT, {ATTR_SCRIPT_ID: 10}, blocking=True
+        )
+    assert exc_info.value.translation_key == "write_failed"
+
+
+async def test_execute_script_with_unknown_config_entry_id(hass, init_integration):
+    with pytest.raises(ServiceValidationError) as exc_info:
+        await hass.services.async_call(
+            XENIA_DOMAIN,
+            SERVICE_EXECUTE_SCRIPT,
+            {ATTR_CONFIG_ENTRY_ID: "nope", ATTR_SCRIPT_ID: 10},
+            blocking=True,
+        )
+    assert exc_info.value.translation_key == "entry_not_found"
+
+
+async def test_execute_script_with_unloaded_config_entry_id(hass, init_integration):
+    await hass.config_entries.async_unload(init_integration.entry_id)
+    await hass.async_block_till_done()
+    with pytest.raises(ServiceValidationError) as exc_info:
+        await hass.services.async_call(
+            XENIA_DOMAIN,
+            SERVICE_EXECUTE_SCRIPT,
+            {ATTR_CONFIG_ENTRY_ID: init_integration.entry_id, ATTR_SCRIPT_ID: 10},
+            blocking=True,
+        )
+    assert exc_info.value.translation_key == "entry_not_loaded"
+
+
+async def test_execute_script_needs_config_entry_id_with_several_machines(
+    hass, init_integration, mock_xenia_api
+):
+    await _add_second_entry(hass, mock_xenia_api)
+    with pytest.raises(ServiceValidationError) as exc_info:
+        await hass.services.async_call(
+            XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT, {ATTR_SCRIPT_ID: 10}, blocking=True
+        )
+    assert exc_info.value.translation_key == "multiple_entries"
+
+
+async def test_execute_script_config_entry_id_picks_the_machine(
+    hass, init_integration, mock_xenia_api
+):
+    second = await _add_second_entry(hass, mock_xenia_api)
+    mock_xenia_api._mock.post(
+        "http://xenia2.local/api/v2/scripts/execute", status=200, repeat=True
+    )
+    await hass.services.async_call(
+        XENIA_DOMAIN,
+        SERVICE_EXECUTE_SCRIPT,
+        {ATTR_CONFIG_ENTRY_ID: second.entry_id, ATTR_SCRIPT_ID: 1},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    assert mock_xenia_api.post_count("scripts/execute") == 0
 
 
 # ===========================================================================

@@ -151,6 +151,12 @@ class MockXeniaApi:
     def expect_execute_script(self) -> None:
         self._mock.post(self._url("scripts/execute"), status=200, repeat=True)
 
+    def fail_post(self, path: str, status: int = 500) -> None:
+        self._mock.post(self._url(path), status=status, repeat=True)
+
+    def fail_get(self, path: str, status: int = 500) -> None:
+        self._mock.get(self._url(path), status=status, repeat=True)
+
     def expect_stop_script(self) -> None:
         # Unlike the other mutating calls, /scripts/stop is a GET.
         self._mock.get(self._url("scripts/stop"), status=200, repeat=True)

@@ -197,6 +197,7 @@ wins and `script_name` is ignored.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `config_entry_id` | string | Only with several machines | The config entry of the machine to use. With a single machine it can be left out. |
 | `script_id` | integer | One of `script_id` / `script_name` is required | Numeric ID (≥ 1) of the script as stored on the machine. Takes precedence over `script_name` when both are supplied. |
 | `script_name` | string | One of `script_id` / `script_name` is required | Name of the script. Ignored when `script_id` is also supplied. |
 

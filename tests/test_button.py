@@ -1,5 +1,6 @@
 """Tests for button.py — execute script button."""
 
+from homeassistant.exceptions import HomeAssistantError
 import pytest
 
 BUTTON_ENTITY_ID = "button.xenia_espresso_machine_execute_script"
@@ -69,3 +70,22 @@ async def test_stop_button_press_calls_stop_script(
     mock_xenia_api.expect_stop_script()
     await _press_button(hass, STOP_BUTTON_ENTITY_ID)
     assert mock_xenia_api.get_count("scripts/stop") == 1
+
+
+async def test_execute_button_raises_translated_error_when_machine_refuses(
+    hass, init_integration, mock_xenia_api
+):
+    mock_xenia_api.fail_post("scripts/execute")
+    init_integration.runtime_data.config_coordinator.selected_script_id = 10
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await _press_button(hass)
+    assert exc_info.value.translation_key == "write_failed"
+
+
+async def test_stop_button_raises_translated_error_when_machine_refuses(
+    hass, init_integration, mock_xenia_api
+):
+    mock_xenia_api.fail_get("scripts/stop")
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await _press_button(hass, STOP_BUTTON_ENTITY_ID)
+    assert exc_info.value.translation_key == "write_failed"

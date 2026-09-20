@@ -25,6 +25,7 @@ from .const import (
     DEFAULT_POWER_ON_BEHAVIOR,
     DEFAULT_READY_THRESHOLD,
 )
+from .errors import describe_error
 from .shot_store import XeniaShotStore
 from .xenia import (
     MachineStatus,
@@ -121,7 +122,7 @@ class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
             overview = await self.xenia.get_overview()
             overview_single = await self.xenia.get_overview_single()
         except (ClientError, OSError, TimeoutError) as err:
-            raise UpdateFailed(f"Xenia fetch failed: {err}") from err
+            raise UpdateFailed(f"Xenia fetch failed: {describe_error(err)}") from err
 
         match overview.ma_status:
             case MachineStatus.BREWING | MachineStatus.DRAINING:
@@ -180,7 +181,9 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
             user_scripts = await self.xenia.get_scripts()
             switches = await self.xenia.get_switches()
         except (ClientError, OSError, TimeoutError) as err:
-            raise UpdateFailed(f"Xenia config fetch failed: {err}") from err
+            raise UpdateFailed(
+                f"Xenia config fetch failed: {describe_error(err)}"
+            ) from err
         scripts = {**BUILTIN_SCRIPTS, **user_scripts}
 
         managed_instruction: str | None = None

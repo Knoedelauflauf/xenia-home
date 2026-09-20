@@ -2,6 +2,12 @@ execute_script:
   name: Execute script
   description: Execute a script on the Xenia espresso machine.
   fields:
+    config_entry_id:
+      name: Config entry
+      description: The Xenia machine to use. Only needed when several are set up.
+      selector:
+        config_entry:
+          integration: xenia_home
     script_id:
       name: Script ID
       description: The ID of the script to execute.

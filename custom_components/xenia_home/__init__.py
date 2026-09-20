@@ -3,10 +3,11 @@
 import logging
 
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import CONF_HOST
+from homeassistant.const import ATTR_CONFIG_ENTRY_ID, CONF_HOST
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import ConfigEntrySelector
 from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
 
@@ -17,6 +18,7 @@ from .coordinator import (
     XeniaDataUpdateCoordinator,
     XeniaRuntimeData,
 )
+from .errors import machine_write
 from .recorder_import import async_import_recorder_shots
 from .shot_store import XeniaShotStore
 from .websocket import async_register_commands
@@ -30,10 +32,38 @@ ATTR_SCRIPT_NAME = "script_name"
 
 SERVICE_EXECUTE_SCRIPT_SCHEMA = vol.Schema(
     {
+        vol.Optional(ATTR_CONFIG_ENTRY_ID): ConfigEntrySelector(
+            {"integration": XENIA_DOMAIN}
+        ),
         vol.Optional(ATTR_SCRIPT_ID): vol.Coerce(int),
         vol.Optional(ATTR_SCRIPT_NAME): str,
     }
 )
+
+
+def _resolve_entry(hass: HomeAssistant, call: ServiceCall) -> XeniaConfigEntry:
+    """Return the addressed config entry, or the only loaded one."""
+    if (entry_id := call.data.get(ATTR_CONFIG_ENTRY_ID)) is not None:
+        entry = hass.config_entries.async_get_entry(entry_id)
+        if entry is None or entry.domain != XENIA_DOMAIN:
+            raise ServiceValidationError(
+                translation_domain=XENIA_DOMAIN, translation_key="entry_not_found"
+            )
+        if entry.state is not ConfigEntryState.LOADED:
+            raise ServiceValidationError(
+                translation_domain=XENIA_DOMAIN, translation_key="entry_not_loaded"
+            )
+        return entry
+    entries = hass.config_entries.async_loaded_entries(XENIA_DOMAIN)
+    if not entries:
+        raise ServiceValidationError(
+            translation_domain=XENIA_DOMAIN, translation_key="entry_not_loaded"
+        )
+    if len(entries) > 1:
+        raise ServiceValidationError(
+            translation_domain=XENIA_DOMAIN, translation_key="multiple_entries"
+        )
+    return entries[0]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -42,37 +72,26 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def handle_execute_script(call: ServiceCall) -> None:
         """Handle the execute_script service call."""
-        entries = [
-            entry
-            for entry in hass.config_entries.async_entries(XENIA_DOMAIN)
-            if entry.state is ConfigEntryState.LOADED
-        ]
-        if not entries:
-            raise ServiceValidationError(
-                "No Xenia config entry is loaded; cannot execute script"
-            )
-
+        runtime = _resolve_entry(hass, call).runtime_data
         script_id = call.data.get(ATTR_SCRIPT_ID)
         script_name = call.data.get(ATTR_SCRIPT_NAME)
-
         if script_id is None and script_name is None:
-            raise ServiceValidationError("Either script_id or script_name is required")
-
-        # Use the first loaded entry's coordinators
-        entry = entries[0]
-        runtime = entry.runtime_data
-        xenia = runtime.coordinator.xenia
-        config_coordinator = runtime.config_coordinator
-
+            raise ServiceValidationError(
+                translation_domain=XENIA_DOMAIN, translation_key="script_required"
+            )
         if script_id is None:
-            scripts = config_coordinator.data.scripts
+            scripts = runtime.config_coordinator.data.scripts
             script_id = next(
                 (sid for sid, title in scripts.items() if title == script_name), None
             )
             if script_id is None:
-                raise ServiceValidationError(f"Script '{script_name}' not found")
-
-        await xenia.execute_script(script_id)
+                raise ServiceValidationError(
+                    translation_domain=XENIA_DOMAIN,
+                    translation_key="script_not_found",
+                    translation_placeholders={"script_name": str(script_name)},
+                )
+        async with machine_write():
+            await runtime.coordinator.xenia.execute_script(script_id)
 
     hass.services.async_register(
         XENIA_DOMAIN,

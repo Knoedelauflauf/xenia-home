@@ -34,6 +34,7 @@ from .coordinator import (
     XeniaDataUpdateCoordinator,
 )
 from .entity import XeniaEntity, build_device_info
+from .errors import machine_write
 from .script_parser import get_weight_target, set_weight_target
 
 _LOGGER = logging.getLogger(__name__)
@@ -139,7 +140,8 @@ class XeniaNumber(XeniaEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Push a new value to the machine and trigger a refresh."""
         try:
-            await self.entity_description.set_fn(self.coordinator, float(value))
+            async with machine_write():
+                await self.entity_description.set_fn(self.coordinator, float(value))
         finally:
             await self.coordinator.async_request_refresh()
 
@@ -194,13 +196,15 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
         if script_id is None:
             return
         # Read fresh from machine to avoid stale data
-        script_data = await self.coordinator.xenia.read_script(int(script_id))
+        async with machine_write():
+            script_data = await self.coordinator.xenia.read_script(int(script_id))
         instruction = script_data.get("Content")
         name = script_data.get("Title")
         if instruction is None or name is None:
             return
         new_instruction = set_weight_target(instruction, value)
-        await self.coordinator.xenia.update_script(
-            int(script_id), name, new_instruction
-        )
+        async with machine_write():
+            await self.coordinator.xenia.update_script(
+                int(script_id), name, new_instruction
+            )
         await self.coordinator.async_request_refresh()

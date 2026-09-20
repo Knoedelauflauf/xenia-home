@@ -11,6 +11,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .const import POWER_ON_BEHAVIOR_OPTIONS, XENIA_DOMAIN
 from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
 from .entity import XeniaEntity
+from .errors import machine_write
 
 PARALLEL_UPDATES = 1
 
@@ -179,7 +180,8 @@ class SwitchConfigSelect(XeniaEntity, SelectEntity):
         scripts = config_coordinator.data.scripts
         script_id = next((sid for sid, title in scripts.items() if title == option), 0)
         # Update the switch assignment
-        await self.coordinator.xenia.set_switch(self._switch_key, script_id)
+        async with machine_write():
+            await self.coordinator.xenia.set_switch(self._switch_key, script_id)
         # Refresh config data
         await config_coordinator.async_request_refresh()
         self.async_write_ha_state()

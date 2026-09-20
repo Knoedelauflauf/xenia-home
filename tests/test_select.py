@@ -3,7 +3,7 @@
 from datetime import timedelta
 
 from homeassistant.core import State
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 import pytest
 from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
@@ -187,3 +187,17 @@ async def test_script_rename_reaches_the_select_without_a_reload(
     options = hass.states.get(SCRIPT).attributes["options"]
     assert "MyShot renamed" in options
     assert "MyShot" not in options
+
+
+async def test_switch_config_select_raises_translated_error_when_machine_refuses(
+    hass, init_integration, mock_xenia_api
+):
+    mock_xenia_api.fail_post("switches")
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await hass.services.async_call(
+            "select",
+            "select_option",
+            {"entity_id": SWITCH_LEFT_SHORT, "option": "MyShot"},
+            blocking=True,
+        )
+    assert exc_info.value.translation_key == "write_failed"
