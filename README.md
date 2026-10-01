@@ -218,8 +218,8 @@ expose a slider on a dashboard.
 The integration stores every completed shot itself (indefinitely, in
 `.storage/xenia_home/`); history does not depend on the recorder and survives recorder
 purges. Other apps can query it over the Home Assistant WebSocket API with any
-authenticated connection; a long-lived access token is enough, no admin
-rights required.
+authenticated connection; a long-lived access token is enough. Reading needs
+no admin rights, deleting does.
 
 Timestamps are millisecond-precision ISO 8601 strings, directly parseable
 with JavaScript's `new Date(...)`. A shot's `shot_id` is its `start_time`.
@@ -238,7 +238,8 @@ Result: `{"shots": [...]}` in request order; each entry is the complete
 `shot_completed` event payload plus `shot_id`, unknown ids are omitted.
 
 **`xenia_home/shots/delete`**: remove one shot. Required: `shot_id`.
-Errors with code `not_found` for unknown ids.
+Admin users only, others get `unauthorized`. Errors with code `not_found` for
+unknown ids.
 
 All commands error with `not_found` (no or unknown entry) and
 `multiple_entries` (several entries loaded but no `entry_id` given);
