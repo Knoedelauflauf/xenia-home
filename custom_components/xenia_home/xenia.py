@@ -373,8 +373,11 @@ class Xenia:
 
     async def set_switch(self, switch_key: str, script_id: int) -> None:
         """Set a switch to trigger a specific script."""
-        # Fetch current switches, update the one key, and send all back
-        current = await self.get_switches()
+        current = {
+            k: v
+            for k, v in (await self.get_switches()).items()
+            if k.startswith("SWITCH_SET_")
+        }
         current[switch_key] = script_id
         # Convert all values to strings as per API format
         data = "{" + ",".join(f'"{k}":"{v}"' for k, v in current.items()) + "}"

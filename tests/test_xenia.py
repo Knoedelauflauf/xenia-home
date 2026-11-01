@@ -1,5 +1,6 @@
 """Tests for xenia.py — the HTTP API client."""
 
+import json
 from typing import Any
 
 from aiohttp import ClientError, ClientResponseError, ClientSession
@@ -501,14 +502,21 @@ async def test_get_switches_returns_dict(mock_api, xenia) -> None:
     }
 
 
-async def test_set_switch_preserves_other_keys(mock_api, xenia) -> None:
-    mock_api.get(f"{BASE}/switches", payload={"KEY_A": 1, "KEY_B": 2})
+async def test_set_switch_sends_only_switch_assignments(mock_api, xenia) -> None:
+    mock_api.get(
+        f"{BASE}/switches",
+        payload={
+            "SWITCH_SET_LEFT_LEFT_0": 1,
+            "SWITCH_SET_RIGHT_RIGHT_1": 2,
+            "MA_BEVERAGE_WEIGHT_DBL_INT_SCALE": 36,
+            "MA_SET_TIMER_POWERDOWN": 10,
+            "VIEW": 0,
+        },
+    )
     mock_api.post(f"{BASE}/switches", status=200)
-    await xenia.set_switch("KEY_A", 99)
-    body = str(_last_post_body(mock_api, f"{BASE}/switches"))
-    assert "KEY_A" in body
-    assert "99" in body
-    assert "KEY_B" in body
+    await xenia.set_switch("SWITCH_SET_LEFT_LEFT_0", 99)
+    body = json.loads(_last_post_body(mock_api, f"{BASE}/switches"))
+    assert body == {"SWITCH_SET_LEFT_LEFT_0": "99", "SWITCH_SET_RIGHT_RIGHT_1": "2"}
 
 
 # ===========================================================================
