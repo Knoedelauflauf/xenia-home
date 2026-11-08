@@ -28,10 +28,6 @@ class MachineControl(IntEnum):
     SB_ON = 4
     ON_SB_OFF = 5
 
-    def __str__(self):
-        """Return the member name for logging."""
-        return self.name
-
 
 class MachineStatus(IntEnum):
     """Machine state reported in `MA_STATUS`."""
@@ -43,9 +39,10 @@ class MachineStatus(IntEnum):
     DRAINING = 4
     UNKNOWN = 99
 
-    def __str__(self):
-        """Return the member name for logging."""
-        return self.name
+
+ACTIVE_STATUSES = frozenset(
+    {MachineStatus.ON, MachineStatus.BREWING, MachineStatus.DRAINING}
+)
 
 
 class SteamBoilerStatus(IntEnum):
@@ -54,10 +51,6 @@ class SteamBoilerStatus(IntEnum):
     OFF = 1
     ON = 2
     UNKNOWN = 99
-
-    def __str__(self):
-        """Return the member name for logging."""
-        return self.name
 
 
 @dataclass
@@ -144,7 +137,6 @@ class XeniaOverviewSingleData:
             psp=int(data.get("PSP", 0)),
             ma_mac=data.get("MA_MAC", ""),
             ma_extractions_start=int(data.get("MA_EXTRACTIONS_START", 0)),
-            # pop up is optional
             pop_up=data.get("POP_UP"),
         )
 
@@ -235,43 +227,43 @@ class Xenia:
         self._session = session
 
     async def device_connected(self) -> bool:
-        """Return True if the machine answered with an `MA_STATUS` payload."""
+        """Return whether a Xenia machine answers on the host."""
         try:
-            json_data = await self._get_overview_raw()
-            if "MA_STATUS" in json_data:
-                return True
-        except (ClientError, OSError, TimeoutError) as e:
-            _LOGGER.info("Connection test failed: %s", e)
+            overview = await self._get_overview_raw()
+        except (ClientError, OSError, TimeoutError) as err:
+            _LOGGER.debug("Connection test failed: %s", err)
             return False
-        return False
+        return "MA_STATUS" in overview
 
-    async def machine_turn_on(self, sb_on: bool = True):
+    async def machine_turn_on(self, sb_on: bool = True) -> None:
         """Turn the machine on, optionally suppressing the steam boiler."""
         if sb_on:
             await self._control_machine(MachineControl.ON)
         else:
             await self._control_machine(MachineControl.ON_SB_OFF)
 
-    async def machine_turn_off(self):
+    async def machine_turn_off(self) -> None:
         """Turn the machine off."""
         await self._control_machine(MachineControl.OFF)
 
-    async def machine_set_eco(self):
+    async def machine_set_eco(self) -> None:
         """Switch the machine into eco mode."""
         await self._control_machine(MachineControl.ECO)
 
-    async def sb_turn_on(self):
+    async def sb_turn_on(self) -> None:
         """Turn the steam boiler on."""
         await self._toggle_sb(True)
 
-    async def sb_turn_off(self):
+    async def sb_turn_off(self) -> None:
         """Turn the steam boiler off."""
         await self._toggle_sb(False)
 
+    def _url(self, path: str) -> str:
+        return f"http://{self._host}/api/v2/{path}"
+
     async def _get(self, path: str, timeout: int = 10) -> bytes:
-        url = f"http://{self._host}/api/v2/{path}"
         async with self._session.get(
-            url,
+            self._url(path),
             timeout=ClientTimeout(total=timeout),
             allow_redirects=False,
         ) as resp:
@@ -296,12 +288,10 @@ class Xenia:
         return XeniaMachineData.from_dict(_json(await self._get("machine")))
 
     async def _post(self, path: str, data: str, timeout: int = 5) -> bytes:
-        url = f"http://{self._host}/api/v2/{path}"
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
         async with self._session.post(
-            url,
+            self._url(path),
             data=data,
-            headers=headers,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
             timeout=ClientTimeout(total=timeout),
             allow_redirects=False,
         ) as resp:
@@ -327,7 +317,7 @@ class Xenia:
         await self._post("inc_dec_bb", data)
 
     async def get_scripts(self) -> dict[int, str]:
-        """Get available scripts as {id: title} dict."""
+        """Return the scripts as {id: title}."""
         data = _json(await self._get("scripts/list"))
         index_list = data.get("index_list", [])
         title_list = data.get("title_list", [])
@@ -343,14 +333,11 @@ class Xenia:
         await self._get("scripts/stop")
 
     async def get_switches(self) -> dict[str, int]:
-        """Get switch-to-script mappings."""
+        """Return the switch settings, including the switch-to-script assignments."""
         return _json(await self._get("switches"))
 
     async def read_script(self, script_id: int) -> dict[str, str]:
-        """Read a script's content by ID.
-
-        Returns dict with 'Content' (instruction) and 'Title' keys.
-        """
+        """Return a script as {"Content": instruction, "Title": title}."""
         file_name = f"{script_id:03d}"
         data = f'{{"FILE_NAME":"{file_name}"}}'
         return _json(await self._post("scripts/read", data, timeout=10))
@@ -372,13 +359,12 @@ class Xenia:
         await self._post("scripts/create", data)
 
     async def set_switch(self, switch_key: str, script_id: int) -> None:
-        """Set a switch to trigger a specific script."""
+        """Assign a script to a switch."""
         current = {
             k: v
             for k, v in (await self.get_switches()).items()
             if k.startswith("SWITCH_SET_")
         }
         current[switch_key] = script_id
-        # Convert all values to strings as per API format
         data = "{" + ",".join(f'"{k}":"{v}"' for k, v in current.items()) + "}"
         await self._post("switches", data)

@@ -1,63 +1,52 @@
-"""Select platform for Xenia espresso machine."""
+"""Select platform for the Xenia espresso machine."""
 
-from dataclasses import dataclass
-
-from homeassistant.components.select import SelectEntity
+from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import POWER_ON_BEHAVIOR_OPTIONS, XENIA_DOMAIN, PowerOnBehavior
 from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
-from .entity import XeniaEntity, machine_id
+from .entity import XeniaEntity
 from .errors import machine_write
 
 PARALLEL_UPDATES = 1
 
 
-@dataclass(frozen=True, kw_only=True)
-class SwitchDescription:
-    """Description of a physical switch on the machine."""
-
-    key: str
-    translation_key: str
-
-
-SWITCH_TYPES: tuple[SwitchDescription, ...] = (
-    SwitchDescription(
-        key="SWITCH_SET_LEFT_LEFT_0",
-        translation_key="switch_left_short",
+SWITCH_TYPES: tuple[SelectEntityDescription, ...] = (
+    SelectEntityDescription(
+        key="SWITCH_SET_LEFT_LEFT_0", translation_key="switch_left_short"
     ),
-    SwitchDescription(
-        key="SWITCH_SET_LEFT_LEFT_1",
-        translation_key="switch_left_long",
+    SelectEntityDescription(
+        key="SWITCH_SET_LEFT_LEFT_1", translation_key="switch_left_long"
     ),
-    SwitchDescription(
-        key="SWITCH_SET_RIGHT_LEFT_0",
-        translation_key="switch_right_left_short",
+    SelectEntityDescription(
+        key="SWITCH_SET_RIGHT_LEFT_0", translation_key="switch_right_left_short"
     ),
-    SwitchDescription(
-        key="SWITCH_SET_RIGHT_LEFT_1",
-        translation_key="switch_right_left_long",
+    SelectEntityDescription(
+        key="SWITCH_SET_RIGHT_LEFT_1", translation_key="switch_right_left_long"
     ),
-    SwitchDescription(
-        key="SWITCH_SET_RIGHT_RIGHT_0",
-        translation_key="switch_right_right_short",
+    SelectEntityDescription(
+        key="SWITCH_SET_RIGHT_RIGHT_0", translation_key="switch_right_right_short"
     ),
-    SwitchDescription(
-        key="SWITCH_SET_RIGHT_RIGHT_1",
-        translation_key="switch_right_right_long",
+    SelectEntityDescription(
+        key="SWITCH_SET_RIGHT_RIGHT_1", translation_key="switch_right_right_long"
     ),
 )
+
+
+def _script_id(scripts: dict[int, str], title: str) -> int:
+    # Home Assistant only passes options the select offers.
+    return next(sid for sid, name in scripts.items() if name == title)
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: XeniaConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up Xenia select entities."""
+    """Set up the power on behavior, script and switch selects."""
     coordinator = entry.runtime_data.coordinator
     entities: list[SelectEntity] = [
         PowerOnBehaviorSelect(coordinator),
@@ -68,18 +57,16 @@ async def async_setup_entry(
 
 
 class PowerOnBehaviorSelect(XeniaEntity, SelectEntity, RestoreEntity):
-    """Select entity for power on behavior."""
+    """Whether the steam boiler turns on with the machine; kept by Home Assistant."""
 
     _attr_entity_category = EntityCategory.CONFIG
     _attr_translation_key = "power_on_behavior"
     _attr_options = POWER_ON_BEHAVIOR_OPTIONS
 
     def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
-        """Initialize the select entity."""
+        """Initialize the select."""
         super().__init__(coordinator)
-        self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_power_on_behavior_{machine_id(coordinator.config_entry)}"
-        )
+        self._attr_unique_id = f"{XENIA_DOMAIN}_power_on_behavior_{self.machine_id}"
 
     @property
     def available(self) -> bool:
@@ -101,36 +88,33 @@ class PowerOnBehaviorSelect(XeniaEntity, SelectEntity, RestoreEntity):
 
     @property
     def current_option(self) -> str:
-        """Return the current selected option."""
+        """Return the power on behavior."""
         return self.runtime_data.power_on_behavior
 
     async def async_select_option(self, option: str) -> None:
-        """Handle option selection."""
+        """Set the power on behavior."""
         self.runtime_data.power_on_behavior = PowerOnBehavior(option)
         self.async_write_ha_state()
 
 
 class ScriptSelect(XeniaEntity, SelectEntity):
-    """Select entity for choosing a script to execute."""
+    """The script the execute button runs."""
 
     _attr_translation_key = "script"
 
     def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
-        """Initialize the select entity."""
+        """Initialize the select."""
         super().__init__(coordinator)
-        self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_script_{machine_id(coordinator.config_entry)}"
-        )
+        self._attr_unique_id = f"{XENIA_DOMAIN}_script_{self.machine_id}"
 
     @property
     def options(self) -> list[str]:
-        """Return the list of available scripts."""
-        scripts = self.runtime_data.config_coordinator.data.scripts
-        return list(scripts.values())
+        """Return the script titles."""
+        return list(self.runtime_data.config_coordinator.data.scripts.values())
 
     @property
     def current_option(self) -> str | None:
-        """Return the currently selected script."""
+        """Return the selected script."""
         config_coordinator = self.runtime_data.config_coordinator
         script_id = config_coordinator.selected_script_id
         if script_id is None:
@@ -138,55 +122,47 @@ class ScriptSelect(XeniaEntity, SelectEntity):
         return config_coordinator.data.scripts.get(script_id)
 
     async def async_select_option(self, option: str) -> None:
-        """Handle script selection."""
+        """Select a script."""
         config_coordinator = self.runtime_data.config_coordinator
-        scripts = config_coordinator.data.scripts
-        script_id = next(
-            (sid for sid, title in scripts.items() if title == option), None
+        config_coordinator.selected_script_id = _script_id(
+            config_coordinator.data.scripts, option
         )
-        if script_id is not None:
-            config_coordinator.selected_script_id = script_id
         self.async_write_ha_state()
 
 
 class SwitchConfigSelect(XeniaEntity, SelectEntity):
-    """Select entity for configuring a physical switch."""
+    """The script a switch on the machine runs."""
 
     _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
         self,
         coordinator: XeniaDataUpdateCoordinator,
-        description: SwitchDescription,
+        description: SelectEntityDescription,
     ) -> None:
-        """Initialize the select entity."""
+        """Initialize the select."""
         super().__init__(coordinator)
-        self._switch_key = description.key
-        self._attr_translation_key = description.translation_key
-        self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_{description.key}_{machine_id(coordinator.config_entry)}"
-        )
+        self.entity_description = description
+        self._attr_unique_id = f"{XENIA_DOMAIN}_{description.key}_{self.machine_id}"
 
     @property
     def options(self) -> list[str]:
-        """Return the list of available scripts."""
-        scripts = self.runtime_data.config_coordinator.data.scripts
-        return list(scripts.values())
+        """Return the script titles."""
+        return list(self.runtime_data.config_coordinator.data.scripts.values())
 
     @property
     def current_option(self) -> str | None:
-        """Return the currently assigned script."""
-        config_coordinator = self.runtime_data.config_coordinator
-        switches = config_coordinator.data.switches
-        script_id = switches.get(self._switch_key, 0)
-        return config_coordinator.data.scripts.get(script_id)
+        """Return the assigned script."""
+        data = self.runtime_data.config_coordinator.data
+        return data.scripts.get(data.switches.get(self.entity_description.key, 0))
 
     async def async_select_option(self, option: str) -> None:
-        """Handle switch script assignment."""
+        """Assign a script to the switch."""
         config_coordinator = self.runtime_data.config_coordinator
-        scripts = config_coordinator.data.scripts
-        script_id = next((sid for sid, title in scripts.items() if title == option), 0)
         async with machine_write():
-            await self.coordinator.xenia.set_switch(self._switch_key, script_id)
+            await self.coordinator.xenia.set_switch(
+                self.entity_description.key,
+                _script_id(config_coordinator.data.scripts, option),
+            )
         await config_coordinator.async_request_refresh()
         self.async_write_ha_state()

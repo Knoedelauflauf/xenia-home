@@ -49,7 +49,6 @@ class PowerOnBehavior(StrEnum):
 
     STEAM_ON = "steam_on"
     STEAM_OFF = "steam_off"
-    # REMEMBER_LAST = "remember_last"
 
 
 POWER_ON_BEHAVIOR_OPTIONS: list[str] = [e.value for e in PowerOnBehavior]

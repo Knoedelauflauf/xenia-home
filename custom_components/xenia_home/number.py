@@ -2,7 +2,6 @@
 
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
-import logging
 from typing import Any, Final
 
 from homeassistant.components.number import (
@@ -16,8 +15,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import StateType
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
@@ -40,29 +38,17 @@ from .coordinator import (
 from .entity import XeniaEntity, build_device_info, machine_id
 from .errors import machine_write
 from .script_parser import get_weight_target, set_weight_target
-
-_LOGGER = logging.getLogger(__name__)
+from .xenia import Xenia
 
 PARALLEL_UPDATES = 1
 
 
 @dataclass(frozen=True, kw_only=True)
-class XeniaEntityDescriptionMixinNumber:
-    """Mixin adding `value_fn` and `set_fn` to a number description."""
+class XeniaNumberEntityDescription(NumberEntityDescription):
+    """Describes a setpoint of the machine."""
 
-    value_fn: Callable[[XeniaCoordinatorData], StateType]
-    set_fn: Callable[[XeniaDataUpdateCoordinator, float], Coroutine[Any, Any, None]]
-
-
-@dataclass(frozen=True, kw_only=True)
-class XeniaNumberEntityDescription(
-    NumberEntityDescription, XeniaEntityDescriptionMixinNumber
-):
-    """Number description with optional dynamic entity-category resolution."""
-
-    entity_category_fn: (
-        Callable[[XeniaCoordinatorData], EntityCategory | None] | None
-    ) = None
+    value_fn: Callable[[XeniaCoordinatorData], float]
+    set_fn: Callable[[Xenia, float], Coroutine[Any, Any, None]]
 
 
 NUMBER_TYPES: Final[tuple[XeniaNumberEntityDescription, ...]] = (
@@ -73,7 +59,7 @@ NUMBER_TYPES: Final[tuple[XeniaNumberEntityDescription, ...]] = (
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data: data.overview_single.bg_set_temp,
-        set_fn=lambda coordinator, v: coordinator.xenia.set_bg_set_temp(v),
+        set_fn=Xenia.set_bg_set_temp,
         native_min_value=60,
         native_max_value=96,
         native_step=0.5,
@@ -85,7 +71,7 @@ NUMBER_TYPES: Final[tuple[XeniaNumberEntityDescription, ...]] = (
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         entity_category=EntityCategory.CONFIG,
         value_fn=lambda data: data.overview_single.bb_set_temp,
-        set_fn=lambda coordinator, v: coordinator.xenia.set_bb_set_temp(v),
+        set_fn=Xenia.set_bb_set_temp,
         native_min_value=60,
         native_max_value=96,
         native_step=0.5,
@@ -96,9 +82,9 @@ NUMBER_TYPES: Final[tuple[XeniaNumberEntityDescription, ...]] = (
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: XeniaConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the Xenia number entities (setpoints and weight target)."""
+    """Set up the setpoints and, with weight management, the weight target."""
     coordinator = entry.runtime_data.coordinator
     entities: list[NumberEntity] = [
         XeniaNumber(coordinator, description) for description in NUMBER_TYPES
@@ -120,46 +106,36 @@ async def async_setup_entry(
 
 
 class XeniaNumber(XeniaEntity, NumberEntity):
-    """A live number (e.g. brew-group setpoint) backed by `value_fn`/`set_fn`."""
+    """Setpoint of the machine."""
+
+    entity_description: XeniaNumberEntityDescription
 
     def __init__(
         self,
         coordinator: XeniaDataUpdateCoordinator,
         entity_description: XeniaNumberEntityDescription,
     ) -> None:
-        """Initialize the live-number entity."""
+        """Initialize the setpoint."""
         super().__init__(coordinator)
-        self.entity_description: XeniaNumberEntityDescription = entity_description
-        self._attr_unique_id = (
-            f"{machine_id(coordinator.config_entry)}_{entity_description.key}"
-        )
-        self._attr_native_min_value = entity_description.native_min_value or 0.0
-        self._attr_native_max_value = entity_description.native_max_value or 100.0
-        self._attr_native_step = entity_description.native_step or 1.0
+        self.entity_description = entity_description
+        self._attr_unique_id = f"{self.machine_id}_{entity_description.key}"
 
     @property
-    def native_value(self) -> float | None:
-        """Return the current native value from the coordinator data."""
-        return self.entity_description.value_fn(self.coordinator.data)  # type: ignore[return-value]
-
-    @property
-    def entity_category(self) -> EntityCategory | None:
-        """Resolve the entity category dynamically if `entity_category_fn` is set."""
-        if self.entity_description.entity_category_fn is not None:
-            return self.entity_description.entity_category_fn(self.coordinator.data)
-        return super().entity_category
+    def native_value(self) -> float:
+        """Return the setpoint."""
+        return self.entity_description.value_fn(self.coordinator.data)
 
     async def async_set_native_value(self, value: float) -> None:
-        """Push a new value to the machine and trigger a refresh."""
+        """Write the setpoint, then poll the machine even if the write failed."""
         try:
             async with machine_write():
-                await self.entity_description.set_fn(self.coordinator, float(value))
+                await self.entity_description.set_fn(self.coordinator.xenia, value)
         finally:
             await self.coordinator.async_request_refresh()
 
 
 class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity):
-    """Number entity for the managed script weight target."""
+    """Weight target of the managed script."""
 
     _attr_has_entity_name = True
     _attr_translation_key = "script_weight_target"
@@ -168,7 +144,7 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
     _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, coordinator: XeniaConfigCoordinator, unique_id: str) -> None:
-        """Initialize the weight-target entity."""
+        """Initialize the weight target."""
         super().__init__(coordinator)
         self._attr_unique_id = unique_id
         options = coordinator.config_entry.options
@@ -194,13 +170,13 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return device information about this Xenia espresso machine."""
+        """Return the device info of the machine."""
         return build_device_info(
             self.coordinator.config_entry, self.coordinator.data.machine
         )
 
     async def async_set_native_value(self, value: float) -> None:
-        """Rewrite the weight-target command in the managed script on the machine."""
+        """Rewrite the weight target in the managed script on the machine."""
         script_id = int(self.coordinator.config_entry.options[CONF_MANAGED_SCRIPT_ID])
         async with machine_write():
             script = await self.coordinator.xenia.read_script(script_id)

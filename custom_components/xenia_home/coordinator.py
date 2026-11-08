@@ -19,6 +19,7 @@ from .const import (
 from .errors import REQUEST_ERRORS, update_failed
 from .shot_store import XeniaShotStore
 from .xenia import (
+    ACTIVE_STATUSES,
     MachineStatus,
     Xenia,
     XeniaMachineData,
@@ -29,7 +30,7 @@ from .xenia import (
 _LOGGER = logging.getLogger(__name__)
 
 
-# Built-in scripts that are not returned by the API
+# Built-in scripts the script list leaves out.
 BUILTIN_SCRIPTS: dict[int, str] = {
     0: "None",
     1: "Espresso",
@@ -39,7 +40,7 @@ BUILTIN_SCRIPTS: dict[int, str] = {
 
 @dataclass
 class XeniaCoordinatorData:
-    """Data type for fast polling coordinator."""
+    """Live data of the machine."""
 
     overview: XeniaOverviewData
     overview_single: XeniaOverviewSingleData
@@ -48,7 +49,7 @@ class XeniaCoordinatorData:
 
 @dataclass
 class XeniaConfigData:
-    """Data type for config/slow data coordinator."""
+    """Slowly changing data of the machine."""
 
     machine: XeniaMachineData
     scripts: dict[int, str] = field(default_factory=dict)
@@ -71,7 +72,7 @@ type XeniaConfigEntry = ConfigEntry[XeniaRuntimeData]
 
 
 class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
-    """Xenia device data update coordinator for fast polling."""
+    """Poll the live data, faster while the machine is on."""
 
     config_entry: XeniaConfigEntry
 
@@ -99,14 +100,11 @@ class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
         except REQUEST_ERRORS as err:
             raise update_failed(err) from err
 
-        if overview.ma_status in (
-            MachineStatus.ON,
-            MachineStatus.BREWING,
-            MachineStatus.DRAINING,
-        ):
-            self.update_interval = POLL_INTERVAL_ACTIVE
-        else:
-            self.update_interval = POLL_INTERVAL_IDLE
+        self.update_interval = (
+            POLL_INTERVAL_ACTIVE
+            if overview.ma_status in ACTIVE_STATUSES
+            else POLL_INTERVAL_IDLE
+        )
 
         shot_start_time = None
         if overview.ma_status == MachineStatus.BREWING:
@@ -117,7 +115,7 @@ class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
 
 
 class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
-    """Xenia coordinator for config/slow data (scripts, switches, machine info)."""
+    """Poll the machine info, scripts, switches and managed script hourly."""
 
     config_entry: XeniaConfigEntry
     selected_script_id: int | None = None
@@ -136,7 +134,6 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
             update_interval=timedelta(hours=1),
             config_entry=config_entry,
         )
-        self.config_entry = config_entry
         self.xenia = xenia
 
     async def _async_update_data(self) -> XeniaConfigData:

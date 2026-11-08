@@ -1,4 +1,4 @@
-"""Base entity for Xenia Espresso Machine integration."""
+"""Base entity for the Xenia espresso machine."""
 
 from homeassistant.core import callback
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
@@ -22,18 +22,17 @@ def machine_id(entry: XeniaConfigEntry) -> str:
 def build_device_info(
     entry: XeniaConfigEntry, machine: XeniaMachineData, mac: str | None = None
 ) -> DeviceInfo:
-    """Build device info for a Xenia espresso machine."""
+    """Build the device info of the machine."""
     fw_version = machine.fw_version()
     esp_fw_version = machine.esp_fw_version()
-    sw_version = (
-        f"{fw_version}/{esp_fw_version}" if fw_version and esp_fw_version else None
-    )
     info = DeviceInfo(
         identifiers={(XENIA_DOMAIN, machine_id(entry))},
         name="Xenia Espresso Machine",
         manufacturer="Xenia Espresso GmbH",
         model="DBL",
-        sw_version=sw_version,
+        sw_version=(
+            f"{fw_version}/{esp_fw_version}" if fw_version and esp_fw_version else None
+        ),
         serial_number=machine.ma_sn,
     )
     if mac:
@@ -42,16 +41,12 @@ def build_device_info(
 
 
 class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
-    """Base entity for Xenia Espresso Machine."""
+    """Entity of the machine, updated by both coordinators."""
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
-        """Initialize the entity."""
-        super().__init__(coordinator)
-
     async def async_added_to_hass(self) -> None:
-        """Subscribe to the config coordinator as well."""
+        """Also listen to the config coordinator."""
         await super().async_added_to_hass()
         # A coordinator only polls while it has listeners.
         self.async_on_remove(
@@ -73,15 +68,14 @@ class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
 
     @property
     def runtime_data(self) -> XeniaRuntimeData:
-        """Return the runtime data."""
+        """Return the runtime data of the config entry."""
         return self.coordinator.config_entry.runtime_data
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return device information about this Xenia espresso machine."""
-        machine = self.runtime_data.config_coordinator.data.machine
+        """Return the device info of the machine."""
         return build_device_info(
             self.coordinator.config_entry,
-            machine,
+            self.runtime_data.config_coordinator.data.machine,
             self.coordinator.data.overview_single.ma_mac,
         )
