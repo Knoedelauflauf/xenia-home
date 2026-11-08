@@ -16,6 +16,7 @@ from custom_components.xenia_home.xenia import (
     XeniaOverviewData,
     XeniaOverviewSingleData,
 )
+
 from tests.conftest import MockXeniaApi
 from tests.fixtures.api_responses import (
     MACHINE_NEW_FW_FIELDS,

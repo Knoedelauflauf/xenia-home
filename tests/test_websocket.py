@@ -1,26 +1,39 @@
 """Contract tests for the shot history WebSocket API."""
 
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from typing import Any
 
-from custom_components.xenia_home.const import XENIA_DOMAIN
+from homeassistant.core import HomeAssistant
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.typing import WebSocketGenerator
+
+from tests import setup_second_machine
+from tests.conftest import MockXeniaApi
 from tests.fixtures.shots import shot_payload
 
 
-async def _cmd(hass, hass_ws_client, msg, **client_kwargs):
+async def _cmd(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    msg: dict[str, Any],
+    **client_kwargs: Any,
+) -> dict[str, Any]:
     client = await hass_ws_client(hass, **client_kwargs)
     await client.send_json_auto_id(msg)
     return await client.receive_json()
 
 
-async def _seed(init_integration, *payloads):
+async def _seed(init_integration: MockConfigEntry, *payloads: dict[str, Any]) -> None:
     store = init_integration.runtime_data.shot_store
     for payload in payloads:
         await store.async_add_shot(payload)
 
 
 async def test_list_returns_summaries_newest_first(
-    hass, init_integration, hass_ws_client
-):
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """shots/list returns summaries, newest first."""
     early = shot_payload("2026-06-15T08:00:00.000+00:00")
     late = shot_payload("2026-07-01T10:00:00.000+00:00")
     await _seed(init_integration, early, late)
@@ -38,7 +51,12 @@ async def test_list_returns_summaries_newest_first(
     }
 
 
-async def test_list_filters_and_limits(hass, init_integration, hass_ws_client):
+async def test_list_filters_and_limits(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """shots/list filters by start time and limits the count; the bounds are exclusive."""
     a = shot_payload("2026-07-01T10:00:00.000+00:00")
     b = shot_payload("2026-07-02T10:00:00.000+00:00")
     c = shot_payload("2026-07-03T10:00:00.000+00:00")
@@ -65,7 +83,12 @@ async def test_list_filters_and_limits(hass, init_integration, hass_ws_client):
     ]
 
 
-async def test_list_accepts_naive_timestamp(hass, init_integration, hass_ws_client):
+async def test_list_accepts_naive_timestamp(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """A bound without a time zone is read as UTC."""
     a = shot_payload("2026-07-01T10:00:00.000+00:00")
     b = shot_payload("2026-07-02T10:00:00.000+00:00")
     await _seed(init_integration, a, b)
@@ -80,8 +103,11 @@ async def test_list_accepts_naive_timestamp(hass, init_integration, hass_ws_clie
 
 
 async def test_list_rejects_unparseable_timestamp(
-    hass, init_integration, hass_ws_client
-):
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """An unparseable bound is rejected."""
     msg = await _cmd(
         hass,
         hass_ws_client,
@@ -92,8 +118,11 @@ async def test_list_rejects_unparseable_timestamp(
 
 
 async def test_get_returns_full_payloads_in_request_order(
-    hass, init_integration, hass_ws_client
-):
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """shots/get returns full payloads in request order and skips unknown ids."""
     a = shot_payload("2026-07-01T10:00:00.000+00:00")
     b = shot_payload("2026-07-02T10:00:00.000+00:00")
     await _seed(init_integration, a, b)
@@ -116,7 +145,12 @@ async def test_get_returns_full_payloads_in_request_order(
     assert shots[1] == {**a, "shot_id": a["start_time"]}
 
 
-async def test_unknown_entry_id_errors(hass, init_integration, hass_ws_client):
+async def test_unknown_entry_id_errors(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """An unknown entry_id is not found."""
     msg = await _cmd(
         hass,
         hass_ws_client,
@@ -127,19 +161,14 @@ async def test_unknown_entry_id_errors(hass, init_integration, hass_ws_client):
 
 
 async def test_multiple_entries_require_entry_id(
-    hass, init_integration, mock_xenia_api, hass_ws_client
-):
-    second_api = mock_xenia_api.for_host("xenia2.local")
-    second_entry = MockConfigEntry(
-        domain=XENIA_DOMAIN,
-        title="xenia2.local",
-        unique_id="xenia2.local",
-        data={"host": "xenia2.local"},
-        options={},
-    )
-    second_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(second_entry.entry_id)
-    await hass.async_block_till_done()
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """With several machines a command has to name one."""
+    mock_xenia_api.for_host("xenia2.local")
+    second_entry = await setup_second_machine(hass)
 
     msg = await _cmd(hass, hass_ws_client, {"type": "xenia_home/shots/list"})
     assert not msg["success"]
@@ -154,7 +183,12 @@ async def test_multiple_entries_require_entry_id(
     assert msg["result"]["shots"] == []
 
 
-async def test_delete_removes_shot_from_api(hass, init_integration, hass_ws_client):
+async def test_delete_removes_shot_from_api(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """A deleted shot is gone from list and get."""
     keep = shot_payload("2026-07-01T10:00:00.000+00:00")
     drop = shot_payload("2026-07-02T10:00:00.000+00:00")
     await _seed(init_integration, keep, drop)
@@ -181,8 +215,11 @@ async def test_delete_removes_shot_from_api(hass, init_integration, hass_ws_clie
 
 
 async def test_no_loaded_entry_errors_on_every_command(
-    hass, init_integration, hass_ws_client
-):
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """Every command fails while no machine is loaded."""
     await hass.config_entries.async_unload(init_integration.entry_id)
     await hass.async_block_till_done()
 
@@ -203,8 +240,12 @@ async def test_no_loaded_entry_errors_on_every_command(
 
 
 async def test_non_admin_can_read_but_not_delete(
-    hass, init_integration, hass_ws_client, hass_read_only_access_token
-):
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    hass_read_only_access_token: str,
+) -> None:
+    """Users without admin rights can read shots but not delete them."""
     shot = shot_payload("2026-07-01T10:00:00.000+00:00")
     await _seed(init_integration, shot)
     token = hass_read_only_access_token
@@ -229,7 +270,12 @@ async def test_non_admin_can_read_but_not_delete(
     assert msg["success"]
 
 
-async def test_delete_unknown_shot_errors(hass, init_integration, hass_ws_client):
+async def test_delete_unknown_shot_errors(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """Deleting an unknown shot is not found."""
     msg = await _cmd(
         hass,
         hass_ws_client,

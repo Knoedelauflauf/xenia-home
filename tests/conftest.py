@@ -22,6 +22,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
 from yarl import URL
 
 from custom_components.xenia_home.const import XENIA_DOMAIN
+
 from tests import setup_integration
 from tests.fixtures.api_responses import (
     MACHINE_PAYLOAD,

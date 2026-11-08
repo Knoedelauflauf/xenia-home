@@ -18,6 +18,7 @@ from custom_components.xenia_home.const import (
     DEFAULT_SCRIPT_NAME,
     XENIA_DOMAIN,
 )
+
 from tests.conftest import MockXeniaApi
 
 WEIGHT_SETTINGS = {CONF_WEIGHT_MIN: 20.0, CONF_WEIGHT_MAX: 45.0, CONF_WEIGHT_STEP: 0.1}
