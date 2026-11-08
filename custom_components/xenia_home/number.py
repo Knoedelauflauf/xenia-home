@@ -13,6 +13,7 @@ from homeassistant.components.number import (
 )
 from homeassistant.const import EntityCategory, UnitOfMass, UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -185,11 +186,11 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
 
     @property
     def available(self) -> bool:
-        """Available only when weight management is enabled and a script is known."""
-        options = self.coordinator.config_entry.options
-        if not options.get(CONF_WEIGHT_MANAGEMENT_ENABLED):
-            return False
-        return self.coordinator.data.managed_script_instruction is not None
+        """Return whether the managed script could be read."""
+        return (
+            super().available
+            and self.coordinator.data.managed_script_instruction is not None
+        )
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -200,19 +201,19 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
 
     async def async_set_native_value(self, value: float) -> None:
         """Rewrite the weight-target command in the managed script on the machine."""
-        options = self.coordinator.config_entry.options
-        script_id = options.get(CONF_MANAGED_SCRIPT_ID)
-        if script_id is None:
-            return
+        script_id = int(self.coordinator.config_entry.options[CONF_MANAGED_SCRIPT_ID])
         async with machine_write():
-            script_data = await self.coordinator.xenia.read_script(int(script_id))
-        instruction = script_data.get("Content")
-        name = script_data.get("Title")
-        if instruction is None or name is None:
-            return
-        new_instruction = set_weight_target(instruction, value)
+            script = await self.coordinator.xenia.read_script(script_id)
+        if not script.get("Content"):
+            raise HomeAssistantError(
+                translation_domain=XENIA_DOMAIN,
+                translation_key="managed_script_missing",
+                translation_placeholders={"script_id": str(script_id)},
+            )
         async with machine_write():
             await self.coordinator.xenia.update_script(
-                int(script_id), name, new_instruction
+                script_id,
+                script.get("Title", ""),
+                set_weight_target(script["Content"], value),
             )
         await self.coordinator.async_request_refresh()

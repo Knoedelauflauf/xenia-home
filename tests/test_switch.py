@@ -1,257 +1,212 @@
-"""Tests for switch.py — XeniaPowerSwitch, XeniaEcoSwitch, XeniaSteamBoilerSwitch."""
+"""Tests for the power, eco and steam boiler switches."""
 
+from homeassistant.components.select import (
+    DOMAIN as SELECT_DOMAIN,
+    SERVICE_SELECT_OPTION,
+)
+from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    ATTR_OPTION,
+    SERVICE_TURN_OFF,
+    SERVICE_TURN_ON,
+    STATE_OFF,
+    STATE_ON,
+    STATE_UNAVAILABLE,
+)
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+from syrupy.assertion import SnapshotAssertion
 
 from custom_components.xenia_home.const import PowerOnBehavior
 from custom_components.xenia_home.xenia import MachineStatus, SteamBoilerStatus
+
+from tests import setup_integration
+from tests.conftest import MockXeniaApi
 
 POWER = "switch.xenia_espresso_machine_power"
 ECO = "switch.xenia_espresso_machine_eco_mode"
 STEAM_BOILER = "switch.xenia_espresso_machine_steam_boiler_power"
 POWER_ON_BEHAVIOR = "select.xenia_espresso_machine_power_on_behavior"
+TURN_ON = '{"action":"1"}'
+TURN_ON_WITHOUT_STEAM = '{"action":"5"}'
 
 
-async def _select_power_on_behavior(hass, option: PowerOnBehavior) -> None:
+async def _switch(hass: HomeAssistant, service: str, entity_id: str) -> None:
     await hass.services.async_call(
-        "select",
-        "select_option",
-        {"entity_id": POWER_ON_BEHAVIOR, "option": option},
-        blocking=True,
+        SWITCH_DOMAIN, service, {ATTR_ENTITY_ID: entity_id}, blocking=True
     )
+
+
+async def _setup_with_status(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    machine: MockXeniaApi,
+    status: MachineStatus,
+    **fields,
+) -> None:
+    machine.set_overview(MA_STATUS=int(status), **fields)
+    await setup_integration(hass, entry)
 
 
 async def test_switch_entities_snapshot(
-    hass, init_integration, snapshot, entity_registry
-):
-    entity_ids = sorted(
-        e.entity_id
-        for e in entity_registry.entities.values()
-        if e.platform == "xenia_home" and e.domain == "switch"
-    )
-    assert len(entity_ids) == 3
-    for entity_id in entity_ids:
-        state = hass.states.get(entity_id)
-        registry_entry = entity_registry.async_get(entity_id)
-        assert state == snapshot(name=f"{entity_id}-state")
-        assert registry_entry == snapshot(name=f"{entity_id}-registry")
-
-
-# ===========================================================================
-# Power switch — is_on for each MachineStatus
-# ===========================================================================
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    snapshot: SnapshotAssertion,
+    entity_registry: er.EntityRegistry,
+) -> None:
+    """The switches match the snapshot."""
+    for entity_id in (POWER, ECO, STEAM_BOILER):
+        assert hass.states.get(entity_id) == snapshot(name=f"{entity_id}-state")
+        assert entity_registry.async_get(entity_id) == snapshot(
+            name=f"{entity_id}-registry"
+        )
 
 
 @pytest.mark.parametrize(
-    ("ma_status", "expected_state"),
+    ("status", "power", "eco", "steam_boiler"),
     [
-        (MachineStatus.ON, "on"),
-        (MachineStatus.BREWING, "on"),
-        (MachineStatus.DRAINING, "on"),
-        (MachineStatus.OFF, "off"),
-        (MachineStatus.ECO, "off"),
-        (MachineStatus.UNKNOWN, "off"),
+        (MachineStatus.ON, STATE_ON, STATE_OFF, STATE_ON),
+        (MachineStatus.BREWING, STATE_ON, STATE_OFF, STATE_ON),
+        (MachineStatus.DRAINING, STATE_ON, STATE_OFF, STATE_ON),
+        (MachineStatus.ECO, STATE_OFF, STATE_ON, STATE_UNAVAILABLE),
+        (MachineStatus.OFF, STATE_OFF, STATE_UNAVAILABLE, STATE_UNAVAILABLE),
+        (MachineStatus.UNKNOWN, STATE_OFF, STATE_UNAVAILABLE, STATE_UNAVAILABLE),
     ],
 )
-async def test_power_switch_state(
-    hass,
-    enable_custom_integrations,
-    mock_xenia_api,
-    mock_config_entry,
-    ma_status,
-    expected_state,
-):
-    mock_xenia_api.set_overview(MA_STATUS=int(ma_status))
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    assert hass.states.get(POWER).state == expected_state
+async def test_states_follow_the_machine(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    status: MachineStatus,
+    power: str,
+    eco: str,
+    steam_boiler: str,
+) -> None:
+    """Eco mode needs a running machine or eco mode, the steam boiler a running machine."""
+    await _setup_with_status(hass, mock_config_entry, mock_xenia_api, status)
+    assert hass.states.get(POWER).state == power
+    assert hass.states.get(ECO).state == eco
+    assert hass.states.get(STEAM_BOILER).state == steam_boiler
 
 
-async def test_power_switch_turn_on_steam_on_calls_machine_on(
-    hass, init_integration, mock_xenia_api
-):
-    await _select_power_on_behavior(hass, PowerOnBehavior.STEAM_ON)
-    await hass.services.async_call(
-        "switch", "turn_on", {"entity_id": POWER}, blocking=True
+async def test_steam_boiler_off(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """The steam boiler switch is off while the boiler is off."""
+    await _setup_with_status(
+        hass,
+        mock_config_entry,
+        mock_xenia_api,
+        MachineStatus.ON,
+        SB_STATUS=int(SteamBoilerStatus.OFF),
     )
-    await hass.async_block_till_done()
-    # MachineControl.ON = 1
-    mock_xenia_api.assert_post_called_with("machine/control", '"1"')
+    assert hass.states.get(STEAM_BOILER).state == STATE_OFF
 
 
-async def test_power_switch_turn_on_default_behavior_is_steam_off(
-    hass, init_integration, mock_xenia_api
-):
-    await hass.services.async_call(
-        "switch", "turn_on", {"entity_id": POWER}, blocking=True
-    )
-    await hass.async_block_till_done()
-    mock_xenia_api.assert_post_called_with("machine/control", '"5"')
-
-
-async def test_power_switch_turn_off_calls_machine_off(
-    hass, init_integration, mock_xenia_api
-):
-    await hass.services.async_call(
-        "switch", "turn_off", {"entity_id": POWER}, blocking=True
-    )
-    await hass.async_block_till_done()
-    # MachineControl.OFF = 0
-    mock_xenia_api.assert_post_called_with("machine/control", '"0"')
-
-
-# ===========================================================================
-# Eco switch
-# ===========================================================================
+async def test_switches_unavailable_without_machine(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    poll,
+) -> None:
+    """All switches are unavailable while the machine does not answer."""
+    mock_xenia_api.override("get", "overview", exc=TimeoutError())
+    await poll()
+    for entity_id in (POWER, ECO, STEAM_BOILER):
+        assert hass.states.get(entity_id).state == STATE_UNAVAILABLE
 
 
 @pytest.mark.parametrize(
-    ("ma_status", "expected_state"),
+    ("behavior", "body"),
     [
-        (MachineStatus.ECO, "on"),
-        (MachineStatus.ON, "off"),
-        (MachineStatus.BREWING, "off"),
-        (MachineStatus.OFF, "unavailable"),
-        (MachineStatus.UNKNOWN, "unavailable"),
+        (None, TURN_ON_WITHOUT_STEAM),
+        (PowerOnBehavior.STEAM_OFF, TURN_ON_WITHOUT_STEAM),
+        (PowerOnBehavior.STEAM_ON, TURN_ON),
     ],
 )
-async def test_eco_switch_state(
-    hass,
-    enable_custom_integrations,
-    mock_xenia_api,
-    mock_config_entry,
-    ma_status,
-    expected_state,
-):
-    mock_xenia_api.set_overview(MA_STATUS=int(ma_status))
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    assert hass.states.get(ECO).state == expected_state
-
-
-async def test_eco_switch_turn_on_calls_machine_set_eco(
-    hass, init_integration, mock_xenia_api
-):
-    await hass.services.async_call(
-        "switch", "turn_on", {"entity_id": ECO}, blocking=True
-    )
-    await hass.async_block_till_done()
-    # MachineControl.ECO = 2
-    mock_xenia_api.assert_post_called_with("machine/control", '"2"')
-
-
-async def test_eco_switch_turn_off_steam_off_calls_on_sb_off(
-    hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
-):
-    mock_xenia_api.set_overview(MA_STATUS=int(MachineStatus.ECO))
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    await _select_power_on_behavior(hass, PowerOnBehavior.STEAM_OFF)
-    await hass.services.async_call(
-        "switch", "turn_off", {"entity_id": ECO}, blocking=True
-    )
-    await hass.async_block_till_done()
-    mock_xenia_api.assert_post_called_with("machine/control", '"5"')
-
-
-# ===========================================================================
-# Steam boiler switch
-# ===========================================================================
+@pytest.mark.parametrize(
+    ("status", "entity_id", "service"),
+    [
+        (MachineStatus.OFF, POWER, SERVICE_TURN_ON),
+        (MachineStatus.ECO, ECO, SERVICE_TURN_OFF),
+    ],
+)
+async def test_turning_on_honours_the_power_on_behavior(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    status: MachineStatus,
+    entity_id: str,
+    service: str,
+    behavior: PowerOnBehavior | None,
+    body: str,
+) -> None:
+    """Powering on and leaving eco mode start the steam boiler only if chosen."""
+    await _setup_with_status(hass, mock_config_entry, mock_xenia_api, status)
+    if behavior is not None:
+        await hass.services.async_call(
+            SELECT_DOMAIN,
+            SERVICE_SELECT_OPTION,
+            {ATTR_ENTITY_ID: POWER_ON_BEHAVIOR, ATTR_OPTION: behavior},
+            blocking=True,
+        )
+    mock_xenia_api.set_overview(MA_STATUS=int(MachineStatus.ON))
+    await _switch(hass, service, entity_id)
+    assert mock_xenia_api.bodies("post", "machine/control") == [body]
+    assert hass.states.get(POWER).state == STATE_ON
 
 
 @pytest.mark.parametrize(
-    ("sb_status", "expected_state"),
+    ("entity_id", "service", "path", "body"),
     [
-        (SteamBoilerStatus.ON, "on"),
-        (SteamBoilerStatus.OFF, "off"),
+        (POWER, SERVICE_TURN_OFF, "machine/control", '{"action":"0"}'),
+        (ECO, SERVICE_TURN_ON, "machine/control", '{"action":"2"}'),
+        (STEAM_BOILER, SERVICE_TURN_ON, "toggle/sb", '{"TOGGLE":true,"SAVE":true}'),
+        (STEAM_BOILER, SERVICE_TURN_OFF, "toggle/sb", '{"TOGGLE":false,"SAVE":true}'),
     ],
 )
-async def test_steam_boiler_state(
-    hass,
-    enable_custom_integrations,
-    mock_xenia_api,
-    mock_config_entry,
-    sb_status,
-    expected_state,
-):
-    mock_xenia_api.set_overview(
-        SB_STATUS=int(sb_status), MA_STATUS=int(MachineStatus.ON)
-    )
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    assert hass.states.get(STEAM_BOILER).state == expected_state
-
-
-@pytest.mark.parametrize(
-    ("ma_status", "expected_avail"),
-    [
-        (MachineStatus.ON, True),
-        (MachineStatus.BREWING, True),
-        (MachineStatus.ECO, False),
-        (MachineStatus.OFF, False),
-    ],
-)
-async def test_steam_boiler_availability_follows_machine_state(
-    hass,
-    enable_custom_integrations,
-    mock_xenia_api,
-    mock_config_entry,
-    ma_status,
-    expected_avail,
-):
-    mock_xenia_api.set_overview(MA_STATUS=int(ma_status))
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    state = hass.states.get(STEAM_BOILER)
-    assert state is not None
-    is_available = state.state not in ("unavailable", "unknown")
-    assert is_available == expected_avail
-
-
-async def test_steam_boiler_turn_on_calls_toggle_sb(
-    hass, init_integration, mock_xenia_api
-):
-    await hass.services.async_call(
-        "switch", "turn_on", {"entity_id": STEAM_BOILER}, blocking=True
-    )
-    await hass.async_block_till_done()
-    mock_xenia_api.assert_post_called_with("toggle/sb", '"TOGGLE":true')
-    mock_xenia_api.assert_post_called_with("toggle/sb", '"SAVE":true')
-
-
-async def test_steam_boiler_turn_off_calls_toggle_sb(
-    hass, init_integration, mock_xenia_api
-):
-    await hass.services.async_call(
-        "switch", "turn_off", {"entity_id": STEAM_BOILER}, blocking=True
-    )
-    await hass.async_block_till_done()
-    mock_xenia_api.assert_post_called_with("toggle/sb", '"TOGGLE":false')
+async def test_commands(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    entity_id: str,
+    service: str,
+    path: str,
+    body: str,
+) -> None:
+    """Each switch sends its command to the machine."""
+    await _switch(hass, service, entity_id)
+    assert mock_xenia_api.bodies("post", path) == [body]
 
 
 @pytest.mark.parametrize(
     ("entity_id", "service", "path"),
     [
-        (POWER, "turn_on", "machine/control"),
-        (POWER, "turn_off", "machine/control"),
-        (ECO, "turn_on", "machine/control"),
-        (ECO, "turn_off", "machine/control"),
-        (STEAM_BOILER, "turn_on", "toggle/sb"),
-        (STEAM_BOILER, "turn_off", "toggle/sb"),
+        (POWER, SERVICE_TURN_ON, "machine/control"),
+        (POWER, SERVICE_TURN_OFF, "machine/control"),
+        (ECO, SERVICE_TURN_ON, "machine/control"),
+        (ECO, SERVICE_TURN_OFF, "machine/control"),
+        (STEAM_BOILER, SERVICE_TURN_ON, "toggle/sb"),
+        (STEAM_BOILER, SERVICE_TURN_OFF, "toggle/sb"),
     ],
 )
-async def test_switch_raises_translated_error_when_machine_refuses(
-    hass, init_integration, mock_xenia_api, entity_id, service, path
-):
+async def test_refused_command_raises(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    entity_id: str,
+    service: str,
+    path: str,
+) -> None:
+    """A refused command raises a translated error naming the cause."""
     mock_xenia_api.fail("post", path)
     with pytest.raises(HomeAssistantError) as exc_info:
-        await hass.services.async_call(
-            "switch", service, {"entity_id": entity_id}, blocking=True
-        )
+        await _switch(hass, service, entity_id)
     assert exc_info.value.translation_key == "write_failed"
     assert "Internal Server Error" in exc_info.value.translation_placeholders["error"]

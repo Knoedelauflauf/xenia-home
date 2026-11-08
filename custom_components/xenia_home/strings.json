@@ -219,6 +219,9 @@
     },
     "update_failed": {
       "message": "Fetching data from the Xenia espresso machine failed: {error}"
+    },
+    "managed_script_missing": {
+      "message": "The managed script {script_id} no longer exists on the machine. Pick another script in the weight management options."
     }
   }
 }

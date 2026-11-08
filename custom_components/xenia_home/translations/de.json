@@ -219,6 +219,9 @@
     },
     "update_failed": {
       "message": "Das Abrufen der Daten von der Xenia Espressomaschine ist fehlgeschlagen: {error}"
+    },
+    "managed_script_missing": {
+      "message": "Das verwaltete Skript {script_id} existiert auf der Maschine nicht mehr. Wähle in den Optionen der Gewichtssteuerung ein anderes Skript."
     }
   }
 }

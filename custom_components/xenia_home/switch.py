@@ -25,8 +25,7 @@ async def async_setup_entry(
             XeniaPowerSwitch(coordinator),
             XeniaEcoSwitch(coordinator),
             XeniaSteamBoilerSwitch(coordinator),
-        ],
-        True,
+        ]
     )
 
 
@@ -79,7 +78,7 @@ class XeniaEcoSwitch(XeniaEntity, SwitchEntity):
     @property
     def available(self) -> bool:
         """Available only when the machine is on (in any heating state)."""
-        return self.coordinator.data.overview.ma_status in [
+        return super().available and self.coordinator.data.overview.ma_status in [
             MachineStatus.ON,
             MachineStatus.BREWING,
             MachineStatus.DRAINING,
@@ -119,7 +118,7 @@ class XeniaSteamBoilerSwitch(XeniaEntity, SwitchEntity):
     @property
     def available(self) -> bool:
         """Available only when the machine is on."""
-        return self.coordinator.data.overview.ma_status in [
+        return super().available and self.coordinator.data.overview.ma_status in [
             MachineStatus.ON,
             MachineStatus.BREWING,
             MachineStatus.DRAINING,

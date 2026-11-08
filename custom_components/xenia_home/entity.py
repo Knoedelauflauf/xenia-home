@@ -55,7 +55,7 @@ class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
         # A coordinator only polls while it has listeners.
         self.async_on_remove(
             self.runtime_data.config_coordinator.async_add_listener(
-                self._handle_coordinator_update
+                self.async_write_ha_state
             )
         )
 
