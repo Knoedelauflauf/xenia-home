@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
@@ -92,6 +92,12 @@ class PowerOnBehaviorSelect(XeniaEntity, SelectEntity, RestoreEntity):
         state = await self.async_get_last_state()
         if state is not None and state.state in POWER_ON_BEHAVIOR_OPTIONS:
             self.runtime_data.power_on_behavior = PowerOnBehavior(state.state)
+
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Keep the entity when its entity_id changes; nothing is keyed on it."""
+        # Called from Home Assistant 2026.11 on, which added the hook.
+        super().async_entity_id_changed(old_entity_id)  # type: ignore[misc]
 
     @property
     def current_option(self) -> str:

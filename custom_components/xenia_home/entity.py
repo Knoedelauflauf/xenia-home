@@ -1,5 +1,6 @@
 """Base entity for Xenia Espresso Machine integration."""
 
+from homeassistant.core import callback
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -58,6 +59,12 @@ class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
                 self.async_write_ha_state
             )
         )
+
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Keep the entity when its entity_id changes; nothing is keyed on it."""
+        # Called from Home Assistant 2026.11 on, which added the hook.
+        super().async_entity_id_changed(old_entity_id)  # type: ignore[misc]
 
     @property
     def machine_id(self) -> str:
