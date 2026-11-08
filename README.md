@@ -9,16 +9,16 @@
 
 The **Xenia Espresso Machine** integration brings the commercial-grade
 espresso machines made by [Xenia Espresso GmbH](https://www.xenia-espresso.de/)
-into Home Assistant. It talks to your machine over the local network — no
-cloud account is required — and exposes the machine's state, settings, and
+into Home Assistant. It talks to your machine over the local network (no
+cloud account is required) and exposes the machine's state, settings, and
 on-device scripts as Home Assistant entities.
 
 With it installed you can monitor temperatures, pressures, energy usage, and
 extraction counters; toggle power, ECO mode, and the steam boiler from a
 dashboard or automation; adjust brew-group and brew-boiler setpoints; bind
 the machine's physical switch positions to scripts; track every shot with
-its temperature, pressure, flow rate, and final weight; and — if your
-machine runs a weight-target script — change that target directly from Home
+its temperature, pressure, flow rate, and final weight; and, if your
+machine runs a weight-target script, change that target directly from Home
 Assistant.
 
 ## Supported devices
@@ -55,7 +55,7 @@ Assistant.
 
 When you add the integration you are asked for the **Host** of your machine.
 Enter the hostname or IP address of the Xenia controller on your local
-network — for example `xenia.local` or `192.168.1.42`. Do not include a
+network, for example `xenia.local` or `192.168.1.42`. Do not include a
 URL scheme (`http://`) or a port number; enter only the bare hostname or
 IPv4 address. You can find the value in the machine's built-in web UI or in
 your router's DHCP client list.
@@ -209,7 +209,7 @@ When weight management is enabled (see **Options** above), the integration
 exposes the brew weight target of a chosen on-device script as a Home
 Assistant number entity. Adjusting that entity rewrites the weight target
 on the machine, so the next shot pulled with that script stops at the new
-weight. You can also bind the number entity into automations — for
+weight. You can also bind the number entity into automations, for
 example, to step the target down by 0.5 g across a tasting flight, or to
 expose a slider on a dashboard.
 

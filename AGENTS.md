@@ -1,6 +1,6 @@
 # Agent and developer instructions
 
-Working notes for AI coding assistants (Claude Code, GitHub Copilot, Codex) and human contributors. Generic Home Assistant conventions are not repeated here — see the references at the bottom. Only project-specific information lives in this file.
+Working notes for AI coding assistants (Claude Code, GitHub Copilot, Codex) and human contributors. Generic Home Assistant conventions are not repeated here; see the references at the bottom. Only project-specific information lives in this file.
 
 ## Project context
 
@@ -18,8 +18,8 @@ uv run pytest                                               # all tests
 uv run pytest tests/test_sensor.py::test_x -v               # single test
 uv run pytest tests/ --snapshot-update                      # after intentional snapshot changes
 uv run pytest tests/ --cov=custom_components.xenia_home     # with coverage
-uv run ruff format custom_components/xenia_home/
-uv run ruff check custom_components/xenia_home/
+uv run ruff format .
+uv run ruff check .                                         # tests/ruff.toml relaxes rules for tests, as in core
 uv run mypy custom_components/xenia_home/
 ```
 
@@ -31,16 +31,16 @@ docker compose up -d                                        # exposes HA at http
 
 ### Optional: pylint with the Home Assistant Core plugin
 
-The ruff config in `pyproject.toml` mirrors home-assistant/core, but Home Assistant Core also maintains a pylint plugin (`pylint_home_assistant`) that runs HA-specific checks ruff cannot express — `enforce_runtime_data`, `exception_translations`, `logger`, `mdi_icons`, `enforce_super_call`, action/config-flow checks, and more. The plugin is not on PyPI; it lives in the HA Core repo.
+The ruff config in `pyproject.toml` is copied from home-assistant/core, but Home Assistant Core also maintains a pylint plugin (`pylint_home_assistant`) that runs HA-specific checks ruff cannot express: `enforce_runtime_data`, `exception_translations`, `logger`, `mdi_icons`, `enforce_super_call`, action/config-flow checks, and more. The plugin is not on PyPI; it lives in the HA Core repo.
 
-A `[tool.pylint.*]` section in `pyproject.toml` is set up to load that plugin when a local HA Core checkout is available. Point `HA_CORE` at it and run:
+A `[tool.pylint.*]` section in `pyproject.toml` is set up to load that plugin when a local HA Core checkout is available; it finds the plugin in both the old (`pylint/plugins`) and the current (`packages/pylint-home-assistant`) location. Point `HA_CORE` at it and run:
 
 ```bash
 HA_CORE=/path/to/home-assistant/core \
   uv run --with "pylint>=4" pylint custom_components/xenia_home/
 ```
 
-Optional only — ruff + mypy are the canonical local checks.
+Optional only; ruff and mypy are the canonical local checks.
 
 ## Project-specific architecture
 
@@ -48,22 +48,24 @@ Optional only — ruff + mypy are the canonical local checks.
 
 Two `DataUpdateCoordinator` instances are stored in `entry.runtime_data` as `XeniaRuntimeData`:
 
-- **`XeniaDataUpdateCoordinator`** — poll interval switches dynamically based on machine state (`BREWING`, `ACTIVE` while heating, `READY`, `IDLE`); defaults in `const.py`. Polls `/api/v2/overview` and `/api/v2/overview_single`.
-- **`XeniaConfigCoordinator`** — one-hour interval. Polls `/api/v2/machine`, `/api/v2/scripts/list`, `/api/v2/switches`, and the optionally-configured managed weight script.
+- **`XeniaDataUpdateCoordinator`**: polls `/api/v2/overview` and `/api/v2/overview_single` every second while the machine is on, brewing or draining, and every five seconds otherwise (`POLL_INTERVAL_*` in `const.py`).
+- **`XeniaConfigCoordinator`**: polls `/api/v2/machine`, `/api/v2/scripts/list`, `/api/v2/switches` and the optionally configured managed weight script every hour.
+
+`XeniaEntity` listens to both. An update of the config coordinator only rewrites the entity state; logic that runs per live sample, like the shot tracker in `event.py`, must stay in `_handle_coordinator_update`, which only the live coordinator calls.
 
 In any `XeniaEntity` subclass:
 
 ```python
-self.coordinator.data                          # XeniaCoordinatorData (live)
-self.runtime_data.config_coordinator.data      # XeniaConfigData (slow)
+self.coordinator.data  # XeniaCoordinatorData (live)
+self.runtime_data.config_coordinator.data  # XeniaConfigData (slow)
 ```
 
-### Type-safe config entry access
+### Stable unique ids
 
-Both coordinators declare `config_entry: XeniaConfigEntry` as a class attribute, so mypy knows the field is never `None` — no `assert` is needed:
+Device identifiers and entity unique ids are keyed on `machine_id(entry)` (the config entry's unique id: the host the machine was first added with). Reconfiguring the host changes `entry.data[CONF_HOST]` but not the unique id, so devices and entities stay. Never build ids from `entry.data[CONF_HOST]`.
 
 ```python
-self._attr_unique_id = f"...{coordinator.config_entry.data[CONF_HOST]}"
+self._attr_unique_id = f"{self.machine_id}_{description.key}"
 ```
 
 ### Device client
@@ -74,18 +76,17 @@ self._attr_unique_id = f"...{coordinator.config_entry.data[CONF_HOST]}"
 
 | Fixture | Purpose |
 |---|---|
-| `mock_xenia_api` | Wrapper around `aioresponses`. Setters (`set_overview`, `set_scripts`, ...) before integration setup; `expect_*` and `assert_post_called_with` after. |
-| `mock_config_entry` | A `MockConfigEntry` for the xenia domain with default options. |
-| `mock_config_entry_factory_with_options` | Factory for building a `MockConfigEntry` with custom options preloaded. |
-| `init_integration` | Wires `mock_xenia_api` + `mock_config_entry` together and calls `async_setup_entry`. Returns the loaded entry. |
+| `mock_xenia_api` | Autouse fake machine on `xenia.local`, built on `aioclient_mock`. Setters (`set_overview`, `set_scripts`, `set_script`, ...) change the answers at any time; write endpoints accept every request. `override`, `fail` and `restore` change single endpoints, `bodies` and `assert_post_called_with` inspect the requests. `for_host` adds a second machine. |
+| `mock_config_entry` | A `MockConfigEntry` for `xenia.local` without options. |
+| `mock_config_entry_factory_with_options` | Factory for a `MockConfigEntry` with the given options. |
+| `init_integration` | Sets up `mock_config_entry` and returns it. |
+| `poll` | Serves an overview and lets one second pass, so the live coordinator polls once while the machine is on. |
 
-Pure-logic tests (`test_xenia.py`, `test_script_parser.py`, `test_coordinator.py`) do not need the `hass` fixture and run in milliseconds. All other test files use `pytest-homeassistant-custom-component`'s `hass` fixture.
-
-`xfail` markers are printed in the pytest session summary so deferred bugs stay visible.
+`tests/__init__.py` holds `setup_integration` and `setup_second_machine`. Tests drive the machine through `mock_xenia_api` and time through `poll` or `freezer`, and assert on states, actions, events and the stored shots; they do not reach into coordinators or entities.
 
 ## References
 
-- **Home Assistant developer docs:** <https://developers.home-assistant.io/> — architecture, coding standards, entity patterns, error-handling, async rules. All generic conventions live there.
-- **Quality scale rules:** <https://developers.home-assistant.io/docs/core/integration-quality-scale/> — Bronze through Platinum, with the exact text of every rule.
+- **Home Assistant developer docs:** <https://developers.home-assistant.io/>: architecture, coding standards, entity patterns, error-handling, async rules. All generic conventions live there.
+- **Quality scale rules:** <https://developers.home-assistant.io/docs/core/integration-quality-scale/>: Bronze through Platinum, with the exact text of every rule.
 - **`quality-scale-rule-verifier` agent:** defined at `.claude/agents/quality-scale-rule-verifier.md` in the Home Assistant Core repository (<https://github.com/home-assistant/core>). In a Claude Code session with that repository on disk, dispatch the agent against this integration to verify a specific rule against its official documentation.
-- **Local compliance state:** `QUALITY_SCALE.md` in this repo — a checklist where boxes are only checked once a rule has been verified.
+- **Local compliance state:** `QUALITY_SCALE.md` in this repo, a checklist where boxes are only checked once a rule has been verified.

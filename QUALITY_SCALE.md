@@ -8,8 +8,8 @@ Tracks compliance with the [Home Assistant integration quality scale](https://de
 - [ ] `brands` - Has branding assets available for the integration
 - [x] `common-modules` - Place common patterns in common modules
 - [ ] `config-flow-test-coverage` - Full test coverage for the config flow
-- [ ] `config-flow` - Integration needs to be able to be set up via the UI
-    - [ ] Uses `data_description` to give context to fields
+- [x] `config-flow` - Integration needs to be able to be set up via the UI
+    - [x] Uses `data_description` to give context to fields
     - [x] Uses `ConfigEntry.data` and `ConfigEntry.options` correctly
 - [x] `dependency-transparency` - Dependency transparency
 - [x] `docs-actions` - The documentation describes the provided service actions that can be used

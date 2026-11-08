@@ -48,7 +48,7 @@ Comprehensive overview of all real-time sensor data.
 | `PU_SENS_PRESS`           | float  | Pump pressure (bar)                  |
 | `PU_LEVEL_PW_CONTROL`     | uint16 | Pump PWM control                     |
 | `PU_SET_LEVEL_PW_CONTROL` | uint16 | Pump target PWM                      |
-| `PU_SENS_FLOW_METER_ML`   | float  | Flow meter reading (ml/s); on 4.159 it mirrors `PU_SENS_FLOW_METER_FLOWRATE` — on a tank machine both read 0 throughout brewing, with a stale nonzero value while idle |
+| `PU_SENS_FLOW_METER_ML`   | float  | Flow meter reading (ml/s); on 4.159 it mirrors `PU_SENS_FLOW_METER_FLOWRATE`; on a tank machine both read 0 throughout brewing, with a stale nonzero value while idle |
 | `SB_SENS_PRESS`           | float  | Steam boiler pressure (bar)          |
 | `SB_STATUS`               | uint8  | Steam boiler status (see enum below) |
 | `SCALE_WEIGHT`            | float  | Scale weight (grams)                 |
@@ -58,7 +58,7 @@ Comprehensive overview of all real-time sensor data.
 | `PU_SENS_FLOW_METER_VOLUME` | float | Flow meter volume (ml) *(4.159+)* |
 | `PU_SENS_FLOW_METER_FLOWRATE` | float | Flow meter rate (ml/s) *(4.159+)* |
 
-Fields marked *(4.159+)* were first observed with firmware 4.159/3.63 and are absent on older firmware (verified on 4.22/3.22). On a Xenia DBL running 4.159, all three flow-meter fields stayed 0 through a real 9.4 bar shot — the DBL presumably has no flow-meter hardware installed; other variants (e.g. the Mahlkönig edition) may report real values here. The scale auto-tares shortly after brew start and again ~2.5 s after brew end.
+Fields marked *(4.159+)* were first observed with firmware 4.159/3.63 and are absent on older firmware (verified on 4.22/3.22). On a Xenia DBL running 4.159, all three flow-meter fields stayed 0 through a real 9.4 bar shot. The DBL presumably has no flow-meter hardware installed; other variants (e.g. the Mahlkönig edition) may report real values here. The scale auto-tares shortly after brew start and again ~2.5 s after brew end.
 
 ---
 
@@ -306,7 +306,7 @@ on the HTTP status, not this field.
 
 ### `/api/v2/switches`
 
-**GET** — Returns switch-to-script mappings.
+**GET**: returns switch-to-script mappings.
 
 **Response:**
 ```json
@@ -316,7 +316,7 @@ on the HTTP status, not this field.
 }
 ```
 
-**POST** — Updates all switch mappings. Send the full set of switch assignments.
+**POST**: updates all switch mappings. Send the full set of switch assignments.
 
 **Content-Type:** `application/x-www-form-urlencoded`
 
@@ -407,6 +407,7 @@ The following remain undocumented and device-only, with no known API for reading
 
 ```python
 import aiohttp
+
 
 async def turn_on_machine(host: str):
     url = f"http://{host}/api/v2/machine/control"
