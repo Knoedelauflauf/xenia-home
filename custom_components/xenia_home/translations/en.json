@@ -26,23 +26,27 @@
         "description": "Enter the hostname or IP address of your Xenia espresso machine",
         "data": {
           "host": "Host"
+        },
+        "data_description": {
+          "host": "The hostname or IP address of the machine, for example xenia.local."
         }
       },
-      "reconfigure_confirm": {
+      "reconfigure": {
         "title": "Reconfigure Xenia Espresso Machine",
         "description": "Update the hostname or IP address for {name}",
         "data": {
           "host": "Host"
+        },
+        "data_description": {
+          "host": "The hostname or IP address of the machine, for example xenia.local."
         }
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect to the espresso machine. Please check the host address and ensure the device is powered on and accessible on your network.",
-      "unknown": "An unexpected error occurred"
+      "cannot_connect": "Failed to connect to the espresso machine. Please check the host address and ensure the device is powered on and accessible on your network."
     },
     "abort": {
-      "already_configured": "This espresso machine is already configured",
-      "reconfigure_successful": "Reconfiguration successful"
+      "already_configured": "This espresso machine is already configured"
     }
   },
   "options": {
@@ -51,6 +55,9 @@
         "title": "Xenia options",
         "data": {
           "weight_management_enabled": "Enable weight management"
+        },
+        "data_description": {
+          "weight_management_enabled": "Adds a number entity that sets the weight target of a script on the machine."
         }
       },
       "select_script": {
@@ -58,6 +65,9 @@
         "description": "Select an existing script with a weight target or create a new one",
         "data": {
           "managed_script_id": "Script"
+        },
+        "data_description": {
+          "managed_script_id": "Only scripts with a weight target are listed."
         }
       },
       "configure_weight": {
@@ -67,11 +77,17 @@
           "weight_min": "Minimum weight (g)",
           "weight_max": "Maximum weight (g)",
           "weight_step": "Step size (g)"
+        },
+        "data_description": {
+          "weight_min": "The lowest weight target the number entity offers.",
+          "weight_max": "The highest weight target the number entity offers.",
+          "weight_step": "The step size of the number entity."
         }
       }
     },
     "abort": {
-      "cannot_connect": "Failed to connect to the espresso machine"
+      "cannot_connect": "Failed to connect to the espresso machine",
+      "script_not_created": "The script was created, but the machine does not list it."
     }
   },
   "entity": {

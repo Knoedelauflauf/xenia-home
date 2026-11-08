@@ -1,13 +1,12 @@
 """Switch platform for the Xenia espresso machine."""
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import XENIA_DOMAIN, PowerOnBehavior
 from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
-from .entity import XeniaEntity
+from .entity import XeniaEntity, machine_id
 from .errors import machine_write
 from .xenia import MachineStatus, SteamBoilerStatus
 
@@ -39,7 +38,7 @@ class XeniaPowerSwitch(XeniaEntity, SwitchEntity):
         super().__init__(coordinator)
         self._attr_translation_key = "power"
         self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_power_{coordinator.config_entry.data[CONF_HOST]}"
+            f"{XENIA_DOMAIN}_power_{machine_id(coordinator.config_entry)}"
         )
 
     @property
@@ -74,7 +73,7 @@ class XeniaEcoSwitch(XeniaEntity, SwitchEntity):
         super().__init__(coordinator)
         self._attr_translation_key = "eco_mode"
         self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_eco_mode_{coordinator.config_entry.data[CONF_HOST]}"
+            f"{XENIA_DOMAIN}_eco_mode_{machine_id(coordinator.config_entry)}"
         )
 
     @property
@@ -114,8 +113,7 @@ class XeniaSteamBoilerSwitch(XeniaEntity, SwitchEntity):
         super().__init__(coordinator)
         self._attr_translation_key = "steam_boiler_power"
         self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_steam_boiler_power_"
-            f"{coordinator.config_entry.data[CONF_HOST]}"
+            f"{XENIA_DOMAIN}_steam_boiler_power_{machine_id(coordinator.config_entry)}"
         )
 
     @property

@@ -6,12 +6,14 @@ import logging
 from typing import Any, Final
 
 from homeassistant.components.number import (
+    DOMAIN as NUMBER_DOMAIN,
     NumberDeviceClass,
     NumberEntity,
     NumberEntityDescription,
 )
-from homeassistant.const import CONF_HOST, EntityCategory, UnitOfMass, UnitOfTemperature
+from homeassistant.const import EntityCategory, UnitOfMass, UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
@@ -26,6 +28,7 @@ from .const import (
     DEFAULT_WEIGHT_MAX,
     DEFAULT_WEIGHT_MIN,
     DEFAULT_WEIGHT_STEP,
+    XENIA_DOMAIN,
 )
 from .coordinator import (
     XeniaConfigCoordinator,
@@ -33,7 +36,7 @@ from .coordinator import (
     XeniaCoordinatorData,
     XeniaDataUpdateCoordinator,
 )
-from .entity import XeniaEntity, build_device_info
+from .entity import XeniaEntity, build_device_info, machine_id
 from .errors import machine_write
 from .script_parser import get_weight_target, set_weight_target
 
@@ -100,9 +103,17 @@ async def async_setup_entry(
         XeniaNumber(coordinator, description) for description in NUMBER_TYPES
     ]
 
+    weight_unique_id = f"{machine_id(entry)}_script_weight_target"
     if entry.options.get(CONF_WEIGHT_MANAGEMENT_ENABLED):
-        config_coordinator = entry.runtime_data.config_coordinator
-        entities.append(XeniaWeightNumber(config_coordinator))
+        entities.append(
+            XeniaWeightNumber(entry.runtime_data.config_coordinator, weight_unique_id)
+        )
+    else:
+        registry = er.async_get(hass)
+        if entity_id := registry.async_get_entity_id(
+            NUMBER_DOMAIN, XENIA_DOMAIN, weight_unique_id
+        ):
+            registry.async_remove(entity_id)
 
     async_add_entities(entities)
 
@@ -119,7 +130,7 @@ class XeniaNumber(XeniaEntity, NumberEntity):
         super().__init__(coordinator)
         self.entity_description: XeniaNumberEntityDescription = entity_description
         self._attr_unique_id = (
-            f"{coordinator.config_entry.data[CONF_HOST]}_{entity_description.key}"
+            f"{machine_id(coordinator.config_entry)}_{entity_description.key}"
         )
         self._attr_native_min_value = entity_description.native_min_value or 0.0
         self._attr_native_max_value = entity_description.native_max_value or 100.0
@@ -155,12 +166,10 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
     _attr_native_unit_of_measurement = UnitOfMass.GRAMS
     _attr_entity_category = EntityCategory.CONFIG
 
-    def __init__(self, coordinator: XeniaConfigCoordinator) -> None:
+    def __init__(self, coordinator: XeniaConfigCoordinator, unique_id: str) -> None:
         """Initialize the weight-target entity."""
         super().__init__(coordinator)
-        self._attr_unique_id = (
-            f"{coordinator.config_entry.data[CONF_HOST]}_script_weight_target"
-        )
+        self._attr_unique_id = unique_id
         options = coordinator.config_entry.options
         self._attr_native_min_value = options.get(CONF_WEIGHT_MIN, DEFAULT_WEIGHT_MIN)
         self._attr_native_max_value = options.get(CONF_WEIGHT_MAX, DEFAULT_WEIGHT_MAX)
@@ -185,9 +194,9 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
     @property
     def device_info(self) -> DeviceInfo:
         """Return device information about this Xenia espresso machine."""
-        host = self.coordinator.config_entry.data[CONF_HOST]
-        machine = self.coordinator.data.machine
-        return build_device_info(host, machine)
+        return build_device_info(
+            self.coordinator.config_entry, self.coordinator.data.machine
+        )
 
     async def async_set_native_value(self, value: float) -> None:
         """Rewrite the weight-target command in the managed script on the machine."""

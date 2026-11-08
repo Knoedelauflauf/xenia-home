@@ -1,16 +1,25 @@
 """Base entity for Xenia Espresso Machine integration."""
 
-from homeassistant.const import CONF_HOST
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import XENIA_DOMAIN
-from .coordinator import XeniaDataUpdateCoordinator, XeniaRuntimeData
+from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator, XeniaRuntimeData
 from .xenia import XeniaMachineData
 
 
+def machine_id(entry: XeniaConfigEntry) -> str:
+    """Return the key of the machine's device and entity unique ids.
+
+    This is the host the machine was added with. It is kept when the host is
+    reconfigured, so the ids stay stable.
+    """
+    assert entry.unique_id is not None
+    return entry.unique_id
+
+
 def build_device_info(
-    host: str, machine: XeniaMachineData, mac: str | None = None
+    entry: XeniaConfigEntry, machine: XeniaMachineData, mac: str | None = None
 ) -> DeviceInfo:
     """Build device info for a Xenia espresso machine."""
     fw_version = machine.fw_version()
@@ -19,7 +28,7 @@ def build_device_info(
         f"{fw_version}/{esp_fw_version}" if fw_version and esp_fw_version else None
     )
     info = DeviceInfo(
-        identifiers={(XENIA_DOMAIN, host)},
+        identifiers={(XENIA_DOMAIN, machine_id(entry))},
         name="Xenia Espresso Machine",
         manufacturer="Xenia Espresso GmbH",
         model="DBL",
@@ -51,6 +60,11 @@ class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
         )
 
     @property
+    def machine_id(self) -> str:
+        """Return the key of the machine's unique ids."""
+        return machine_id(self.coordinator.config_entry)
+
+    @property
     def runtime_data(self) -> XeniaRuntimeData:
         """Return the runtime data."""
         return self.coordinator.config_entry.runtime_data
@@ -58,8 +72,9 @@ class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device information about this Xenia espresso machine."""
-        host = self.coordinator.config_entry.data[CONF_HOST]
         machine = self.runtime_data.config_coordinator.data.machine
         return build_device_info(
-            host, machine, self.coordinator.data.overview_single.ma_mac
+            self.coordinator.config_entry,
+            machine,
+            self.coordinator.data.overview_single.ma_mac,
         )

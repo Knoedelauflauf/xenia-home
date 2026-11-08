@@ -1,7 +1,5 @@
 """Tests for __init__.py — setup, unload, and the execute_script service."""
 
-from unittest.mock import patch
-
 from homeassistant.const import ATTR_CONFIG_ENTRY_ID
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
@@ -306,15 +304,3 @@ async def test_setup_strips_polling_options_of_older_releases(
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     assert dict(entry.options) == {CONF_WEIGHT_MIN: 20.0}
-
-
-async def test_options_change_reloads_entry(hass, init_integration):
-    with patch.object(
-        hass.config_entries, "async_reload", wraps=hass.config_entries.async_reload
-    ) as reload:
-        hass.config_entries.async_update_entry(
-            init_integration,
-            options={**init_integration.options, CONF_WEIGHT_MIN: 20.0},
-        )
-        await hass.async_block_till_done()
-    reload.assert_called_once_with(init_integration.entry_id)

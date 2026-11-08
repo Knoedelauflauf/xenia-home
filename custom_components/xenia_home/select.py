@@ -3,14 +3,14 @@
 from dataclasses import dataclass
 
 from homeassistant.components.select import SelectEntity
-from homeassistant.const import CONF_HOST, EntityCategory
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import POWER_ON_BEHAVIOR_OPTIONS, XENIA_DOMAIN, PowerOnBehavior
 from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
-from .entity import XeniaEntity
+from .entity import XeniaEntity, machine_id
 from .errors import machine_write
 
 PARALLEL_UPDATES = 1
@@ -78,8 +78,7 @@ class PowerOnBehaviorSelect(XeniaEntity, SelectEntity, RestoreEntity):
         """Initialize the select entity."""
         super().__init__(coordinator)
         self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_power_on_behavior_"
-            f"{coordinator.config_entry.data[CONF_HOST]}"
+            f"{XENIA_DOMAIN}_power_on_behavior_{machine_id(coordinator.config_entry)}"
         )
 
     @property
@@ -114,7 +113,7 @@ class ScriptSelect(XeniaEntity, SelectEntity):
         """Initialize the select entity."""
         super().__init__(coordinator)
         self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_script_{coordinator.config_entry.data[CONF_HOST]}"
+            f"{XENIA_DOMAIN}_script_{machine_id(coordinator.config_entry)}"
         )
 
     @property
@@ -158,7 +157,9 @@ class SwitchConfigSelect(XeniaEntity, SelectEntity):
         super().__init__(coordinator)
         self._switch_key = description.key
         self._attr_translation_key = description.translation_key
-        self._attr_unique_id = f"{XENIA_DOMAIN}_{description.key}_{coordinator.config_entry.data[CONF_HOST]}"
+        self._attr_unique_id = (
+            f"{XENIA_DOMAIN}_{description.key}_{machine_id(coordinator.config_entry)}"
+        )
 
     @property
     def options(self) -> list[str]:

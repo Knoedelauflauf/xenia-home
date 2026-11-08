@@ -1,6 +1,5 @@
 """Config flow for the Xenia espresso machine integration."""
 
-import asyncio
 import logging
 from typing import Any
 
@@ -8,7 +7,7 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
-    OptionsFlow,
+    OptionsFlowWithReload,
 )
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant, callback
@@ -35,145 +34,103 @@ from .xenia import Xenia
 
 _LOGGER = logging.getLogger(__name__)
 
-DATA_SCHEMA_USER = probatio.Schema(
-    {
-        probatio.Required(CONF_HOST, default=DEFAULT_HOST): str,
-    }
-)
-
+HOST_SCHEMA = probatio.Schema({probatio.Required(CONF_HOST, default=DEFAULT_HOST): str})
 
 CREATE_NEW_SCRIPT = "__create_new__"
 
 
+async def _async_can_connect(hass: HomeAssistant, host: str) -> bool:
+    return await Xenia(host, async_get_clientsession(hass)).device_connected()
+
+
 class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
-    """User-driven config flow for adding and reconfiguring a Xenia machine."""
+    """Add a Xenia machine by host, or change the host of one."""
 
     VERSION = 1
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
-        """Return the options flow handler for this integration."""
+    def async_get_options_flow(config_entry: ConfigEntry) -> XeniaOptionsFlow:
+        """Return the options flow."""
         return XeniaOptionsFlow()
-
-    def __init__(self) -> None:
-        """Initialize per-flow state."""
-        self._entry: ConfigEntry | None = None
-        self._host: str | None = None
-        self._name: str | None = None
-
-    async def _async_test_connection(
-        self, hass: HomeAssistant, host: str
-    ) -> str | None:
-        session = async_get_clientsession(hass)
-        xenia = Xenia(host, session)
-        try:
-            if not await asyncio.wait_for(xenia.device_connected(), timeout=8):
-                return "cannot_connect"
-        except REQUEST_ERRORS:
-            return "cannot_connect"
-        return None
-
-    def _create_entry(self, title: str) -> ConfigFlowResult:
-        assert self._host is not None
-        return self.async_create_entry(
-            title=title,
-            data={CONF_HOST: self._host},
-        )
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle the initial step where the user supplies the host."""
+        """Ask for the host and add the machine."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            self._host = user_input[CONF_HOST]
-            self._name = str(user_input[CONF_HOST])
-
-            await self.async_set_unique_id(self._host)
+            host = user_input[CONF_HOST].strip()
+            await self.async_set_unique_id(host)
             self._abort_if_unique_id_configured()
-            error = await self._async_test_connection(self.hass, self._host)
-            if error is None:
-                return self._create_entry(self._name)
-
-            errors["base"] = error
+            if await _async_can_connect(self.hass, host):
+                return self.async_create_entry(title=host, data={CONF_HOST: host})
+            errors["base"] = "cannot_connect"
 
         return self.async_show_form(
-            step_id="user", data_schema=DATA_SCHEMA_USER, errors=errors
+            step_id="user",
+            data_schema=self.add_suggested_values_to_schema(HOST_SCHEMA, user_input),
+            errors=errors,
         )
 
     async def async_step_reconfigure(
-        self, _: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Pre-fill the existing host and forward to the reconfigure form."""
-        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
-        assert entry is not None
-        self._entry = entry
-        self._host = entry.data.get(CONF_HOST, DEFAULT_HOST)
-        self._name = entry.title or self._host
-
-        return await self.async_step_reconfigure_confirm()
-
-    async def async_step_reconfigure_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Validate a new host and update the existing entry."""
-        assert self._host is not None
+        """Change the host of the machine."""
+        entry = self._get_reconfigure_entry()
         errors: dict[str, str] = {}
-
-        schema = probatio.Schema(
-            {probatio.Required(CONF_HOST, default=self._host): str}
-        )
-
         if user_input is not None:
-            new_host = user_input[CONF_HOST].strip()
-            error = await self._async_test_connection(self.hass, new_host)
-            if error is None:
-                assert self._entry is not None
-                self.hass.config_entries.async_update_entry(
-                    self._entry, data={CONF_HOST: new_host}
+            host = user_input[CONF_HOST].strip()
+            if await _async_can_connect(self.hass, host):
+                return self.async_update_reload_and_abort(
+                    entry, data_updates={CONF_HOST: host}
                 )
-                return self.async_abort(reason="reconfigure_successful")
-            errors["base"] = error
+            errors["base"] = "cannot_connect"
 
         return self.async_show_form(
-            step_id="reconfigure_confirm",
-            data_schema=schema,
-            description_placeholders={"name": self._name or self._host},
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(
+                HOST_SCHEMA, user_input or entry.data
+            ),
+            description_placeholders={"name": entry.title},
             errors=errors,
         )
 
 
-class XeniaOptionsFlow(OptionsFlow):
-    """Options flow for Xenia weight management."""
+class XeniaOptionsFlow(OptionsFlowWithReload):
+    """Set up weight management on a script of the machine."""
 
     def __init__(self) -> None:
-        """Initialize options flow."""
-        super().__init__()
+        """Initialize the options flow."""
         self._managed_script_id: int | None = None
-        self._weight_data: dict[str, Any] = {}
+
+    def _xenia(self) -> Xenia:
+        return Xenia(
+            self.config_entry.data[CONF_HOST], async_get_clientsession(self.hass)
+        )
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Show the options entry form and route to the weight flow."""
+        """Turn weight management on or off."""
         if user_input is not None:
-            if not user_input.get(CONF_WEIGHT_MANAGEMENT_ENABLED):
-                new_data = {
+            if user_input[CONF_WEIGHT_MANAGEMENT_ENABLED]:
+                return await self.async_step_select_script()
+            return self.async_create_entry(
+                data={
                     **self.config_entry.options,
                     CONF_WEIGHT_MANAGEMENT_ENABLED: False,
                     CONF_MANAGED_SCRIPT_ID: None,
                 }
-                return self.async_create_entry(data=new_data)
-            return await self.async_step_select_script()
+            )
 
-        current_weight = self.config_entry.options.get(
-            CONF_WEIGHT_MANAGEMENT_ENABLED, False
-        )
         schema = probatio.Schema(
             {
                 probatio.Required(
-                    CONF_WEIGHT_MANAGEMENT_ENABLED, default=current_weight
+                    CONF_WEIGHT_MANAGEMENT_ENABLED,
+                    default=self.config_entry.options.get(
+                        CONF_WEIGHT_MANAGEMENT_ENABLED, False
+                    ),
                 ): bool,
             }
         )
@@ -182,46 +139,40 @@ class XeniaOptionsFlow(OptionsFlow):
     async def async_step_select_script(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Let the user pick an existing weight-script or create a new one."""
+        """Pick a script with a weight target, or create one."""
         if user_input is not None:
             selected = user_input[CONF_MANAGED_SCRIPT_ID]
             if selected == CREATE_NEW_SCRIPT:
-                return await self._create_new_script()
+                return await self._async_create_script()
             self._managed_script_id = int(selected)
             return await self.async_step_configure_weight()
 
-        # Build list of scripts that contain a weight command
-        host = self.config_entry.data[CONF_HOST]
-        session = async_get_clientsession(self.hass)
-        xenia = Xenia(host, session)
-
+        xenia = self._xenia()
         try:
-            all_scripts = await xenia.get_scripts()
+            scripts = await xenia.get_scripts()
         except REQUEST_ERRORS:
             return self.async_abort(reason="cannot_connect")
 
-        weight_scripts: dict[str, str] = {}
-        for script_id, title in all_scripts.items():
+        options: dict[str, str] = {}
+        for script_id, title in scripts.items():
             try:
-                script_data = await xenia.read_script(script_id)
-                instruction = script_data.get("Content", "")
-                parsed = parse_instruction(instruction)
-                if parsed.has_command(COMMAND_WEIGHT_TARGET):
-                    weight_scripts[str(script_id)] = title
+                script = await xenia.read_script(script_id)
             except REQUEST_ERRORS:
                 _LOGGER.debug("Could not read script %s, skipping", script_id)
+                continue
+            if parse_instruction(script.get("Content", "")).has_command(
+                COMMAND_WEIGHT_TARGET
+            ):
+                options[str(script_id)] = title
+        options[CREATE_NEW_SCRIPT] = f"{DEFAULT_SCRIPT_NAME} (create new)"
 
-        current_id = self.config_entry.options.get(CONF_MANAGED_SCRIPT_ID)
-        options: dict[str, str] = dict(weight_scripts)
-        options[CREATE_NEW_SCRIPT] = DEFAULT_SCRIPT_NAME + " (create new)"
-
-        default = str(current_id) if current_id and str(current_id) in options else None
-
+        current = str(self.config_entry.options.get(CONF_MANAGED_SCRIPT_ID))
         schema = probatio.Schema(
             {
-                probatio.Required(CONF_MANAGED_SCRIPT_ID, default=default): probatio.In(
-                    options
-                ),
+                probatio.Required(
+                    CONF_MANAGED_SCRIPT_ID,
+                    default=current if current in options else probatio.UNDEFINED,
+                ): probatio.In(options),
             }
         )
         return self.async_show_form(step_id="select_script", data_schema=schema)
@@ -229,63 +180,51 @@ class XeniaOptionsFlow(OptionsFlow):
     async def async_step_configure_weight(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Configure weight target min, max, and step size."""
+        """Set the range and step of the weight target."""
         if user_input is not None:
-            self._weight_data = {
-                CONF_WEIGHT_MANAGEMENT_ENABLED: True,
-                CONF_MANAGED_SCRIPT_ID: self._managed_script_id,
-                CONF_WEIGHT_MIN: user_input[CONF_WEIGHT_MIN],
-                CONF_WEIGHT_MAX: user_input[CONF_WEIGHT_MAX],
-                CONF_WEIGHT_STEP: user_input[CONF_WEIGHT_STEP],
-            }
-            new_data = {**self.config_entry.options, **self._weight_data}
-            return self.async_create_entry(data=new_data)
+            return self.async_create_entry(
+                data={
+                    **self.config_entry.options,
+                    **user_input,
+                    CONF_WEIGHT_MANAGEMENT_ENABLED: True,
+                    CONF_MANAGED_SCRIPT_ID: self._managed_script_id,
+                }
+            )
 
-        current_min = self.config_entry.options.get(CONF_WEIGHT_MIN, DEFAULT_WEIGHT_MIN)
-        current_max = self.config_entry.options.get(CONF_WEIGHT_MAX, DEFAULT_WEIGHT_MAX)
-        current_step = self.config_entry.options.get(
-            CONF_WEIGHT_STEP, DEFAULT_WEIGHT_STEP
-        )
-
+        options = self.config_entry.options
         schema = probatio.Schema(
             {
                 probatio.Required(
-                    CONF_WEIGHT_MIN, default=current_min
+                    CONF_WEIGHT_MIN,
+                    default=options.get(CONF_WEIGHT_MIN, DEFAULT_WEIGHT_MIN),
                 ): probatio.Coerce(float),
                 probatio.Required(
-                    CONF_WEIGHT_MAX, default=current_max
+                    CONF_WEIGHT_MAX,
+                    default=options.get(CONF_WEIGHT_MAX, DEFAULT_WEIGHT_MAX),
                 ): probatio.Coerce(float),
                 probatio.Required(
-                    CONF_WEIGHT_STEP, default=current_step
+                    CONF_WEIGHT_STEP,
+                    default=options.get(CONF_WEIGHT_STEP, DEFAULT_WEIGHT_STEP),
                 ): probatio.Coerce(float),
             }
         )
         return self.async_show_form(step_id="configure_weight", data_schema=schema)
 
-    async def _create_new_script(self) -> ConfigFlowResult:
-        """Create a new script on the machine and store its ID."""
-        host = self.config_entry.data[CONF_HOST]
-        session = async_get_clientsession(self.hass)
-        xenia = Xenia(host, session)
-
+    async def _async_create_script(self) -> ConfigFlowResult:
+        xenia = self._xenia()
         try:
             await xenia.create_script(DEFAULT_SCRIPT_NAME, DEFAULT_SCRIPT_INSTRUCTION)
-            # Re-fetch script list to find the newly created script
             scripts = await xenia.get_scripts()
         except REQUEST_ERRORS:
             return self.async_abort(reason="cannot_connect")
 
-        # Find the new script by name
+        # The create endpoint does not return the id of the new script.
         new_id = next(
             (sid for sid, title in scripts.items() if title == DEFAULT_SCRIPT_NAME),
             None,
         )
-
         if new_id is None:
-            _LOGGER.error(
-                "Created script '%s' but could not find it", DEFAULT_SCRIPT_NAME
-            )
-            return self.async_abort(reason="cannot_connect")
+            return self.async_abort(reason="script_not_created")
 
         self._managed_script_id = new_id
         return await self.async_step_configure_weight()

@@ -12,7 +12,6 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
-    CONF_HOST,
     EntityCategory,
     UnitOfElectricCurrent,
     UnitOfEnergy,
@@ -29,7 +28,7 @@ from .coordinator import (
     XeniaCoordinatorData,
     XeniaDataUpdateCoordinator,
 )
-from .entity import XeniaEntity
+from .entity import XeniaEntity, machine_id
 from .xenia import MachineStatus
 
 PARALLEL_UPDATES = 0
@@ -175,7 +174,7 @@ class XeniaSensor(XeniaEntity, SensorEntity):
         super().__init__(coordinator)
         self.entity_description: XeniaSensorEntityDescription = entity_description
         self._attr_unique_id = (
-            f"{coordinator.config_entry.data[CONF_HOST]}_{entity_description.key}"
+            f"{machine_id(coordinator.config_entry)}_{entity_description.key}"
         )
 
     @property

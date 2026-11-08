@@ -101,7 +101,8 @@ async def test_power_on_behavior_stays_available_without_machine(
     hass, init_integration
 ):
     """The select is a local preference; an unreachable machine must not
-    make it unavailable, or a restart would store and restore that state."""
+    make it unavailable, or a restart would store and restore that state.
+    """
     coordinator = init_integration.runtime_data.coordinator
     coordinator.last_update_success = False
     coordinator.async_update_listeners()

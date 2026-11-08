@@ -6,14 +6,13 @@ import logging
 from typing import Any
 
 from homeassistant.components.event import EventEntity
-from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from .const import XENIA_DOMAIN
 from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
-from .entity import XeniaEntity
+from .entity import XeniaEntity, machine_id
 from .xenia import MachineStatus
 
 _LOGGER = logging.getLogger(__name__)
@@ -76,7 +75,7 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
         """Initialize the shot tracker."""
         super().__init__(coordinator)
         self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_shot_tracker_{coordinator.config_entry.data[CONF_HOST]}"
+            f"{XENIA_DOMAIN}_shot_tracker_{machine_id(coordinator.config_entry)}"
         )
         self._is_brewing = False
         self._shot_start_time: datetime | None = None

@@ -1,13 +1,12 @@
 """Button platform for Xenia espresso machine."""
 
 from homeassistant.components.button import ButtonEntity
-from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import XENIA_DOMAIN
 from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
-from .entity import XeniaEntity
+from .entity import XeniaEntity, machine_id
 from .errors import machine_write
 
 PARALLEL_UPDATES = 1
@@ -37,7 +36,7 @@ class XeniaExecuteScriptButton(XeniaEntity, ButtonEntity):
         """Initialize the button."""
         super().__init__(coordinator)
         self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_execute_script_{coordinator.config_entry.data[CONF_HOST]}"
+            f"{XENIA_DOMAIN}_execute_script_{machine_id(coordinator.config_entry)}"
         )
 
     async def async_press(self) -> None:
@@ -58,7 +57,7 @@ class XeniaStopScriptButton(XeniaEntity, ButtonEntity):
         """Initialize the button."""
         super().__init__(coordinator)
         self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_stop_script_{coordinator.config_entry.data[CONF_HOST]}"
+            f"{XENIA_DOMAIN}_stop_script_{machine_id(coordinator.config_entry)}"
         )
 
     async def async_press(self) -> None:

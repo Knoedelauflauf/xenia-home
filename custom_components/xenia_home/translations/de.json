@@ -26,23 +26,27 @@
         "description": "Gib den Hostnamen oder die IP-Adresse deiner Xenia Espressomaschine ein",
         "data": {
           "host": "Host"
+        },
+        "data_description": {
+          "host": "Der Hostname oder die IP-Adresse der Maschine, zum Beispiel xenia.local."
         }
       },
-      "reconfigure_confirm": {
+      "reconfigure": {
         "title": "Xenia Espressomaschine neu konfigurieren",
         "description": "Aktualisiere den Hostnamen oder die IP-Adresse für {name}",
         "data": {
           "host": "Host"
+        },
+        "data_description": {
+          "host": "Der Hostname oder die IP-Adresse der Maschine, zum Beispiel xenia.local."
         }
       }
     },
     "error": {
-      "cannot_connect": "Verbindung zur Espressomaschine fehlgeschlagen. Bitte überprüfe die Host-Adresse und stelle sicher, dass das Gerät eingeschaltet und im Netzwerk erreichbar ist.",
-      "unknown": "Ein unerwarteter Fehler ist aufgetreten"
+      "cannot_connect": "Verbindung zur Espressomaschine fehlgeschlagen. Bitte überprüfe die Host-Adresse und stelle sicher, dass das Gerät eingeschaltet und im Netzwerk erreichbar ist."
     },
     "abort": {
-      "already_configured": "Diese Espressomaschine ist bereits konfiguriert",
-      "reconfigure_successful": "Neukonfiguration erfolgreich"
+      "already_configured": "Diese Espressomaschine ist bereits konfiguriert"
     }
   },
   "options": {
@@ -51,6 +55,9 @@
         "title": "Xenia Optionen",
         "data": {
           "weight_management_enabled": "Gewichtssteuerung aktivieren"
+        },
+        "data_description": {
+          "weight_management_enabled": "Fügt eine Zahlen-Entität hinzu, die das Zielgewicht eines Skripts auf der Maschine setzt."
         }
       },
       "select_script": {
@@ -58,6 +65,9 @@
         "description": "Wähle ein vorhandenes Skript mit Zielgewicht oder erstelle ein neues",
         "data": {
           "managed_script_id": "Skript"
+        },
+        "data_description": {
+          "managed_script_id": "Es werden nur Skripte mit Zielgewicht angezeigt."
         }
       },
       "configure_weight": {
@@ -67,11 +77,17 @@
           "weight_min": "Mindestgewicht (g)",
           "weight_max": "Maximalgewicht (g)",
           "weight_step": "Schrittweite (g)"
+        },
+        "data_description": {
+          "weight_min": "Das kleinste Zielgewicht, das die Zahlen-Entität anbietet.",
+          "weight_max": "Das größte Zielgewicht, das die Zahlen-Entität anbietet.",
+          "weight_step": "Die Schrittweite der Zahlen-Entität."
         }
       }
     },
     "abort": {
-      "cannot_connect": "Verbindung zur Espressomaschine fehlgeschlagen"
+      "cannot_connect": "Verbindung zur Espressomaschine fehlgeschlagen",
+      "script_not_created": "Das Skript wurde angelegt, aber die Maschine listet es nicht."
     }
   },
   "entity": {

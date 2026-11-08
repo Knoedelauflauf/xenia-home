@@ -40,11 +40,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
-async def _async_update_listener(hass: HomeAssistant, entry: XeniaConfigEntry) -> None:
-    """Reload on an options or host change."""
-    await hass.config_entries.async_reload(entry.entry_id)
-
-
 async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> bool:
     """Set up Xenia from a config entry."""
     host = entry.data[CONF_HOST]
@@ -65,7 +60,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> boo
         config_coordinator=config_coordinator,
         shot_store=shot_store,
     )
-    # Strip before the update listener is added, or this reloads the entry.
     options = {k: v for k, v in entry.options.items() if k not in REMOVED_OPTION_KEYS}
     if (
         value := options.pop(CONF_POWER_ON_BEHAVIOR, None)
@@ -73,8 +67,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> boo
         entry.runtime_data.power_on_behavior = PowerOnBehavior(value)
     if options != entry.options:
         hass.config_entries.async_update_entry(entry, options=options)
-
-    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
