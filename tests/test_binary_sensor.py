@@ -47,7 +47,6 @@ async def test_water_tank_state_for_level(
     expected_state,
 ):
     mock_xenia_api.set_overview_single(PU_SENS_WATER_TANK_LEVEL=level)
-    mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()

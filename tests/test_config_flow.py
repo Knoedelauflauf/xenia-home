@@ -4,7 +4,6 @@ from unittest.mock import patch
 
 from homeassistant import config_entries, data_entry_flow
 import pytest
-import yarl
 
 from custom_components.xenia_home.config_flow import CREATE_NEW_SCRIPT
 from custom_components.xenia_home.const import (
@@ -16,7 +15,6 @@ from custom_components.xenia_home.const import (
     DEFAULT_SCRIPT_NAME,
     XENIA_DOMAIN,
 )
-from tests.conftest import MockXeniaApi
 
 # ===========================================================================
 # Config flow — user step
@@ -26,7 +24,6 @@ from tests.conftest import MockXeniaApi
 async def test_user_step_shows_form_initially(
     hass, enable_custom_integrations, mock_xenia_api
 ):
-    mock_xenia_api.register()
     result = await hass.config_entries.flow.async_init(
         XENIA_DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -37,7 +34,6 @@ async def test_user_step_shows_form_initially(
 async def test_user_step_creates_entry_on_successful_connection(
     hass, enable_custom_integrations, mock_xenia_api
 ):
-    mock_xenia_api.register()
     result = await hass.config_entries.flow.async_init(
         XENIA_DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -51,7 +47,6 @@ async def test_user_step_creates_entry_on_successful_connection(
 async def test_user_step_aborts_when_already_configured(
     hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
 ):
-    mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)
     result = await hass.config_entries.flow.async_init(
         XENIA_DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -70,10 +65,7 @@ async def test_user_step_aborts_when_already_configured(
 async def test_user_step_shows_cannot_connect_on_network_error(
     hass, enable_custom_integrations, mock_xenia_api, exception
 ):
-    # Make the GET /overview to bad.host raise
-    mock_xenia_api._mock.get(
-        "http://bad.host/api/v2/overview", exception=exception, repeat=True
-    )
+    mock_xenia_api.for_host("bad.host").override("get", "overview", exc=exception)
     result = await hass.config_entries.flow.async_init(
         XENIA_DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -92,12 +84,11 @@ async def test_user_step_shows_cannot_connect_on_network_error(
 async def test_reconfigure_updates_host_on_success(
     hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
 ):
-    mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    MockXeniaApi(mock_xenia_api._mock, host="new.host").register()
+    new_machine = mock_xenia_api.for_host("new.host")
 
     result = await mock_config_entry.start_reconfigure_flow(hass)
     with patch.object(
@@ -112,24 +103,18 @@ async def test_reconfigure_updates_host_on_success(
     assert mock_config_entry.data["host"] == "new.host"
     reload.assert_called_once_with(mock_config_entry.entry_id)
     assert mock_config_entry.state is config_entries.ConfigEntryState.LOADED
-    assert (
-        "GET",
-        yarl.URL("http://new.host/api/v2/overview"),
-    ) in mock_xenia_api._mock.requests
+    assert new_machine.bodies("get", "overview")
 
 
 async def test_reconfigure_shows_error_on_connection_failure(
     hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
 ):
-    mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    mock_xenia_api._mock.get(
-        "http://bad.host/api/v2/overview",
-        exception=OSError("refused"),
-        repeat=True,
+    mock_xenia_api.for_host("bad.host").override(
+        "get", "overview", exc=OSError("refused")
     )
     result = await mock_config_entry.start_reconfigure_flow(hass)
     result = await hass.config_entries.flow.async_configure(
@@ -171,22 +156,9 @@ async def test_options_disable_weight_creates_entry(hass, init_integration):
 async def test_options_select_script_shows_weight_scripts_only(
     hass, init_integration, mock_xenia_api
 ):
-    # The flow re-reads scripts on entry to select_script via Xenia.get_scripts
-    # and Xenia.read_script. Register them.
-    mock_xenia_api._mock.get(
-        mock_xenia_api._url("scripts/list"),
-        payload={"index_list": [10, 20], "title_list": ["WithWeight", "NoWeight"]},
-        repeat=True,
-    )
-    # Two POSTs to /scripts/read — registrations are popped FIFO
-    mock_xenia_api._mock.post(
-        mock_xenia_api._url("scripts/read"),
-        payload={"Content": "1;13;27 45;7;", "Title": "WithWeight"},
-    )
-    mock_xenia_api._mock.post(
-        mock_xenia_api._url("scripts/read"),
-        payload={"Content": "1;13;7;", "Title": "NoWeight"},
-    )
+    mock_xenia_api.set_scripts({10: "WithWeight", 20: "NoWeight"})
+    mock_xenia_api.set_script(10, "1;13;27 45;7;", "WithWeight")
+    mock_xenia_api.set_script(20, "1;13;7;", "NoWeight")
 
     result = await hass.config_entries.options.async_init(init_integration.entry_id)
     result = await hass.config_entries.options.async_configure(
@@ -202,11 +174,7 @@ async def test_options_select_script_shows_weight_scripts_only(
 async def test_options_select_existing_script_proceeds_to_configure_weight(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api._mock.post(
-        mock_xenia_api._url("scripts/read"),
-        payload={"Content": "1;13;27 45;7;", "Title": "MyShot"},
-        repeat=True,
-    )
+    mock_xenia_api.set_script(10, "1;13;27 45;7;", "MyShot")
     result = await hass.config_entries.options.async_init(init_integration.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
@@ -224,18 +192,8 @@ async def test_options_select_existing_script_proceeds_to_configure_weight(
 async def test_options_create_new_script_calls_api(
     hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
 ):
-    # scripts/list must return DEFAULT_SCRIPT_NAME after create_script is called.
-    # Set this before register() so the repeat=True response is correct from
-    # the start — aioresponses ignores later registrations when repeat=True
-    # is already in effect for a URL.
     mock_xenia_api.set_scripts({25: DEFAULT_SCRIPT_NAME})
-    mock_xenia_api.register()
-    mock_xenia_api.expect_create_script()
-    mock_xenia_api._mock.post(
-        mock_xenia_api._url("scripts/read"),
-        payload={"Content": "1;13;27 45;7;", "Title": "MyShot"},
-        repeat=True,
-    )
+    mock_xenia_api.set_script(10, "1;13;27 45;7;", "MyShot")
 
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -264,11 +222,7 @@ async def test_options_create_new_script_calls_api(
 async def test_options_configure_weight_creates_entry(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api._mock.post(
-        mock_xenia_api._url("scripts/read"),
-        payload={"Content": "1;13;27 45;7;", "Title": "MyShot"},
-        repeat=True,
-    )
+    mock_xenia_api.set_script(10, "1;13;27 45;7;", "MyShot")
     result = await hass.config_entries.options.async_init(init_integration.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
@@ -302,11 +256,7 @@ async def test_options_configure_weight_creates_entry(
 
 
 async def test_options_full_flow_weight(hass, init_integration, mock_xenia_api):
-    mock_xenia_api._mock.post(
-        mock_xenia_api._url("scripts/read"),
-        payload={"Content": "1;13;27 45;7;", "Title": "MyShot"},
-        repeat=True,
-    )
+    mock_xenia_api.set_script(10, "1;13;27 45;7;", "MyShot")
     result = await hass.config_entries.options.async_init(init_integration.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],

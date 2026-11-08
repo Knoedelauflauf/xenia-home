@@ -1,14 +1,28 @@
-"""Shared pytest fixtures for the xenia_home integration tests."""
+"""Fixtures for the Xenia integration tests."""
 
-from collections.abc import Callable, Iterator
+from collections.abc import Awaitable, Callable
+from datetime import timedelta
+from http import HTTPStatus
+import json
+import re
 from typing import Any
+from unittest.mock import Mock
 
-from aioresponses import aioresponses as AioResponses
+from freezegun.api import FrozenDateTimeFactory
+from homeassistant.core import HomeAssistant
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-import yarl
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
+from pytest_homeassistant_custom_component.test_util.aiohttp import (
+    AiohttpClientMocker,
+    AiohttpClientMockResponse,
+)
+from yarl import URL
 
 from custom_components.xenia_home.const import XENIA_DOMAIN
+from tests import setup_integration
 from tests.fixtures.api_responses import (
     MACHINE_PAYLOAD,
     OVERVIEW_PAYLOAD,
@@ -19,213 +33,173 @@ from tests.fixtures.api_responses import (
 
 DEFAULT_HOST = "xenia.local"
 
+WRITE_ENDPOINTS = {
+    ("get", "scripts/stop"),
+    ("post", "inc_dec"),
+    ("post", "inc_dec_bb"),
+    ("post", "machine/control"),
+    ("post", "scripts/create"),
+    ("post", "scripts/execute"),
+    ("post", "switches"),
+    ("post", "toggle/sb"),
+}
+
+
+class XeniaMockResponse(AiohttpClientMockResponse):
+    """Mock response with the attributes ClientResponseError is built from."""
+
+    @property
+    def request_info(self) -> Mock:
+        """Return a stand-in for the request info."""
+        return Mock(real_url=self.url)
+
+    @property
+    def reason(self) -> str:
+        """Return the reason phrase of the status."""
+        return HTTPStatus(self.status).phrase
+
 
 class MockXeniaApi:
-    """Helper around aioresponses that knows the Xenia URL surface.
+    """A fake Xenia machine behind aioclient_mock.
 
-    Tests use the setter methods to register canned GET responses and the
-    `expect_*` methods to declare and later verify mutating POST calls.
-    Everything is keyed off a single host (default: xenia.local).
+    Responses follow the current payloads, so setters take effect at any
+    time, also after the integration is set up. Write endpoints accept
+    every request unless `override` replaces them.
     """
 
-    def __init__(self, mock: AioResponses, host: str = DEFAULT_HOST) -> None:
-        self._mock = mock
+    def __init__(
+        self, aioclient_mock: AiohttpClientMocker, host: str = DEFAULT_HOST
+    ) -> None:
+        """Answer every request to the API of `host`."""
+        self._aioclient_mock = aioclient_mock
         self._host = host
-        # Default everything to the canonical payloads.
-        self._overview: dict[str, Any] = dict(OVERVIEW_PAYLOAD)
-        self._overview_single: dict[str, Any] = dict(OVERVIEW_SINGLE_PAYLOAD)
-        self._machine: dict[str, Any] = dict(MACHINE_PAYLOAD)
-        self._scripts: dict[str, Any] = dict(SCRIPTS_PAYLOAD)
-        self._switches: dict[str, Any] = dict(SWITCHES_PAYLOAD)
-        self._read_script_responses: dict[int, dict[str, str]] = {}
-        self._registered = False
+        self._payloads: dict[str, dict[str, Any]] = {
+            "overview": dict(OVERVIEW_PAYLOAD),
+            "overview_single": dict(OVERVIEW_SINGLE_PAYLOAD),
+            "machine": dict(MACHINE_PAYLOAD),
+            "scripts/list": dict(SCRIPTS_PAYLOAD),
+            "switches": dict(SWITCHES_PAYLOAD),
+        }
+        self._script_files: dict[str, dict[str, str]] = {}
+        self._overrides: dict[tuple[str, str], dict[str, Any]] = {}
+        self._calls: list[tuple[str, str, str]] = []
+        api = re.compile(rf"^http://{re.escape(host)}/api/v2/")
+        for method in ("get", "post"):
+            aioclient_mock.request(method, api, side_effect=self._respond)
 
     @property
     def host(self) -> str:
+        """Return the host this machine answers on."""
         return self._host
 
-    def _url(self, path: str) -> str:
-        return f"http://{self._host}/api/v2/{path}"
-
-    def for_host(self, host: str) -> "MockXeniaApi":
-        """Return a second mock for another machine on the same session."""
-        return MockXeniaApi(self._mock, host)
-
-    # ---- setters ----
+    def for_host(self, host: str) -> MockXeniaApi:
+        """Return a second machine on another host."""
+        return MockXeniaApi(self._aioclient_mock, host)
 
     def set_overview(self, **fields: Any) -> None:
-        self._overview.clear()
-        self._overview.update({**OVERVIEW_PAYLOAD, **fields})
+        """Serve the default overview with `fields` replaced."""
+        self._payloads["overview"] = {**OVERVIEW_PAYLOAD, **fields}
 
     def set_overview_single(self, **fields: Any) -> None:
-        self._overview_single.clear()
-        self._overview_single.update({**OVERVIEW_SINGLE_PAYLOAD, **fields})
+        """Serve the default overview_single with `fields` replaced."""
+        self._payloads["overview_single"] = {**OVERVIEW_SINGLE_PAYLOAD, **fields}
 
     def set_machine(self, **fields: Any) -> None:
-        self._machine.clear()
-        self._machine.update({**MACHINE_PAYLOAD, **fields})
+        """Serve the default machine payload with `fields` replaced."""
+        self._payloads["machine"] = {**MACHINE_PAYLOAD, **fields}
 
     def set_scripts(self, scripts: dict[int, str]) -> None:
-        self._scripts.clear()
-        self._scripts["index_list"] = list(scripts.keys())
-        self._scripts["title_list"] = list(scripts.values())
-
-    def set_switches(self, switches: dict[str, int]) -> None:
-        self._switches.clear()
-        self._switches.update(switches)
-
-    def set_read_script(self, script_id: int, content: str, title: str) -> None:
-        """Register the response for POST /scripts/read; served in registration order.
-
-        aioresponses cannot inspect the POST body.
-        """
-        self._read_script_responses[script_id] = {
-            "Content": content,
-            "Title": title,
+        """Serve `scripts` as {id: title} from the script list."""
+        self._payloads["scripts/list"] = {
+            "index_list": list(scripts),
+            "title_list": list(scripts.values()),
         }
 
-    # ---- registration (called by init_integration) ----
+    def set_switches(self, switches: dict[str, int]) -> None:
+        """Serve `switches` as the switch assignments."""
+        self._payloads["switches"] = dict(switches)
 
-    def register(self, *, repeat: bool = True) -> None:
-        """Wire all GET responses into aioresponses.
+    def set_script(self, script_id: int, content: str, title: str) -> None:
+        """Store a script that scripts/read returns for `script_id`."""
+        self._script_files[f"{script_id:03d}"] = {"Content": content, "Title": title}
 
-        `repeat=True` so polling-style endpoints (overview, overview_single)
-        keep returning the response on every call.
-        """
-        if self._registered:
-            return
-        self._mock.get(
-            self._url("overview"),
-            payload=self._overview,
-            repeat=repeat,
-        )
-        self._mock.get(
-            self._url("overview_single"),
-            payload=self._overview_single,
-            repeat=repeat,
-        )
-        self._mock.get(
-            self._url("machine"),
-            payload=self._machine,
-            repeat=repeat,
-        )
-        self._mock.get(
-            self._url("scripts/list"),
-            payload=self._scripts,
-            repeat=repeat,
-        )
-        self._mock.get(
-            self._url("switches"),
-            payload=self._switches,
-            repeat=repeat,
-        )
-        # Default: scripts/read POST returns 404 unless the test registered
-        # a specific script id. Tests that need read_script must call
-        # set_read_script before init_integration.
-        for response in self._read_script_responses.values():
-            self._mock.post(
-                self._url("scripts/read"),
-                payload=response,
-                repeat=repeat,
-            )
-        self._registered = True
+    def override(
+        self,
+        method: str,
+        path: str,
+        *,
+        status: HTTPStatus = HTTPStatus.OK,
+        json: Any = None,
+        text: str | None = None,
+        exc: Exception | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> None:
+        """Answer `method` `path` with a fixed response from now on."""
+        self._overrides[(method, path)] = {
+            "status": status,
+            "json": json,
+            "text": text,
+            "exc": exc,
+            "headers": headers,
+        }
 
-    # ---- mutating-call expectations ----
+    def restore(self, method: str, path: str) -> None:
+        """Answer `method` `path` normally again."""
+        del self._overrides[(method, path)]
 
-    def expect_machine_control(self) -> None:
-        """Register POST /machine/control to accept any control value.
+    def fail(self, method: str, path: str) -> None:
+        """Answer `method` `path` with an internal server error from now on."""
+        self.override(method, path, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
-        Use assert_post_called_with("machine/control", '"<value>"') to verify
-        a specific MachineControl int was sent.
-        """
-        self._mock.post(self._url("machine/control"), status=200, repeat=True)
-
-    def expect_toggle_sb(self) -> None:
-        self._mock.post(self._url("toggle/sb"), status=200, repeat=True)
-
-    def expect_inc_dec(self) -> None:
-        self._mock.post(self._url("inc_dec"), payload={}, repeat=True)
-
-    def expect_inc_dec_bb(self) -> None:
-        self._mock.post(self._url("inc_dec_bb"), payload={}, repeat=True)
-
-    def expect_execute_script(self) -> None:
-        self._mock.post(self._url("scripts/execute"), status=200, repeat=True)
-
-    def fail_post(self, path: str, status: int = 500) -> None:
-        self._mock.post(self._url(path), status=status, repeat=True)
-
-    def fail_get(self, path: str, status: int = 500) -> None:
-        self._mock.get(self._url(path), status=status, repeat=True)
-
-    def expect_stop_script(self) -> None:
-        # Unlike the other mutating calls, /scripts/stop is a GET.
-        self._mock.get(self._url("scripts/stop"), status=200, repeat=True)
-
-    def expect_set_switch(self) -> None:
-        # set_switch first does a GET then a POST to /switches
-        self._mock.post(self._url("switches"), status=200, repeat=True)
-
-    def expect_create_script(self) -> None:
-        self._mock.post(self._url("scripts/create"), status=200, repeat=True)
-
-    def expect_update_script(self) -> None:
-        # Same endpoint as create_script (Enabled vs Disabled differentiator)
-        self._mock.post(self._url("scripts/create"), status=200, repeat=True)
-
-    # ---- assertions ----
+    def bodies(self, method: str, path: str) -> list[str]:
+        """Return the bodies of all `method` requests to `path`, oldest first."""
+        return [body for m, p, body in self._calls if (m, p) == (method, path)]
 
     def assert_post_called_with(self, path: str, substring: str) -> None:
         """Assert that some POST to `path` had `substring` in its body."""
-        url = self._url(path)
-        calls = list(self._mock.requests.get(("POST", yarl.URL(url)), []))
-        assert calls, f"No POST to {url} was made"
-        bodies = [str(call.kwargs.get("data", "")) for call in calls]
+        bodies = self.bodies("post", path)
         assert any(substring in body for body in bodies), (
-            f"None of {len(bodies)} POSTs to {url} contained {substring!r}. "
-            f"Bodies: {bodies}"
+            f"No POST to {path} contained {substring!r}; bodies: {bodies}"
         )
 
-    def post_count(self, path: str) -> int:
-        return len(self._mock.requests.get(("POST", yarl.URL(self._url(path))), []))
-
-    def get_count(self, path: str) -> int:
-        return len(self._mock.requests.get(("GET", yarl.URL(self._url(path))), []))
-
-
-@pytest.fixture
-def mock_xenia_api() -> Iterator[MockXeniaApi]:
-    """Provides a MockXeniaApi backed by aioresponses for one test.
-
-    Setters (`set_overview`, `set_scripts`, ...) change the responses at any
-    time, also after `init_integration`. `expect_*` and `fail_*` register the
-    mutating endpoints; `assert_*`, `post_count`, and `get_count` inspect calls.
-    """
-    # hass_client and hass_ws_client talk to localhost for real.
-    with AioResponses(passthrough=["http://127.0.0.1"]) as mock:
-        yield MockXeniaApi(mock)
+    async def _respond(self, method: str, url: URL, data: Any) -> XeniaMockResponse:
+        method = method.lower()
+        path = url.path.removeprefix("/api/v2/")
+        self._calls.append((method, path, "" if data is None else str(data)))
+        if (method, path) in self._overrides:
+            return XeniaMockResponse(method, url, **self._overrides[(method, path)])
+        if method == "get" and path in self._payloads:
+            return XeniaMockResponse(method, url, json=self._payloads[path])
+        if (method, path) == ("post", "scripts/read"):
+            script = self._script_files.get(json.loads(data)["FILE_NAME"])
+            if script is not None:
+                return XeniaMockResponse(method, url, json=script)
+        elif (method, path) in WRITE_ENDPOINTS:
+            return XeniaMockResponse(method, url)
+        return XeniaMockResponse(method, url, status=HTTPStatus.NOT_FOUND)
 
 
-@pytest.fixture
-def mock_config_entry() -> MockConfigEntry:
-    """Build a MockConfigEntry for the Xenia integration."""
-    return MockConfigEntry(
-        domain=XENIA_DOMAIN,
-        title="xenia.local",
-        unique_id=DEFAULT_HOST,
-        data={"host": DEFAULT_HOST},
-        options={},
-    )
+@pytest.fixture(autouse=True)
+def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
+    """Load the integration from custom_components in every test."""
+
+
+@pytest.fixture(autouse=True)
+def mock_xenia_api(aioclient_mock: AiohttpClientMocker) -> MockXeniaApi:
+    """Return the fake Xenia machine on the default host; no test reaches the network."""
+    return MockXeniaApi(aioclient_mock)
 
 
 @pytest.fixture
-def mock_config_entry_factory_with_options() -> Callable[[dict], MockConfigEntry]:
-    """Factory: build a MockConfigEntry with custom options at construction."""
+def mock_config_entry_factory_with_options() -> Callable[
+    [dict[str, Any]], MockConfigEntry
+]:
+    """Return a factory for config entries with the given options."""
 
-    def _build(options: dict) -> MockConfigEntry:
+    def _build(options: dict[str, Any]) -> MockConfigEntry:
         return MockConfigEntry(
             domain=XENIA_DOMAIN,
-            title="xenia.local",
+            title=DEFAULT_HOST,
             unique_id=DEFAULT_HOST,
             data={"host": DEFAULT_HOST},
             options=options,
@@ -235,36 +209,40 @@ def mock_config_entry_factory_with_options() -> Callable[[dict], MockConfigEntry
 
 
 @pytest.fixture
+def mock_config_entry(
+    mock_config_entry_factory_with_options: Callable[[dict[str, Any]], MockConfigEntry],
+) -> MockConfigEntry:
+    """Return a config entry without options."""
+    return mock_config_entry_factory_with_options({})
+
+
+@pytest.fixture
 async def init_integration(
-    hass,
-    enable_custom_integrations,
+    hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_xenia_api: MockXeniaApi,
 ) -> MockConfigEntry:
-    """Set up the integration with the default responses and return the entry.
-
-    Responses that must differ at setup time need their own fixture that calls
-    the setters before `register()`; see `init_with_weight` in test_number.py.
-    """
-    mock_xenia_api.register()
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
+    """Set up the integration and return its config entry."""
+    await setup_integration(hass, mock_config_entry)
     return mock_config_entry
 
 
-# ---------------------------------------------------------------------------
-# Pytest hook: visible end-of-run summary of open xfails
-# ---------------------------------------------------------------------------
+@pytest.fixture
+def poll(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
+) -> Callable[..., Awaitable[None]]:
+    """Return a function that serves an overview and lets the next poll happen.
 
+    The machine is polled every second while it is on.
+    """
 
-def pytest_terminal_summary(terminalreporter, exitstatus, config):
-    """Print a red banner with all xfail-marked tests at the end of a run."""
-    xfailed = terminalreporter.stats.get("xfailed", [])
-    if not xfailed:
-        return
-    terminalreporter.write_sep("=", "Open xfail markers (= known bugs)", red=True)
-    for report in xfailed:
-        terminalreporter.write_line(f"  XFAIL {report.nodeid}")
-        terminalreporter.write_line(f"        {report.wasxfail}")
-    terminalreporter.write_line(f"\n{len(xfailed)} known bugs are deferred.")
+    async def _poll(**fields: Any) -> None:
+        mock_xenia_api.set_overview(**fields)
+        freezer.tick(timedelta(seconds=1))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done()
+
+    return _poll

@@ -5,10 +5,10 @@ from datetime import timedelta
 from functools import partial
 from unittest.mock import patch
 
-import pytest
 from homeassistant.components.recorder import get_instance, history
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
+import pytest
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
@@ -19,6 +19,14 @@ from custom_components.xenia_home.shot_store import XeniaShotStore
 from custom_components.xenia_home.xenia import MachineStatus
 from tests.fixtures.shots import shot_payload
 from tests.test_event import TRACKER, _drive_status, _get_tracker
+
+
+@pytest.fixture(autouse=True)
+def auto_enable_custom_integrations(
+    recorder_mock: None, enable_custom_integrations: None
+) -> None:
+    """Set the recorder up before Home Assistant, as it requires."""
+
 
 CURVE_ATTRS = (
     "timestamps",
@@ -97,7 +105,6 @@ async def test_migration_imports_legacy_shots_once(
     partial_row = {**legacy, "weights": legacy["weights"][:1]}
     await _seed_legacy_recorder_rows(hass, partial_row, legacy)
 
-    mock_xenia_api.register()
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done(wait_background_tasks=True)
 

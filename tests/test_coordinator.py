@@ -5,10 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from homeassistant.helpers.update_coordinator import UpdateFailed
 import pytest
 
-from custom_components.xenia_home.const import (
-    POLL_INTERVAL_ACTIVE,
-    POLL_INTERVAL_IDLE,
-)
+from custom_components.xenia_home.const import POLL_INTERVAL_ACTIVE, POLL_INTERVAL_IDLE
 from custom_components.xenia_home.coordinator import (
     BUILTIN_SCRIPTS,
     XeniaConfigCoordinator,

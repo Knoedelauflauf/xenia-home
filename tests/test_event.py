@@ -1,14 +1,13 @@
 """Tests for event.py — XeniaShotTracker and ShotData."""
 
 from datetime import timedelta
-from unittest.mock import patch
 
 from homeassistant.helpers.entity_component import DATA_INSTANCES
 from homeassistant.util import dt as dt_util
 import pytest
 
 from custom_components.xenia_home.event import ShotData
-from custom_components.xenia_home.xenia import MachineStatus, XeniaOverviewData
+from custom_components.xenia_home.xenia import MachineStatus
 from tests.fixtures.api_responses import OVERVIEW_PAYLOAD
 
 TRACKER = "event.xenia_espresso_machine_shot_tracker"
@@ -88,10 +87,8 @@ def _get_tracker(hass, init_integration):
 
 async def _drive_overview(hass, mock_xenia_api, init_integration, **fields):
     """Let the coordinator poll an overview with the given field overrides."""
-    coordinator = init_integration.runtime_data.coordinator
-    overview = XeniaOverviewData.from_dict({**mock_xenia_api._overview, **fields})
-    with patch.object(coordinator.xenia, "get_overview", return_value=overview):
-        await coordinator.async_refresh()
+    mock_xenia_api.set_overview(**fields)
+    await init_integration.runtime_data.coordinator.async_refresh()
     await hass.async_block_till_done()
 
 

@@ -39,7 +39,7 @@
 # name: test_button_entities_snapshot[button.xenia_espresso_machine_execute_script-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Execute script',
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Execute script',
     }),
     'context': <ANY>,
     'entity_id': 'button.xenia_espresso_machine_execute_script',
@@ -89,7 +89,7 @@
 # name: test_button_entities_snapshot[button.xenia_espresso_machine_stop_script-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Stop script',
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Stop script',
     }),
     'context': <ANY>,
     'entity_id': 'button.xenia_espresso_machine_stop_script',

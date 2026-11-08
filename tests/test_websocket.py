@@ -3,7 +3,6 @@
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.xenia_home.const import XENIA_DOMAIN
-from tests.conftest import MockXeniaApi
 from tests.fixtures.shots import shot_payload
 
 
@@ -131,7 +130,6 @@ async def test_multiple_entries_require_entry_id(
     hass, init_integration, mock_xenia_api, hass_ws_client
 ):
     second_api = mock_xenia_api.for_host("xenia2.local")
-    second_api.register()
     second_entry = MockConfigEntry(
         domain=XENIA_DOMAIN,
         title="xenia2.local",

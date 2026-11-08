@@ -47,7 +47,6 @@ BREW_BOILER_ENTITY = "number.xenia_espresso_machine_brewboiler_set_temperature"
 async def test_set_brew_group_temp_calls_xenia_and_refreshes(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api.expect_inc_dec()
     await hass.services.async_call(
         "number",
         "set_value",
@@ -59,7 +58,6 @@ async def test_set_brew_group_temp_calls_xenia_and_refreshes(
 
 
 async def test_set_brew_boiler_temp_calls_xenia(hass, init_integration, mock_xenia_api):
-    mock_xenia_api.expect_inc_dec_bb()
     await hass.services.async_call(
         "number",
         "set_value",
@@ -83,11 +81,7 @@ async def test_set_temp_refreshes_even_when_api_raises(
     coordinator refresh fires GETs to overview, not a second POST.
     """
     # Replace the inc_dec route with one that always raises
-    mock_xenia_api._mock.post(
-        mock_xenia_api._url("inc_dec"),
-        exception=RuntimeError("API error"),
-        repeat=True,
-    )
+    mock_xenia_api.override("post", "inc_dec", exc=RuntimeError("API error"))
     with pytest.raises(RuntimeError):
         await hass.services.async_call(
             "number",
@@ -125,8 +119,7 @@ def weight_enabled_entry():
 async def init_with_weight(
     hass, enable_custom_integrations, mock_xenia_api, weight_enabled_entry
 ):
-    mock_xenia_api.set_read_script(17, "1;13;27 45;7;", "Test Shot")
-    mock_xenia_api.register()
+    mock_xenia_api.set_script(17, "1;13;27 45;7;", "Test Shot")
     weight_enabled_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(weight_enabled_entry.entry_id)
     await hass.async_block_till_done()
@@ -147,12 +140,6 @@ async def test_weight_number_reads_weight_from_managed_script(
 async def test_weight_number_set_reads_fresh_then_writes_back(
     hass, init_with_weight, mock_xenia_api
 ):
-    mock_xenia_api._mock.post(
-        mock_xenia_api._url("scripts/read"),
-        payload={"Content": "1;13;27 45;7;", "Title": "Test Shot"},
-        repeat=True,
-    )
-    mock_xenia_api.expect_update_script()
     await hass.services.async_call(
         "number",
         "set_value",
@@ -168,7 +155,7 @@ async def test_weight_number_set_reads_fresh_then_writes_back(
 async def test_set_temp_raises_translated_error_when_machine_refuses(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api.fail_post("inc_dec")
+    mock_xenia_api.fail("post", "inc_dec")
     with pytest.raises(HomeAssistantError) as exc_info:
         await hass.services.async_call(
             "number",
@@ -183,7 +170,7 @@ async def test_set_temp_raises_translated_error_when_machine_refuses(
 async def test_weight_number_raises_translated_error_when_machine_refuses(
     hass, init_with_weight, mock_xenia_api, path
 ):
-    mock_xenia_api.fail_post(path)
+    mock_xenia_api.fail("post", path)
     with pytest.raises(HomeAssistantError) as exc_info:
         await hass.services.async_call(
             "number",

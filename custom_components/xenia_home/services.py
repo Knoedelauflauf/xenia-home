@@ -5,7 +5,7 @@ from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import service
 from homeassistant.helpers.selector import ConfigEntrySelector
-import voluptuous as vol
+import probatio
 
 from .const import XENIA_DOMAIN
 from .coordinator import XeniaConfigEntry
@@ -15,37 +15,22 @@ SERVICE_EXECUTE_SCRIPT = "execute_script"
 ATTR_SCRIPT_ID = "script_id"
 ATTR_SCRIPT_NAME = "script_name"
 
-SERVICE_EXECUTE_SCRIPT_SCHEMA = vol.Schema(
+SERVICE_EXECUTE_SCRIPT_SCHEMA = probatio.Schema(
     {
-        vol.Optional(ATTR_CONFIG_ENTRY_ID): ConfigEntrySelector(
+        probatio.Optional(ATTR_CONFIG_ENTRY_ID): ConfigEntrySelector(
             {"integration": XENIA_DOMAIN}
         ),
-        vol.Optional(ATTR_SCRIPT_ID): vol.Coerce(int),
-        vol.Optional(ATTR_SCRIPT_NAME): str,
+        probatio.Optional(ATTR_SCRIPT_ID): probatio.Coerce(int),
+        probatio.Optional(ATTR_SCRIPT_NAME): str,
     }
 )
 
 
-def _get_entry(hass: HomeAssistant, call: ServiceCall) -> XeniaConfigEntry:
-    """Return the addressed config entry, or the only loaded one."""
-    if (entry_id := call.data.get(ATTR_CONFIG_ENTRY_ID)) is not None:
-        return service.async_get_config_entry(hass, XENIA_DOMAIN, entry_id)
-    # Drop this fallback once the minimum HA is 2026.7; async_get_config_entry
-    # then accepts a missing entry_id.
-    entries = hass.config_entries.async_loaded_entries(XENIA_DOMAIN)
-    if not entries:
-        raise ServiceValidationError(
-            translation_domain=XENIA_DOMAIN, translation_key="entry_not_loaded"
-        )
-    if len(entries) > 1:
-        raise ServiceValidationError(
-            translation_domain=XENIA_DOMAIN, translation_key="multiple_entries"
-        )
-    return entries[0]
-
-
 async def _execute_script(call: ServiceCall) -> None:
-    runtime = _get_entry(call.hass, call).runtime_data
+    entry: XeniaConfigEntry = service.async_get_config_entry(
+        call.hass, XENIA_DOMAIN, call.data.get(ATTR_CONFIG_ENTRY_ID)
+    )
+    runtime = entry.runtime_data
     script_id = call.data.get(ATTR_SCRIPT_ID)
     script_name = call.data.get(ATTR_SCRIPT_NAME)
     if script_id is None and script_name is None:

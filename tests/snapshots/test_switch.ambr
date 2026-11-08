@@ -39,7 +39,7 @@
 # name: test_switch_entities_snapshot[switch.xenia_espresso_machine_eco_mode-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine ECO mode',
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine ECO mode',
     }),
     'context': <ANY>,
     'entity_id': 'switch.xenia_espresso_machine_eco_mode',
@@ -89,7 +89,7 @@
 # name: test_switch_entities_snapshot[switch.xenia_espresso_machine_power-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Power',
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Power',
     }),
     'context': <ANY>,
     'entity_id': 'switch.xenia_espresso_machine_power',
@@ -139,7 +139,7 @@
 # name: test_switch_entities_snapshot[switch.xenia_espresso_machine_steam_boiler_power-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Steam boiler power',
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Steam boiler power',
     }),
     'context': <ANY>,
     'entity_id': 'switch.xenia_espresso_machine_steam_boiler_power',

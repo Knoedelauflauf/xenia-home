@@ -203,12 +203,6 @@
     },
     "update_failed": {
       "message": "Das Abrufen der Daten von der Xenia Espressomaschine ist fehlgeschlagen: {error}"
-    },
-    "entry_not_loaded": {
-      "message": "Der Xenia-Konfigurationseintrag ist nicht geladen."
-    },
-    "multiple_entries": {
-      "message": "Es sind mehrere Xenia-Maschinen eingerichtet. Gib config_entry_id an, um eine auszuwählen."
     }
   }
 }

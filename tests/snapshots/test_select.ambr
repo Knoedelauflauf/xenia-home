@@ -6,7 +6,7 @@
     ]),
     'area_id': None,
     'capabilities': dict({
-      'options': list([
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -47,8 +47,8 @@
 # name: test_select_entities_snapshot[select.xenia_espresso_machine_left_switch_left_long-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Left switch left long',
-      'options': list([
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Left switch left long',
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -71,7 +71,7 @@
     ]),
     'area_id': None,
     'capabilities': dict({
-      'options': list([
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -112,8 +112,8 @@
 # name: test_select_entities_snapshot[select.xenia_espresso_machine_left_switch_left_short-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Left switch left short',
-      'options': list([
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Left switch left short',
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -136,7 +136,7 @@
     ]),
     'area_id': None,
     'capabilities': dict({
-      'options': list([
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'steam_on',
         'steam_off',
       ]),
@@ -174,8 +174,8 @@
 # name: test_select_entities_snapshot[select.xenia_espresso_machine_power_on_behavior-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Power on behavior',
-      'options': list([
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Power on behavior',
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'steam_on',
         'steam_off',
       ]),
@@ -195,7 +195,7 @@
     ]),
     'area_id': None,
     'capabilities': dict({
-      'options': list([
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -236,8 +236,8 @@
 # name: test_select_entities_snapshot[select.xenia_espresso_machine_right_switch_left_long-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Right switch left long',
-      'options': list([
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Right switch left long',
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -260,7 +260,7 @@
     ]),
     'area_id': None,
     'capabilities': dict({
-      'options': list([
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -301,8 +301,8 @@
 # name: test_select_entities_snapshot[select.xenia_espresso_machine_right_switch_left_short-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Right switch left short',
-      'options': list([
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Right switch left short',
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -325,7 +325,7 @@
     ]),
     'area_id': None,
     'capabilities': dict({
-      'options': list([
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -366,8 +366,8 @@
 # name: test_select_entities_snapshot[select.xenia_espresso_machine_right_switch_right_long-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Right switch right long',
-      'options': list([
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Right switch right long',
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -390,7 +390,7 @@
     ]),
     'area_id': None,
     'capabilities': dict({
-      'options': list([
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -431,8 +431,8 @@
 # name: test_select_entities_snapshot[select.xenia_espresso_machine_right_switch_right_short-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Right switch right short',
-      'options': list([
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Right switch right short',
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -455,7 +455,7 @@
     ]),
     'area_id': None,
     'capabilities': dict({
-      'options': list([
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -496,8 +496,8 @@
 # name: test_select_entities_snapshot[select.xenia_espresso_machine_script-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Script',
-      'options': list([
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Script',
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',

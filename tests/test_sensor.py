@@ -49,7 +49,6 @@ async def test_operating_hours_divides_minutes_by_60(
     expected_hours,
 ):
     mock_xenia_api.set_overview(MA_OPERATING_HOURS=minutes)
-    mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
@@ -76,7 +75,6 @@ async def test_total_increasing_sensor_zero_value_becomes_unknown(
 ):
     """Zero on a TOTAL_INCREASING counter is implausible and reported as unknown."""
     mock_xenia_api.set_overview(**{payload_key: 0})
-    mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
@@ -89,7 +87,6 @@ async def test_passthrough_sensor_reads_from_overview(
     hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
 ):
     mock_xenia_api.set_overview(BG_SENS_TEMP_A=88.7)
-    mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
@@ -101,7 +98,6 @@ async def test_scale_flow_rate_sensor_created_on_new_firmware(
     hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
 ):
     mock_xenia_api.set_overview(**OVERVIEW_NEW_FW_FIELDS)
-    mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
@@ -119,7 +115,6 @@ async def test_status_and_shot_start_time_while_brewing(
     hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
 ):
     mock_xenia_api.set_overview(MA_STATUS=3)
-    mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
@@ -132,7 +127,6 @@ async def test_status_sensor_unknown_for_unrecognised_status(
     hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
 ):
     mock_xenia_api.set_overview(MA_STATUS=42)
-    mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()

@@ -18,7 +18,6 @@ async def test_diagnostics(
     snapshot,
 ):
     mock_xenia_api.set_machine(**MACHINE_NEW_FW_FIELDS)
-    mock_xenia_api.register()
     entry = mock_config_entry_factory_with_options({CONF_WEIGHT_MIN: 20.0})
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)

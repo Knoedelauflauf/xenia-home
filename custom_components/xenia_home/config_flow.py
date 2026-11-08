@@ -13,7 +13,7 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-import voluptuous as vol
+import probatio
 
 from .const import (
     CONF_MANAGED_SCRIPT_ID,
@@ -35,9 +35,9 @@ from .xenia import Xenia
 
 _LOGGER = logging.getLogger(__name__)
 
-DATA_SCHEMA_USER = vol.Schema(
+DATA_SCHEMA_USER = probatio.Schema(
     {
-        vol.Required(CONF_HOST, default=DEFAULT_HOST): str,
+        probatio.Required(CONF_HOST, default=DEFAULT_HOST): str,
     }
 )
 
@@ -121,7 +121,9 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
         assert self._host is not None
         errors: dict[str, str] = {}
 
-        schema = vol.Schema({vol.Required(CONF_HOST, default=self._host): str})
+        schema = probatio.Schema(
+            {probatio.Required(CONF_HOST, default=self._host): str}
+        )
 
         if user_input is not None:
             new_host = user_input[CONF_HOST].strip()
@@ -168,9 +170,9 @@ class XeniaOptionsFlow(OptionsFlow):
         current_weight = self.config_entry.options.get(
             CONF_WEIGHT_MANAGEMENT_ENABLED, False
         )
-        schema = vol.Schema(
+        schema = probatio.Schema(
             {
-                vol.Required(
+                probatio.Required(
                     CONF_WEIGHT_MANAGEMENT_ENABLED, default=current_weight
                 ): bool,
             }
@@ -215,9 +217,11 @@ class XeniaOptionsFlow(OptionsFlow):
 
         default = str(current_id) if current_id and str(current_id) in options else None
 
-        schema = vol.Schema(
+        schema = probatio.Schema(
             {
-                vol.Required(CONF_MANAGED_SCRIPT_ID, default=default): vol.In(options),
+                probatio.Required(CONF_MANAGED_SCRIPT_ID, default=default): probatio.In(
+                    options
+                ),
             }
         )
         return self.async_show_form(step_id="select_script", data_schema=schema)
@@ -243,11 +247,17 @@ class XeniaOptionsFlow(OptionsFlow):
             CONF_WEIGHT_STEP, DEFAULT_WEIGHT_STEP
         )
 
-        schema = vol.Schema(
+        schema = probatio.Schema(
             {
-                vol.Required(CONF_WEIGHT_MIN, default=current_min): vol.Coerce(float),
-                vol.Required(CONF_WEIGHT_MAX, default=current_max): vol.Coerce(float),
-                vol.Required(CONF_WEIGHT_STEP, default=current_step): vol.Coerce(float),
+                probatio.Required(
+                    CONF_WEIGHT_MIN, default=current_min
+                ): probatio.Coerce(float),
+                probatio.Required(
+                    CONF_WEIGHT_MAX, default=current_max
+                ): probatio.Coerce(float),
+                probatio.Required(
+                    CONF_WEIGHT_STEP, default=current_step
+                ): probatio.Coerce(float),
             }
         )
         return self.async_show_form(step_id="configure_weight", data_schema=schema)

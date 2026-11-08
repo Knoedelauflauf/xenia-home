@@ -203,12 +203,6 @@
     },
     "update_failed": {
       "message": "Fetching data from the Xenia espresso machine failed: {error}"
-    },
-    "entry_not_loaded": {
-      "message": "The Xenia config entry is not loaded."
-    },
-    "multiple_entries": {
-      "message": "Several Xenia machines are set up. Pass config_entry_id to pick one."
     }
   }
 }

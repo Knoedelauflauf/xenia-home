@@ -62,7 +62,6 @@ async def test_power_switch_state(
     expected_state,
 ):
     mock_xenia_api.set_overview(MA_STATUS=int(ma_status))
-    mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
@@ -73,7 +72,6 @@ async def test_power_switch_turn_on_steam_on_calls_machine_on(
     hass, init_integration, mock_xenia_api
 ):
     await _select_power_on_behavior(hass, PowerOnBehavior.STEAM_ON)
-    mock_xenia_api.expect_machine_control()
     await hass.services.async_call(
         "switch", "turn_on", {"entity_id": POWER}, blocking=True
     )
@@ -85,7 +83,6 @@ async def test_power_switch_turn_on_steam_on_calls_machine_on(
 async def test_power_switch_turn_on_default_behavior_is_steam_off(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api.expect_machine_control()
     await hass.services.async_call(
         "switch", "turn_on", {"entity_id": POWER}, blocking=True
     )
@@ -96,7 +93,6 @@ async def test_power_switch_turn_on_default_behavior_is_steam_off(
 async def test_power_switch_turn_off_calls_machine_off(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api.expect_machine_control()
     await hass.services.async_call(
         "switch", "turn_off", {"entity_id": POWER}, blocking=True
     )
@@ -129,7 +125,6 @@ async def test_eco_switch_state(
     expected_state,
 ):
     mock_xenia_api.set_overview(MA_STATUS=int(ma_status))
-    mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
@@ -139,7 +134,6 @@ async def test_eco_switch_state(
 async def test_eco_switch_turn_on_calls_machine_set_eco(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api.expect_machine_control()
     await hass.services.async_call(
         "switch", "turn_on", {"entity_id": ECO}, blocking=True
     )
@@ -152,8 +146,6 @@ async def test_eco_switch_turn_off_steam_off_calls_on_sb_off(
     hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
 ):
     mock_xenia_api.set_overview(MA_STATUS=int(MachineStatus.ECO))
-    mock_xenia_api.expect_machine_control()
-    mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
@@ -188,7 +180,6 @@ async def test_steam_boiler_state(
     mock_xenia_api.set_overview(
         SB_STATUS=int(sb_status), MA_STATUS=int(MachineStatus.ON)
     )
-    mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
@@ -213,7 +204,6 @@ async def test_steam_boiler_availability_follows_machine_state(
     expected_avail,
 ):
     mock_xenia_api.set_overview(MA_STATUS=int(ma_status))
-    mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
@@ -226,7 +216,6 @@ async def test_steam_boiler_availability_follows_machine_state(
 async def test_steam_boiler_turn_on_calls_toggle_sb(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api.expect_toggle_sb()
     await hass.services.async_call(
         "switch", "turn_on", {"entity_id": STEAM_BOILER}, blocking=True
     )
@@ -238,7 +227,6 @@ async def test_steam_boiler_turn_on_calls_toggle_sb(
 async def test_steam_boiler_turn_off_calls_toggle_sb(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api.expect_toggle_sb()
     await hass.services.async_call(
         "switch", "turn_off", {"entity_id": STEAM_BOILER}, blocking=True
     )
@@ -260,7 +248,7 @@ async def test_steam_boiler_turn_off_calls_toggle_sb(
 async def test_switch_raises_translated_error_when_machine_refuses(
     hass, init_integration, mock_xenia_api, entity_id, service, path
 ):
-    mock_xenia_api.fail_post(path)
+    mock_xenia_api.fail("post", path)
     with pytest.raises(HomeAssistantError) as exc_info:
         await hass.services.async_call(
             "switch", service, {"entity_id": entity_id}, blocking=True

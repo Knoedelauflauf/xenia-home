@@ -39,7 +39,6 @@ async def _press_button(hass, entity_id: str = BUTTON_ENTITY_ID) -> None:
 async def test_button_press_executes_selected_script(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api.expect_execute_script()
     init_integration.runtime_data.config_coordinator.selected_script_id = 10
     await _press_button(hass)
     mock_xenia_api.assert_post_called_with("scripts/execute", "10")
@@ -49,16 +48,14 @@ async def test_button_press_executes_selected_script(
 async def test_button_press_noop_for_invalid_script_id(
     hass, init_integration, mock_xenia_api, script_id
 ):
-    mock_xenia_api.expect_execute_script()
     init_integration.runtime_data.config_coordinator.selected_script_id = script_id
     await _press_button(hass)
-    assert mock_xenia_api.post_count("scripts/execute") == 0
+    assert len(mock_xenia_api.bodies("post", "scripts/execute")) == 0
 
 
 async def test_button_press_executes_builtin_script_id_one(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api.expect_execute_script()
     init_integration.runtime_data.config_coordinator.selected_script_id = 1
     await _press_button(hass)
     mock_xenia_api.assert_post_called_with("scripts/execute", "1")
@@ -67,15 +64,14 @@ async def test_button_press_executes_builtin_script_id_one(
 async def test_stop_button_press_calls_stop_script(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api.expect_stop_script()
     await _press_button(hass, STOP_BUTTON_ENTITY_ID)
-    assert mock_xenia_api.get_count("scripts/stop") == 1
+    assert len(mock_xenia_api.bodies("get", "scripts/stop")) == 1
 
 
 async def test_execute_button_raises_translated_error_when_machine_refuses(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api.fail_post("scripts/execute")
+    mock_xenia_api.fail("post", "scripts/execute")
     init_integration.runtime_data.config_coordinator.selected_script_id = 10
     with pytest.raises(HomeAssistantError) as exc_info:
         await _press_button(hass)
@@ -85,7 +81,7 @@ async def test_execute_button_raises_translated_error_when_machine_refuses(
 async def test_stop_button_raises_translated_error_when_machine_refuses(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api.fail_get("scripts/stop")
+    mock_xenia_api.fail("get", "scripts/stop")
     with pytest.raises(HomeAssistantError) as exc_info:
         await _press_button(hass, STOP_BUTTON_ENTITY_ID)
     assert exc_info.value.translation_key == "write_failed"

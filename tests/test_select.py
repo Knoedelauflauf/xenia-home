@@ -53,7 +53,6 @@ async def test_power_on_behavior_option_is_migrated_and_removed(
     entry = mock_config_entry_factory_with_options(
         {CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_ON.value}
     )
-    mock_xenia_api.register()
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -82,7 +81,6 @@ async def test_power_on_behavior_is_restored_after_restart(
     mock_restore_cache(
         hass, (State(POWER_ON_BEHAVIOR, PowerOnBehavior.STEAM_ON.value),)
     )
-    mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
@@ -93,7 +91,6 @@ async def test_power_on_behavior_ignores_an_unusable_restored_state(
     hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
 ):
     mock_restore_cache(hass, (State(POWER_ON_BEHAVIOR, "unavailable"),))
-    mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
@@ -169,7 +166,6 @@ async def test_script_select_sets_selected_script_id(hass, init_integration):
 async def test_switch_config_select_assigns_script_via_xenia(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api.expect_set_switch()
     await hass.services.async_call(
         "select",
         "select_option",
@@ -196,7 +192,7 @@ async def test_script_rename_reaches_the_select_without_a_reload(
 async def test_switch_config_select_raises_translated_error_when_machine_refuses(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api.fail_post("switches")
+    mock_xenia_api.fail("post", "switches")
     with pytest.raises(HomeAssistantError) as exc_info:
         await hass.services.async_call(
             "select",

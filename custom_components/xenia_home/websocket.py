@@ -5,7 +5,7 @@ from typing import Any
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
-import voluptuous as vol
+import probatio
 
 from .const import XENIA_DOMAIN
 from .shot_store import XeniaShotStore
@@ -56,11 +56,11 @@ def _resolve_store(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{XENIA_DOMAIN}/shots/list",
-        vol.Optional("entry_id"): str,
-        vol.Optional("after"): str,
-        vol.Optional("before"): str,
-        vol.Optional("limit"): vol.All(int, vol.Range(min=1)),
+        probatio.Required("type"): f"{XENIA_DOMAIN}/shots/list",
+        probatio.Optional("entry_id"): str,
+        probatio.Optional("after"): str,
+        probatio.Optional("before"): str,
+        probatio.Optional("limit"): probatio.All(int, probatio.Range(min=1)),
     }
 )
 @websocket_api.async_response
@@ -101,9 +101,9 @@ async def ws_list_shots(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{XENIA_DOMAIN}/shots/get",
-        vol.Optional("entry_id"): str,
-        vol.Required("shot_ids"): vol.All([str], vol.Length(min=1)),
+        probatio.Required("type"): f"{XENIA_DOMAIN}/shots/get",
+        probatio.Optional("entry_id"): str,
+        probatio.Required("shot_ids"): probatio.All([str], probatio.Length(min=1)),
     }
 )
 @websocket_api.async_response
@@ -123,9 +123,9 @@ async def ws_get_shots(
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{XENIA_DOMAIN}/shots/delete",
-        vol.Optional("entry_id"): str,
-        vol.Required("shot_id"): str,
+        probatio.Required("type"): f"{XENIA_DOMAIN}/shots/delete",
+        probatio.Optional("entry_id"): str,
+        probatio.Required("shot_id"): str,
     }
 )
 @websocket_api.async_response

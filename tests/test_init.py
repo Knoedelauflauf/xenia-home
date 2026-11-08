@@ -8,12 +8,12 @@ from homeassistant.helpers import device_registry as dr
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.xenia_home.const import CONF_WEIGHT_MIN, XENIA_DOMAIN
 from custom_components.xenia_home.services import (
     ATTR_SCRIPT_ID,
     ATTR_SCRIPT_NAME,
     SERVICE_EXECUTE_SCRIPT,
 )
-from custom_components.xenia_home.const import CONF_WEIGHT_MIN, XENIA_DOMAIN
 from custom_components.xenia_home.shot_store import XeniaShotStore
 from tests.conftest import MockXeniaApi
 from tests.fixtures.api_responses import MACHINE_NEW_FW_FIELDS
@@ -45,7 +45,6 @@ async def test_runtime_data_holds_both_coordinators(hass, init_integration):
 
 
 async def test_execute_script_by_id_calls_xenia(hass, init_integration, mock_xenia_api):
-    mock_xenia_api.expect_execute_script()
     await hass.services.async_call(
         XENIA_DOMAIN,
         SERVICE_EXECUTE_SCRIPT,
@@ -59,7 +58,6 @@ async def test_execute_script_by_id_calls_xenia(hass, init_integration, mock_xen
 async def test_execute_script_by_name_resolves_id(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api.expect_execute_script()
     await hass.services.async_call(
         XENIA_DOMAIN,
         SERVICE_EXECUTE_SCRIPT,
@@ -74,7 +72,6 @@ async def test_execute_script_by_name_resolves_id(
 async def test_execute_script_by_builtin_name_works(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api.expect_execute_script()
     await hass.services.async_call(
         XENIA_DOMAIN,
         SERVICE_EXECUTE_SCRIPT,
@@ -112,7 +109,6 @@ async def test_execute_script_with_unknown_name_raises_validation_error(
 async def test_execute_script_id_takes_priority_over_name(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api.expect_execute_script()
     await hass.services.async_call(
         XENIA_DOMAIN,
         SERVICE_EXECUTE_SCRIPT,
@@ -149,7 +145,6 @@ async def _add_second_entry(
         options={},
     )
     second_api = mock_xenia_api.for_host("xenia2.local")
-    second_api.register()
     second.add_to_hass(hass)
     await hass.config_entries.async_setup(second.entry_id)
     await hass.async_block_till_done()
@@ -173,7 +168,7 @@ async def test_unload_entry_keeps_service_when_other_entries_remain(
 async def test_execute_script_raises_translated_error_when_machine_refuses(
     hass, init_integration, mock_xenia_api
 ):
-    mock_xenia_api.fail_post("scripts/execute")
+    mock_xenia_api.fail("post", "scripts/execute")
     with pytest.raises(HomeAssistantError) as exc_info:
         await hass.services.async_call(
             XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT, {ATTR_SCRIPT_ID: 10}, blocking=True
@@ -188,7 +183,7 @@ async def test_execute_script_without_loaded_entry(hass, init_integration):
         await hass.services.async_call(
             XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT, {ATTR_SCRIPT_ID: 10}, blocking=True
         )
-    assert exc_info.value.translation_key == "entry_not_loaded"
+    assert exc_info.value.translation_key == "service_config_entry_not_loaded"
 
 
 async def test_execute_script_with_unloaded_config_entry_id(hass, init_integration):
@@ -223,14 +218,15 @@ async def test_execute_script_needs_config_entry_id_with_several_machines(
         await hass.services.async_call(
             XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT, {ATTR_SCRIPT_ID: 10}, blocking=True
         )
-    assert exc_info.value.translation_key == "multiple_entries"
+    assert exc_info.value.translation_key == (
+        "service_found_multiple_config_entry_for_domain"
+    )
 
 
 async def test_execute_script_config_entry_id_picks_the_machine(
     hass, init_integration, mock_xenia_api
 ):
     second, second_api = await _add_second_entry(hass, mock_xenia_api)
-    second_api.expect_execute_script()
     await hass.services.async_call(
         XENIA_DOMAIN,
         SERVICE_EXECUTE_SCRIPT,
@@ -239,7 +235,7 @@ async def test_execute_script_config_entry_id_picks_the_machine(
     )
     await hass.async_block_till_done()
     second_api.assert_post_called_with("scripts/execute", '"ID":1}')
-    assert mock_xenia_api.post_count("scripts/execute") == 0
+    assert len(mock_xenia_api.bodies("post", "scripts/execute")) == 0
 
 
 # ===========================================================================
@@ -251,26 +247,21 @@ async def test_device_info_serial_and_mac_new_firmware(
     hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
 ):
     mock_xenia_api.set_machine(**MACHINE_NEW_FW_FIELDS)
-    mock_xenia_api.register()
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    device_registry = dr.async_get(hass)
-    device = device_registry.async_get_device(
-        identifiers={("xenia_home", "xenia.local")}
+    [device] = dr.async_entries_for_config_entry(
+        dr.async_get(hass), mock_config_entry.entry_id
     )
-    assert device is not None
     assert device.serial_number == "300200000000"
     assert (dr.CONNECTION_NETWORK_MAC, "aa:bb:cc:dd:ee:ff") in device.connections
 
 
 async def test_device_info_old_firmware_has_no_serial(hass, init_integration):
-    device_registry = dr.async_get(hass)
-    device = device_registry.async_get_device(
-        identifiers={("xenia_home", "xenia.local")}
+    [device] = dr.async_entries_for_config_entry(
+        dr.async_get(hass), init_integration.entry_id
     )
-    assert device is not None
     assert device.serial_number is None
     assert (dr.CONNECTION_NETWORK_MAC, "aa:bb:cc:dd:ee:ff") in device.connections
 
@@ -311,7 +302,6 @@ async def test_setup_strips_polling_options_of_older_releases(
     entry = mock_config_entry_factory_with_options(
         {"poll_interval_idle": 10.0, "ready_threshold": 3.0, CONF_WEIGHT_MIN: 20.0}
     )
-    mock_xenia_api.register()
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
