@@ -1,18 +1,23 @@
 """Tests for the shot tracker event entity."""
 
+import re
+
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 from syrupy.assertion import SnapshotAssertion
 
-from custom_components.xenia_home.xenia import MachineStatus
-
+from tests import listed_shots, ws_command
 from tests.conftest import MockXeniaApi
 
 TRACKER = "event.xenia_espresso_machine_shot_tracker"
-BREWING = int(MachineStatus.BREWING)
-ON = int(MachineStatus.ON)
+# MA_STATUS values from the API documentation
+ON = 1
+BREWING = 3
+DRAINING = 4
+ISO_MILLISECONDS = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}\+00:00$")
 
 
 def _shot(hass: HomeAssistant) -> dict | None:
@@ -49,7 +54,10 @@ async def test_event_entities_snapshot(
 
 
 async def test_shot_is_fired_and_stored(
-    hass: HomeAssistant, init_integration: MockConfigEntry, poll
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    poll,
 ) -> None:
     """A shot fires shot_completed with its curves after the afterflow and is stored."""
     await brew(poll, 25)
@@ -66,27 +74,77 @@ async def test_shot_is_fired_and_stored(
     assert shot["weights"][:3] == [1.5, 3.0, 4.5]
     assert shot["weights"][-3:] == [38.0, 38.0, 38.0]
     assert shot["brew_end_time"] > shot["start_time"]
+    assert ISO_MILLISECONDS.match(shot["start_time"])
+    assert ISO_MILLISECONDS.match(shot["brew_end_time"])
     for curve in ("brew_group_temps", "brew_boiler_temps", "pump_pressures"):
         assert len(shot[curve]) == 28
 
-    store = init_integration.runtime_data.shot_store
-    assert [s["start_time"] for s in store.list_shots()] == [shot["start_time"]]
-    stored = (await store.async_get_shots([shot["start_time"]]))[0]
+    assert await listed_shots(hass, hass_ws_client) == [
+        {
+            "shot_id": shot["start_time"],
+            "start_time": shot["start_time"],
+            "brew_end_time": shot["brew_end_time"],
+            "duration_seconds": 26.0,
+            "final_weight_g": 38.0,
+        }
+    ]
+    answer = await ws_command(
+        hass,
+        hass_ws_client,
+        {"type": "xenia_home/shots/get", "shot_ids": [shot["start_time"]]},
+    )
+    [stored] = answer["result"]["shots"]
     assert stored["weights"] == shot["weights"]
 
 
-async def test_short_shot_is_ignored(
-    hass: HomeAssistant, init_integration: MockConfigEntry, poll
+@pytest.mark.parametrize(("seconds", "tracked"), [(8, False), (9, True)])
+async def test_shots_last_ten_seconds_or_more(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    poll,
+    seconds: int,
+    tracked: bool,
 ) -> None:
-    """A brew shorter than ten seconds is not a shot."""
-    await brew(poll, 5)
-    await end_brew(poll, weight=7.5)
-    assert _shot(hass) is None
-    assert init_integration.runtime_data.shot_store.list_shots() == []
+    """A brew of ten seconds is a shot; a shorter one, like a flush, is not."""
+    await brew(poll, seconds)
+    await end_brew(poll, weight=15.0)
+    shots = await listed_shots(hass, hass_ws_client)
+    assert [s["duration_seconds"] for s in shots] == ([10.0] if tracked else [])
+    assert (_shot(hass) is not None) is tracked
+
+
+async def test_draining_counts_as_afterflow(hass: HomeAssistant, poll) -> None:
+    """The machine drains after the brew; the shot ends when brewing stops."""
+    await brew(poll, 12)
+    await poll(MA_STATUS=DRAINING, SCALE_WEIGHT=19.0)
+    await poll(MA_STATUS=DRAINING, SCALE_WEIGHT=19.5)
+    await poll(MA_STATUS=ON, SCALE_WEIGHT=19.5)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert shot["duration_seconds"] == 13.0
+    assert shot["weights"][-3:] == [19.0, 19.5, 19.5]
+
+
+async def test_final_weight_is_the_last_weight(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    poll,
+) -> None:
+    """The final weight is the cup weight at the end, not the highest one."""
+    await brew(poll, 12)
+    await end_brew(poll, weight=17.0)
+    [summary] = await listed_shots(hass, hass_ws_client)
+    assert summary["final_weight_g"] == 17.0
 
 
 async def test_brew_during_afterflow_completes_the_shot_and_starts_a_new_one(
-    hass: HomeAssistant, init_integration: MockConfigEntry, poll
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    poll,
 ) -> None:
     """Brewing again within the afterflow keeps the first shot and starts a new one."""
     await brew(poll, 15)
@@ -98,7 +156,7 @@ async def test_brew_during_afterflow_completes_the_shot_and_starts_a_new_one(
     assert shot is not None
     assert shot["duration_seconds"] == 13.0
     assert shot["weights"][0] == 1.5
-    stored = init_integration.runtime_data.shot_store.list_shots()
+    stored = await listed_shots(hass, hass_ws_client)
     assert [s["duration_seconds"] for s in stored] == [13.0, 16.0]
 
 
@@ -180,25 +238,31 @@ async def test_tare_at_brew_start_zeroes_earlier_weights(
     assert shot["weights"][:3] == [0.0, 0.0, 2.0]
 
 
-async def test_tare_in_afterflow_ends_the_shot(hass: HomeAssistant, poll) -> None:
-    """The auto tare after the brew ends the shot at once, without the tared sample."""
+@pytest.mark.parametrize("tared", [0.1, 28.0])
+async def test_tare_in_afterflow_ends_the_shot(
+    hass: HomeAssistant, poll, tared: float
+) -> None:
+    """A drop of more than 2 g after the brew is the tare; it ends the shot at once."""
     await brew(poll, 20)
     await poll(MA_STATUS=ON, SCALE_WEIGHT=30.5)
-    await poll(MA_STATUS=ON, SCALE_WEIGHT=0.1)
+    await poll(MA_STATUS=ON, SCALE_WEIGHT=tared)
 
     shot = _shot(hass)
     assert shot is not None
     assert shot["weights"][-1] == 30.5
 
 
-async def test_small_drop_in_afterflow_is_recorded(hass: HomeAssistant, poll) -> None:
-    """A drop below the tare threshold is a real sample, not a tare."""
+@pytest.mark.parametrize("weight", [30.0, 28.5])
+async def test_small_drop_in_afterflow_is_recorded(
+    hass: HomeAssistant, poll, weight: float
+) -> None:
+    """A drop of up to 2 g is a real sample, not a tare."""
     await brew(poll, 20)
     await poll(MA_STATUS=ON, SCALE_WEIGHT=30.5)
-    await poll(MA_STATUS=ON, SCALE_WEIGHT=30.0)
+    await poll(MA_STATUS=ON, SCALE_WEIGHT=weight)
     assert _shot(hass) is None
 
-    await poll(MA_STATUS=ON, SCALE_WEIGHT=30.0)
+    await poll(MA_STATUS=ON, SCALE_WEIGHT=weight)
     shot = _shot(hass)
     assert shot is not None
-    assert shot["weights"][-3:] == [30.5, 30.0, 30.0]
+    assert shot["weights"][-3:] == [30.5, weight, weight]

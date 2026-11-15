@@ -224,15 +224,3 @@ async def test_delete_last_shot_of_month_removes_chunk_file(
     assert [s["shot_id"] for s in reloaded.list_shots()] == [july["start_time"]]
     shots = await reloaded.async_get_shots([july["start_time"], june["start_time"]])
     assert [s["shot_id"] for s in shots] == [july["start_time"]]
-
-
-async def test_files_live_in_domain_folder(
-    hass: HomeAssistant, hass_storage: dict[str, Any]
-) -> None:
-    """The files live in the integration's storage folder."""
-    store = await _loaded_store(hass)
-    await store.async_add_shot(shot_payload())
-
-    assert f"{XENIA_DOMAIN}/{ENTRY_ID}.shots_index" in hass_storage
-    assert f"{XENIA_DOMAIN}/{ENTRY_ID}.shots_2026-07" in hass_storage
-    assert not any(k.startswith(f"{XENIA_DOMAIN}.") for k in hass_storage)

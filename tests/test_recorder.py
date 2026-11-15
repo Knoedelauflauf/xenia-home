@@ -4,6 +4,7 @@ from datetime import timedelta
 from functools import partial
 from unittest.mock import patch
 
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.recorder import get_instance, history
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import CoreState, HomeAssistant
@@ -14,10 +15,11 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
+from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
 from custom_components.xenia_home.const import XENIA_DOMAIN
 
-from tests import setup_integration
+from tests import listed_shots, setup_integration, ws_command
 from tests.fixtures.shots import shot_payload
 from tests.test_event import TRACKER, brew, end_brew
 
@@ -73,8 +75,10 @@ async def legacy_install(
     return mock_config_entry
 
 
-def _shot_ids(entry: MockConfigEntry) -> list[str]:
-    return [shot["shot_id"] for shot in entry.runtime_data.shot_store.list_shots()]
+async def _shot_ids(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator
+) -> list[str]:
+    return [shot["shot_id"] for shot in await listed_shots(hass, hass_ws_client)]
 
 
 async def _reload(hass: HomeAssistant, entry: MockConfigEntry) -> None:
@@ -108,37 +112,79 @@ async def test_recorder_rows_lack_curve_arrays(
 
 
 async def test_legacy_shots_are_imported_once(
-    hass: HomeAssistant, legacy_install: MockConfigEntry
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    legacy_install: MockConfigEntry,
 ) -> None:
     """Complete shots from the recorder are imported, and only on the first start."""
     await setup_integration(hass, legacy_install)
     await hass.async_block_till_done(wait_background_tasks=True)
-    assert _shot_ids(legacy_install) == [LEGACY_SHOT["start_time"]]
-    store = legacy_install.runtime_data.shot_store
-    [shot] = await store.async_get_shots([LEGACY_SHOT["start_time"]])
+    assert await _shot_ids(hass, hass_ws_client) == [LEGACY_SHOT["start_time"]]
+    answer = await ws_command(
+        hass,
+        hass_ws_client,
+        {"type": "xenia_home/shots/get", "shot_ids": [LEGACY_SHOT["start_time"]]},
+    )
+    [shot] = answer["result"]["shots"]
     assert shot["weights"] == LEGACY_SHOT["weights"]
 
-    await store.async_delete_shot(LEGACY_SHOT["start_time"])
+    answer = await ws_command(
+        hass,
+        hass_ws_client,
+        {"type": "xenia_home/shots/delete", "shot_id": LEGACY_SHOT["start_time"]},
+    )
+    assert answer["success"]
     await _reload(hass, legacy_install)
-    assert _shot_ids(legacy_install) == []
+    assert await _shot_ids(hass, hass_ws_client) == []
+
+
+async def test_import_reaches_back_400_days(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    legacy_install: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Shots recorded up to 400 days ago are imported, older ones are not."""
+    now = dt_util.utcnow()
+    for days, start_time in (
+        (300, "2025-09-13T09:00:00.000+00:00"),
+        (410, "2025-06-05T09:00:00.000+00:00"),
+    ):
+        freezer.move_to(now - timedelta(days=days))
+        payload = shot_payload(start_time)
+        hass.states.async_set(
+            TRACKER, start_time, {"event_type": "shot_completed", **payload}
+        )
+        await async_wait_recording_done(hass)
+    freezer.move_to(now)
+
+    await setup_integration(hass, legacy_install)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert await _shot_ids(hass, hass_ws_client) == [
+        LEGACY_SHOT["start_time"],
+        "2025-09-13T09:00:00.000+00:00",
+    ]
 
 
 async def test_import_waits_for_home_assistant_to_start(
-    hass: HomeAssistant, legacy_install: MockConfigEntry
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    legacy_install: MockConfigEntry,
 ) -> None:
     """An import cut short by an unload before the start runs at the next start."""
     hass.set_state(CoreState.not_running)
     await setup_integration(hass, legacy_install)
-    assert _shot_ids(legacy_install) == []
+    assert await _shot_ids(hass, hass_ws_client) == []
     await hass.config_entries.async_unload(legacy_install.entry_id)
 
     hass.set_state(CoreState.running)
     await _reload(hass, legacy_install)
-    assert _shot_ids(legacy_install) == [LEGACY_SHOT["start_time"]]
+    assert await _shot_ids(hass, hass_ws_client) == [LEGACY_SHOT["start_time"]]
 
 
 async def test_import_without_shot_tracker_imports_nothing(
     hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
     legacy_install: MockConfigEntry,
     entity_registry: er.EntityRegistry,
 ) -> None:
@@ -150,11 +196,12 @@ async def test_import_without_shot_tracker_imports_nothing(
     hass.set_state(CoreState.running)
     hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
     await hass.async_block_till_done(wait_background_tasks=True)
-    assert _shot_ids(legacy_install) == []
+    assert await _shot_ids(hass, hass_ws_client) == []
 
 
 async def test_failed_import_is_not_retried(
     hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
     legacy_install: MockConfigEntry,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -165,16 +212,17 @@ async def test_failed_import_is_not_retried(
     assert "One-time shot import from the recorder failed" in caplog.text
 
     await _reload(hass, legacy_install)
-    assert _shot_ids(legacy_install) == []
+    assert await _shot_ids(hass, hass_ws_client) == []
 
 
 async def test_new_install_imports_nothing(
     hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
     mock_config_entry: MockConfigEntry,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A new install starts with an empty shot history."""
     await setup_integration(hass, mock_config_entry)
     await hass.async_block_till_done(wait_background_tasks=True)
-    assert _shot_ids(mock_config_entry) == []
+    assert await _shot_ids(hass, hass_ws_client) == []
     assert "shot import" not in caplog.text
