@@ -12,6 +12,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
+    EntityCategory,
     UnitOfElectricCurrent,
     UnitOfEnergy,
     UnitOfPressure,
@@ -80,6 +81,8 @@ SENSOR_TYPES: Final[tuple[XeniaSensorEntityDescription, ...]] = (
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         device_class=SensorDeviceClass.CURRENT,
         state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         value_fn=lambda data: data.overview.ma_cur_pwr,
     ),
     XeniaSensorEntityDescription(
@@ -94,6 +97,7 @@ SENSOR_TYPES: Final[tuple[XeniaSensorEntityDescription, ...]] = (
         key="extractions",
         translation_key="extractions",
         state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: data.overview.ma_extractions,
     ),
     XeniaSensorEntityDescription(
@@ -102,6 +106,7 @@ SENSOR_TYPES: Final[tuple[XeniaSensorEntityDescription, ...]] = (
         native_unit_of_measurement=UnitOfTime.HOURS,
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: data.overview.ma_operating_hours / 60,
     ),
     XeniaSensorEntityDescription(

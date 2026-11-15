@@ -20,6 +20,8 @@ from custom_components.xenia_home.const import PowerOnBehavior
 from tests import setup_integration
 from tests.conftest import MockXeniaApi
 
+pytestmark = pytest.mark.usefixtures("entity_registry_enabled_by_default")
+
 POWER_ON_BEHAVIOR = "select.xenia_espresso_machine_power_on_behavior"
 SCRIPT = "select.xenia_espresso_machine_script"
 SWITCH_LEFT_SHORT = "select.xenia_espresso_machine_left_switch_left_short"

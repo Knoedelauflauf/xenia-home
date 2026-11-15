@@ -20,6 +20,7 @@ SHOT_START = "sensor.xenia_espresso_machine_shot_start_time"
 SCALE_FLOW = "sensor.xenia_espresso_machine_scale_flow_rate"
 
 
+@pytest.mark.usefixtures("entity_registry_enabled_by_default")
 async def test_sensor_entities_snapshot(
     hass: HomeAssistant,
     init_integration: MockConfigEntry,

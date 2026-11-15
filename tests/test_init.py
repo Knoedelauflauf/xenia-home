@@ -96,6 +96,26 @@ async def test_device_of_new_firmware(
     assert device.serial_number == "300200000000"
 
 
+@pytest.mark.parametrize(
+    "entity_id",
+    [
+        "sensor.xenia_espresso_machine_electric_current",
+        "select.xenia_espresso_machine_left_switch_left_short",
+        "select.xenia_espresso_machine_right_switch_right_long",
+    ],
+)
+async def test_noisy_entities_start_disabled(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    entity_registry: er.EntityRegistry,
+    entity_id: str,
+) -> None:
+    """Raw readings and the switch assignments start disabled."""
+    entry = entity_registry.async_get(entity_id)
+    assert entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert hass.states.get(entity_id) is None
+
+
 async def test_entity_id_change_keeps_the_entity_working(
     hass: HomeAssistant,
     entity_registry: er.EntityRegistry,

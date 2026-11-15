@@ -132,6 +132,7 @@ class SwitchConfigSelect(XeniaEntity, SelectEntity):
     """The script a switch on the machine runs."""
 
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_registry_enabled_default = False
 
     def __init__(
         self,

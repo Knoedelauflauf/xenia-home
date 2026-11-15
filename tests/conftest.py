@@ -1,12 +1,12 @@
 """Fixtures for the Xenia integration tests."""
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Generator
 from datetime import timedelta
 from http import HTTPStatus
 import json
 import re
 from typing import Any
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
@@ -47,6 +47,16 @@ WRITE_ENDPOINTS = {
     ("post", "switches"),
     ("post", "toggle/sb"),
 }
+
+
+@pytest.fixture
+def entity_registry_enabled_by_default() -> Generator[None]:
+    """Enable the entities that start disabled."""
+    with patch(
+        "homeassistant.helpers.entity.Entity.entity_registry_enabled_default",
+        return_value=True,
+    ):
+        yield
 
 
 @pytest.fixture
