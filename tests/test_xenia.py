@@ -136,22 +136,28 @@ def test_machine_serial_number(fields: dict, expected: str | None) -> None:
     assert XeniaMachineData.from_dict({**MACHINE_PAYLOAD, **fields}).ma_sn == expected
 
 
+async def test_get_mac(xenia: Xenia) -> None:
+    """The MAC address comes from overview_single."""
+    assert await xenia.get_mac() == "AA:BB:CC:DD:EE:FF"
+
+
 @pytest.mark.parametrize(
     "fault",
     [
-        None,
         {"json": {"OTHER_KEY": 1}},
+        {"json": {"MA_MAC": ""}},
+        {"json": ["MA_MAC"]},
         {"status": 404},
         {"exc": OSError("connection refused")},
     ],
 )
-async def test_device_connected(
-    xenia: Xenia, mock_xenia_api: MockXeniaApi, fault: dict | None
+async def test_get_mac_fails_without_a_mac(
+    xenia: Xenia, mock_xenia_api: MockXeniaApi, fault: dict
 ) -> None:
-    """Only an overview with MA_STATUS counts as a connected machine."""
-    if fault is not None:
-        mock_xenia_api.override("get", "overview", **fault)
-    assert await xenia.device_connected() is (fault is None)
+    """A payload without a MAC address or a failed request raises a ClientError."""
+    mock_xenia_api.override("get", "overview_single", **fault)
+    with pytest.raises((ClientError, OSError)):
+        await xenia.get_mac()
 
 
 async def test_reads(xenia: Xenia, mock_xenia_api: MockXeniaApi) -> None:

@@ -3,19 +3,15 @@
 from dataclasses import dataclass
 from enum import IntEnum
 import json
-import logging
 from typing import Any
 
 from aiohttp import (
-    ClientError,
     ClientPayloadError,
     ClientResponse,
     ClientResponseError,
     ClientSession,
     ClientTimeout,
 )
-
-_LOGGER = logging.getLogger(__name__)
 
 
 class MachineControl(IntEnum):
@@ -226,14 +222,12 @@ class Xenia:
         self._host = host
         self._session = session
 
-    async def device_connected(self) -> bool:
-        """Return whether a Xenia machine answers on the host."""
-        try:
-            overview = await self._get_overview_raw()
-        except (ClientError, OSError, TimeoutError) as err:
-            _LOGGER.debug("Connection test failed: %s", err)
-            return False
-        return "MA_STATUS" in overview
+    async def get_mac(self) -> str:
+        """Fetch the MAC address, which every firmware reports."""
+        payload = _json(await self._get("overview_single"))
+        if isinstance(payload, dict) and (mac := payload.get("MA_MAC")):
+            return str(mac)
+        raise ClientPayloadError("The machine reported no MAC address")
 
     async def machine_turn_on(self, sb_on: bool = True) -> None:
         """Turn the machine on, optionally suppressing the steam boiler."""

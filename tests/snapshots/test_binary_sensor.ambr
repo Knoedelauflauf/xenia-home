@@ -32,7 +32,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'water_tank_empty',
-    'unique_id': 'xenia.local_water_tank_empty',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_water_tank_empty',
     'unit_of_measurement': None,
   })
 # ---

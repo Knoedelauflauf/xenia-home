@@ -35,6 +35,7 @@ from tests.fixtures.api_responses import (
 )
 
 DEFAULT_HOST = "xenia.local"
+DEFAULT_MAC = "aa:bb:cc:dd:ee:ff"
 
 WRITE_ENDPOINTS = {
     ("get", "scripts/stop"),
@@ -213,7 +214,8 @@ def mock_config_entry_factory_with_options() -> Callable[
         return MockConfigEntry(
             domain=XENIA_DOMAIN,
             title=DEFAULT_HOST,
-            unique_id=DEFAULT_HOST,
+            unique_id=DEFAULT_MAC,
+            minor_version=2,
             data={"host": DEFAULT_HOST},
             options=options,
         )

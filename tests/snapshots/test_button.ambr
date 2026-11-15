@@ -32,7 +32,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'execute_script',
-    'unique_id': 'xenia_home_execute_script_xenia.local',
+    'unique_id': 'xenia_home_execute_script_aa:bb:cc:dd:ee:ff',
     'unit_of_measurement': None,
   })
 # ---
@@ -82,7 +82,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'stop_script',
-    'unique_id': 'xenia_home_stop_script_xenia.local',
+    'unique_id': 'xenia_home_stop_script_aa:bb:cc:dd:ee:ff',
     'unit_of_measurement': None,
   })
 # ---

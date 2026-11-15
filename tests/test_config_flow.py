@@ -27,7 +27,7 @@ WEIGHT_SETTINGS = {CONF_WEIGHT_MIN: 20.0, CONF_WEIGHT_MAX: 45.0, CONF_WEIGHT_STE
 async def test_user_flow_creates_entry(
     hass: HomeAssistant, mock_xenia_api: MockXeniaApi
 ) -> None:
-    """The machine is added under its host."""
+    """The machine is added under its host and keyed on its MAC address."""
     result = await hass.config_entries.flow.async_init(
         XENIA_DOMAIN, context={"source": SOURCE_USER}
     )
@@ -40,7 +40,7 @@ async def test_user_flow_creates_entry(
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "xenia.local"
     assert result["data"] == {CONF_HOST: "xenia.local"}
-    assert result["result"].unique_id == "xenia.local"
+    assert result["result"].unique_id == "aa:bb:cc:dd:ee:ff"
 
 
 @pytest.mark.parametrize(
@@ -57,7 +57,7 @@ async def test_user_flow_recovers_from_cannot_connect(
     fault: dict,
 ) -> None:
     """An unreachable host or another device shows an error until the host works."""
-    mock_xenia_api.for_host("bad.host").override("get", "overview", **fault)
+    mock_xenia_api.for_host("bad.host").override("get", "overview_single", **fault)
     result = await hass.config_entries.flow.async_init(
         XENIA_DOMAIN, context={"source": SOURCE_USER}
     )
@@ -78,7 +78,7 @@ async def test_user_flow_aborts_when_already_configured(
     mock_xenia_api: MockXeniaApi,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """A host can only be added once."""
+    """A machine can only be added once."""
     mock_config_entry.add_to_hass(hass)
     result = await hass.config_entries.flow.async_init(
         XENIA_DOMAIN, context={"source": SOURCE_USER}
@@ -88,6 +88,43 @@ async def test_user_flow_aborts_when_already_configured(
     )
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
+
+
+async def test_user_flow_updates_the_host_of_a_known_machine(
+    hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """Adding a machine again under a new host moves the existing entry there."""
+    new_machine = mock_xenia_api.for_host("192.168.1.20")
+    entities = {
+        e.unique_id: e.entity_id
+        for e in er.async_entries_for_config_entry(
+            entity_registry, init_integration.entry_id
+        )
+    }
+
+    result = await hass.config_entries.flow.async_init(
+        XENIA_DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_HOST: "192.168.1.20"}
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert hass.config_entries.async_entries(XENIA_DOMAIN) == [init_integration]
+    assert init_integration.data == {CONF_HOST: "192.168.1.20"}
+    assert init_integration.state is ConfigEntryState.LOADED
+    assert new_machine.bodies("get", "overview")
+    assert {
+        e.unique_id: e.entity_id
+        for e in er.async_entries_for_config_entry(
+            entity_registry, init_integration.entry_id
+        )
+    } == entities
 
 
 async def test_reconfigure_changes_host_and_keeps_entities(
@@ -130,7 +167,9 @@ async def test_reconfigure_recovers_from_cannot_connect(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
 ) -> None:
     """An unreachable host shows an error and leaves the entry unchanged."""
-    mock_xenia_api.for_host("bad.host").override("get", "overview", exc=OSError())
+    mock_xenia_api.for_host("bad.host").override(
+        "get", "overview_single", exc=OSError()
+    )
     mock_xenia_api.for_host("new.host")
     result = await init_integration.start_reconfigure_flow(hass)
     result = await hass.config_entries.flow.async_configure(
@@ -145,6 +184,23 @@ async def test_reconfigure_recovers_from_cannot_connect(
     )
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
+
+
+async def test_reconfigure_rejects_another_machine(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+) -> None:
+    """A host that answers with another machine leaves the entry unchanged."""
+    mock_xenia_api.for_host("other.host").set_overview_single(
+        MA_MAC="11:22:33:44:55:66"
+    )
+    result = await init_integration.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_HOST: "other.host"}
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "unique_id_mismatch"
+    assert init_integration.data == {CONF_HOST: "xenia.local"}
+    assert init_integration.unique_id == "aa:bb:cc:dd:ee:ff"
 
 
 async def _start_weight_options(hass: HomeAssistant, entry: MockConfigEntry) -> dict:

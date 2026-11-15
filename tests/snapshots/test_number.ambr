@@ -37,7 +37,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'brew_boiler_set_temperature',
-    'unique_id': 'xenia.local_brew_boiler_set_temperature',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_brew_boiler_set_temperature',
     'unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
   })
 # ---
@@ -98,7 +98,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'brew_group_set_temperature',
-    'unique_id': 'xenia.local_brew_group_set_temperature',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_brew_group_set_temperature',
     'unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
   })
 # ---

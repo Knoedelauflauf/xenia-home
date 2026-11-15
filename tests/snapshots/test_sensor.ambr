@@ -37,7 +37,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'brew_boiler_temperature',
-    'unique_id': 'xenia.local_brew_boiler_temperature',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_brew_boiler_temperature',
     'unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
   })
 # ---
@@ -95,7 +95,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'brew_group_temperature',
-    'unique_id': 'xenia.local_brew_group_temperature',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_brew_group_temperature',
     'unit_of_measurement': <UnitOfTemperature.CELSIUS: '°C'>,
   })
 # ---
@@ -153,7 +153,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'electric_current',
-    'unique_id': 'xenia.local_electric_current',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_electric_current',
     'unit_of_measurement': <UnitOfElectricCurrent.AMPERE: 'A'>,
   })
 # ---
@@ -208,7 +208,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'extractions',
-    'unique_id': 'xenia.local_extractions',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_extractions',
     'unit_of_measurement': None,
   })
 # ---
@@ -264,7 +264,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'operating_hours',
-    'unique_id': 'xenia.local_operating_hours',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_operating_hours',
     'unit_of_measurement': <UnitOfTime.HOURS: 'h'>,
   })
 # ---
@@ -322,7 +322,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'pump_pressure',
-    'unique_id': 'xenia.local_pump_pressure',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_pump_pressure',
     'unit_of_measurement': <UnitOfPressure.BAR: 'bar'>,
   })
 # ---
@@ -375,7 +375,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'shot_start_time',
-    'unique_id': 'xenia.local_shot_start_time',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_shot_start_time',
     'unit_of_measurement': None,
   })
 # ---
@@ -434,7 +434,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'status',
-    'unique_id': 'xenia.local_status',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_status',
     'unit_of_measurement': None,
   })
 # ---
@@ -497,7 +497,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'steam_boiler_pressure',
-    'unique_id': 'xenia.local_steam_boiler_pressure',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_steam_boiler_pressure',
     'unit_of_measurement': <UnitOfPressure.BAR: 'bar'>,
   })
 # ---
@@ -555,7 +555,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'total_energy',
-    'unique_id': 'xenia.local_total_energy',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_total_energy',
     'unit_of_measurement': <UnitOfEnergy.KILO_WATT_HOUR: 'kWh'>,
   })
 # ---

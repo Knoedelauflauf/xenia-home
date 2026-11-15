@@ -12,6 +12,7 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.device_registry import format_mac
 import probatio
 
 from .const import (
@@ -39,14 +40,20 @@ HOST_SCHEMA = probatio.Schema({probatio.Required(CONF_HOST, default=DEFAULT_HOST
 CREATE_NEW_SCRIPT = "__create_new__"
 
 
-async def _async_can_connect(hass: HomeAssistant, host: str) -> bool:
-    return await Xenia(host, async_get_clientsession(hass)).device_connected()
+async def _async_get_machine_id(hass: HomeAssistant, host: str) -> str | None:
+    try:
+        mac = await Xenia(host, async_get_clientsession(hass)).get_mac()
+    except REQUEST_ERRORS as err:
+        _LOGGER.debug("Connection test failed: %s", err)
+        return None
+    return format_mac(mac)
 
 
 class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
     """Add a Xenia machine by host, or change the host of one."""
 
     VERSION = 1
+    MINOR_VERSION = 2
 
     @staticmethod
     @callback
@@ -61,9 +68,9 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
-            await self.async_set_unique_id(host)
-            self._abort_if_unique_id_configured()
-            if await _async_can_connect(self.hass, host):
+            if machine_id := await _async_get_machine_id(self.hass, host):
+                await self.async_set_unique_id(machine_id)
+                self._abort_if_unique_id_configured(updates={CONF_HOST: host})
                 return self.async_create_entry(title=host, data={CONF_HOST: host})
             errors["base"] = "cannot_connect"
 
@@ -81,7 +88,12 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
-            if await _async_can_connect(self.hass, host):
+            if machine_id := await _async_get_machine_id(self.hass, host):
+                # An entry not migrated yet is keyed on its host; its reload
+                # migrates it to the machine's MAC address.
+                if entry.minor_version >= 2:
+                    await self.async_set_unique_id(machine_id)
+                    self._abort_if_unique_id_mismatch()
                 return self.async_update_reload_and_abort(
                     entry, data_updates={CONF_HOST: host}
                 )

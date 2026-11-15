@@ -40,7 +40,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'switch_left_long',
-    'unique_id': 'xenia_home_SWITCH_SET_LEFT_LEFT_1_xenia.local',
+    'unique_id': 'xenia_home_SWITCH_SET_LEFT_LEFT_1_aa:bb:cc:dd:ee:ff',
     'unit_of_measurement': None,
   })
 # ---
@@ -105,7 +105,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'switch_left_short',
-    'unique_id': 'xenia_home_SWITCH_SET_LEFT_LEFT_0_xenia.local',
+    'unique_id': 'xenia_home_SWITCH_SET_LEFT_LEFT_0_aa:bb:cc:dd:ee:ff',
     'unit_of_measurement': None,
   })
 # ---
@@ -167,7 +167,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'power_on_behavior',
-    'unique_id': 'xenia_home_power_on_behavior_xenia.local',
+    'unique_id': 'xenia_home_power_on_behavior_aa:bb:cc:dd:ee:ff',
     'unit_of_measurement': None,
   })
 # ---
@@ -229,7 +229,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'switch_right_left_long',
-    'unique_id': 'xenia_home_SWITCH_SET_RIGHT_LEFT_1_xenia.local',
+    'unique_id': 'xenia_home_SWITCH_SET_RIGHT_LEFT_1_aa:bb:cc:dd:ee:ff',
     'unit_of_measurement': None,
   })
 # ---
@@ -294,7 +294,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'switch_right_left_short',
-    'unique_id': 'xenia_home_SWITCH_SET_RIGHT_LEFT_0_xenia.local',
+    'unique_id': 'xenia_home_SWITCH_SET_RIGHT_LEFT_0_aa:bb:cc:dd:ee:ff',
     'unit_of_measurement': None,
   })
 # ---
@@ -359,7 +359,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'switch_right_right_long',
-    'unique_id': 'xenia_home_SWITCH_SET_RIGHT_RIGHT_1_xenia.local',
+    'unique_id': 'xenia_home_SWITCH_SET_RIGHT_RIGHT_1_aa:bb:cc:dd:ee:ff',
     'unit_of_measurement': None,
   })
 # ---
@@ -424,7 +424,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'switch_right_right_short',
-    'unique_id': 'xenia_home_SWITCH_SET_RIGHT_RIGHT_0_xenia.local',
+    'unique_id': 'xenia_home_SWITCH_SET_RIGHT_RIGHT_0_aa:bb:cc:dd:ee:ff',
     'unit_of_measurement': None,
   })
 # ---
@@ -489,7 +489,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'script',
-    'unique_id': 'xenia_home_script_xenia.local',
+    'unique_id': 'xenia_home_script_aa:bb:cc:dd:ee:ff',
     'unit_of_measurement': None,
   })
 # ---

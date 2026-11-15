@@ -1,18 +1,30 @@
 """Tests for setting up, unloading and removing the integration."""
 
+from datetime import timedelta
 from typing import Any
 
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.select import (
     DOMAIN as SELECT_DOMAIN,
     SERVICE_SELECT_OPTION,
 )
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import ATTR_CONFIG_ENTRY_ID, ATTR_ENTITY_ID, ATTR_OPTION
+from homeassistant.const import (
+    ATTR_CONFIG_ENTRY_ID,
+    ATTR_ENTITY_ID,
+    ATTR_OPTION,
+    CONF_HOST,
+    STATE_UNAVAILABLE,
+)
 from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 
 from custom_components.xenia_home.const import (
     CONF_POWER_ON_BEHAVIOR,
@@ -31,6 +43,7 @@ from tests.conftest import MockXeniaApi
 from tests.fixtures.api_responses import MACHINE_NEW_FW_FIELDS
 
 POWER_ON_BEHAVIOR = "select.xenia_espresso_machine_power_on_behavior"
+MAC = "aa:bb:cc:dd:ee:ff"
 
 
 async def _execute_script(hass: HomeAssistant, data: dict[str, Any]) -> None:
@@ -60,7 +73,7 @@ async def test_device_of_old_firmware(
     [device] = dr.async_entries_for_config_entry(
         device_registry, init_integration.entry_id
     )
-    assert device.identifiers == {(XENIA_DOMAIN, "xenia.local")}
+    assert device.identifiers == {(XENIA_DOMAIN, "aa:bb:cc:dd:ee:ff")}
     assert device.manufacturer == "Xenia Espresso GmbH"
     assert device.sw_version == "2.3/1.5"
     assert device.serial_number is None
@@ -118,6 +131,170 @@ async def test_setup_drops_options_of_older_releases(
     await setup_integration(hass, entry)
     assert entry.options == {CONF_WEIGHT_MIN: 20.0}
     assert hass.states.get(POWER_ON_BEHAVIOR).state == PowerOnBehavior.STEAM_ON
+
+
+def _add_entry_of_an_earlier_release(
+    hass: HomeAssistant,
+    device_registry: dr.DeviceRegistry,
+    entity_registry: er.EntityRegistry,
+    host: str = "xenia.local",
+) -> MockConfigEntry:
+    """Add an entry keyed on its host, with a device and two renamed entities."""
+    entry = MockConfigEntry(
+        domain=XENIA_DOMAIN,
+        title=host,
+        unique_id=host,
+        minor_version=1,
+        data={CONF_HOST: host},
+    )
+    entry.add_to_hass(hass)
+    device = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id, identifiers={(XENIA_DOMAIN, host)}
+    )
+    for domain, unique_id, object_id in (
+        ("sensor", f"{host}_brew_group_temperature", "group_temp"),
+        ("switch", f"{XENIA_DOMAIN}_power_{host}", "coffee_power"),
+    ):
+        entity_registry.async_get_or_create(
+            domain,
+            XENIA_DOMAIN,
+            unique_id,
+            config_entry=entry,
+            device_id=device.id,
+            suggested_object_id=object_id,
+        )
+    return entry
+
+
+def _ids(
+    device_registry: dr.DeviceRegistry,
+    entity_registry: er.EntityRegistry,
+    entry: MockConfigEntry,
+) -> tuple[dict[str, set[tuple[str, str]]], dict[str, str]]:
+    """Return the identifiers by device id and the unique ids by entity id."""
+    return (
+        {
+            device.id: device.identifiers
+            for device in dr.async_entries_for_config_entry(
+                device_registry, entry.entry_id
+            )
+        },
+        {
+            entity.entity_id: entity.unique_id
+            for entity in er.async_entries_for_config_entry(
+                entity_registry, entry.entry_id
+            )
+        },
+    )
+
+
+async def test_migration_keys_the_machine_on_its_mac(
+    hass: HomeAssistant,
+    device_registry: dr.DeviceRegistry,
+    entity_registry: er.EntityRegistry,
+) -> None:
+    """An entry keyed on its host keeps its device and entities, now keyed on the MAC."""
+    entry = _add_entry_of_an_earlier_release(hass, device_registry, entity_registry)
+    [device_id] = _ids(device_registry, entity_registry, entry)[0]
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.unique_id == MAC
+    devices, entities = _ids(device_registry, entity_registry, entry)
+    assert devices == {device_id: {(XENIA_DOMAIN, MAC)}}
+    assert entities["sensor.group_temp"] == f"{MAC}_brew_group_temperature"
+    assert entities["switch.coffee_power"] == f"{XENIA_DOMAIN}_power_{MAC}"
+    for entity_id in ("sensor.group_temp", "switch.coffee_power"):
+        assert hass.states.get(entity_id).state != STATE_UNAVAILABLE
+    assert "sensor.xenia_espresso_machine_brewgroup_temperature" not in entities
+    assert "switch.xenia_espresso_machine_power" not in entities
+
+
+async def test_migration_waits_for_the_machine(
+    hass: HomeAssistant,
+    device_registry: dr.DeviceRegistry,
+    entity_registry: er.EntityRegistry,
+    mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """While the machine is offline nothing changes; it migrates once it answers."""
+    entry = _add_entry_of_an_earlier_release(hass, device_registry, entity_registry)
+    ids_before = _ids(device_registry, entity_registry, entry)
+    mock_xenia_api.override("get", "overview_single", exc=OSError())
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    assert entry.unique_id == "xenia.local"
+    assert _ids(device_registry, entity_registry, entry) == ids_before
+
+    mock_xenia_api.restore("get", "overview_single")
+    freezer.tick(timedelta(minutes=1))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.unique_id == MAC
+    devices, entities = _ids(device_registry, entity_registry, entry)
+    assert devices.keys() == ids_before[0].keys()
+    assert entities["sensor.group_temp"] == f"{MAC}_brew_group_temperature"
+
+
+async def test_reconfigure_moves_an_entry_waiting_for_migration(
+    hass: HomeAssistant,
+    device_registry: dr.DeviceRegistry,
+    entity_registry: er.EntityRegistry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """A machine that moved to another host migrates once the host is reconfigured."""
+    entry = _add_entry_of_an_earlier_release(hass, device_registry, entity_registry)
+    mock_xenia_api.override("get", "overview_single", exc=OSError())
+    mock_xenia_api.for_host("new.host")
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+
+    result = await entry.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_HOST: "new.host"}
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.data == {CONF_HOST: "new.host"}
+    assert entry.unique_id == MAC
+    assert _ids(device_registry, entity_registry, entry)[1]["sensor.group_temp"] == (
+        f"{MAC}_brew_group_temperature"
+    )
+
+
+async def test_migration_of_a_second_entry_for_the_machine_fails(
+    hass: HomeAssistant,
+    device_registry: dr.DeviceRegistry,
+    entity_registry: er.EntityRegistry,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """A machine added twice under different hosts keeps only the first entry working."""
+    mock_xenia_api.for_host("192.168.1.20")
+    entry = _add_entry_of_an_earlier_release(
+        hass, device_registry, entity_registry, host="192.168.1.20"
+    )
+    ids_before = _ids(device_registry, entity_registry, entry)
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.MIGRATION_ERROR
+    assert entry.error_reason_translation_key == "duplicate_machine"
+    assert entry.unique_id == "192.168.1.20"
+    assert _ids(device_registry, entity_registry, entry) == ids_before
+    assert init_integration.state is ConfigEntryState.LOADED
 
 
 async def test_remove_deletes_the_shot_history(
@@ -200,8 +377,7 @@ async def test_execute_script_with_several_machines(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
 ) -> None:
     """With several machines the call has to name one, and only that one runs it."""
-    second_machine = mock_xenia_api.for_host("xenia2.local")
-    second = await setup_second_machine(hass)
+    second, second_machine = await setup_second_machine(hass, mock_xenia_api)
     with pytest.raises(ServiceValidationError) as exc_info:
         await _execute_script(hass, {ATTR_SCRIPT_ID: 10})
     assert (

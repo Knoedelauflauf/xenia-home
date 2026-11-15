@@ -36,7 +36,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'shot_tracker',
-    'unique_id': 'xenia_home_shot_tracker_xenia.local',
+    'unique_id': 'xenia_home_shot_tracker_aa:bb:cc:dd:ee:ff',
     'unit_of_measurement': None,
   })
 # ---

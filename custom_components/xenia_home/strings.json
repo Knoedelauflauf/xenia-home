@@ -46,7 +46,9 @@
       "cannot_connect": "Failed to connect to the espresso machine. Please check the host address and ensure the device is powered on and accessible on your network."
     },
     "abort": {
-      "already_configured": "This espresso machine is already configured"
+      "already_configured": "This espresso machine is already configured",
+      "reconfigure_successful": "Reconfiguration was successful",
+      "unique_id_mismatch": "This host belongs to a different espresso machine. Add it as a new machine instead."
     }
   },
   "options": {
@@ -222,6 +224,9 @@
     },
     "managed_script_missing": {
       "message": "The managed script {script_id} no longer exists on the machine. Pick another script in the weight management options."
+    },
+    "duplicate_machine": {
+      "message": "This espresso machine is already set up as {title}. Delete this duplicate entry."
     }
   }
 }

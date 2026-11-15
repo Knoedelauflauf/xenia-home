@@ -32,7 +32,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'eco_mode',
-    'unique_id': 'xenia_home_eco_mode_xenia.local',
+    'unique_id': 'xenia_home_eco_mode_aa:bb:cc:dd:ee:ff',
     'unit_of_measurement': None,
   })
 # ---
@@ -82,7 +82,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'power',
-    'unique_id': 'xenia_home_power_xenia.local',
+    'unique_id': 'xenia_home_power_aa:bb:cc:dd:ee:ff',
     'unit_of_measurement': None,
   })
 # ---
@@ -132,7 +132,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'steam_boiler_power',
-    'unique_id': 'xenia_home_steam_boiler_power_xenia.local',
+    'unique_id': 'xenia_home_steam_boiler_power_aa:bb:cc:dd:ee:ff',
     'unit_of_measurement': None,
   })
 # ---

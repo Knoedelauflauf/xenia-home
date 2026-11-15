@@ -46,7 +46,9 @@
       "cannot_connect": "Verbindung zur Espressomaschine fehlgeschlagen. Bitte überprüfe die Host-Adresse und stelle sicher, dass das Gerät eingeschaltet und im Netzwerk erreichbar ist."
     },
     "abort": {
-      "already_configured": "Diese Espressomaschine ist bereits konfiguriert"
+      "already_configured": "Diese Espressomaschine ist bereits konfiguriert",
+      "reconfigure_successful": "Die Neukonfiguration war erfolgreich",
+      "unique_id_mismatch": "Dieser Host gehört zu einer anderen Espressomaschine. Füge sie stattdessen als neue Maschine hinzu."
     }
   },
   "options": {
@@ -222,6 +224,9 @@
     },
     "managed_script_missing": {
       "message": "Das verwaltete Skript {script_id} existiert auf der Maschine nicht mehr. Wähle in den Optionen der Gewichtssteuerung ein anderes Skript."
+    },
+    "duplicate_machine": {
+      "message": "Diese Espressomaschine ist bereits als {title} eingerichtet. Lösche diesen doppelten Eintrag."
     }
   }
 }

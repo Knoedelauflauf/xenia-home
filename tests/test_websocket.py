@@ -167,8 +167,7 @@ async def test_multiple_entries_require_entry_id(
     hass_ws_client: WebSocketGenerator,
 ) -> None:
     """With several machines a command has to name one."""
-    mock_xenia_api.for_host("xenia2.local")
-    second_entry = await setup_second_machine(hass)
+    second_entry, _ = await setup_second_machine(hass, mock_xenia_api)
 
     msg = await _cmd(hass, hass_ws_client, {"type": "xenia_home/shots/list"})
     assert not msg["success"]

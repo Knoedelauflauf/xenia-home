@@ -12,8 +12,7 @@ from .xenia import XeniaMachineData
 def machine_id(entry: XeniaConfigEntry) -> str:
     """Return the key of the machine's device and entity unique ids.
 
-    This is the host the machine was added with. It is kept when the host is
-    reconfigured, so the ids stay stable.
+    This is the config entry's unique id, the MAC address of the machine.
     """
     assert entry.unique_id is not None
     return entry.unique_id
