@@ -71,6 +71,7 @@ async def test_user_flow_recovers_from_cannot_connect(
         result["flow_id"], {CONF_HOST: "xenia.local"}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["result"].unique_id == "aa:bb:cc:dd:ee:ff"
 
 
 async def test_user_flow_aborts_when_already_configured(
