@@ -1,11 +1,12 @@
 """Turn failed requests to the machine into translated Home Assistant errors."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Coroutine
 from contextlib import asynccontextmanager
+from typing import Any
 
 from aiohttp import ClientError
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.update_coordinator import UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import XENIA_DOMAIN
 
@@ -38,3 +39,14 @@ async def machine_write() -> AsyncIterator[None]:
             translation_key="write_failed",
             translation_placeholders={"error": describe_error(err)},
         ) from err
+
+
+async def async_write(
+    coordinator: DataUpdateCoordinator[Any], command: Coroutine[Any, Any, None]
+) -> None:
+    """Send a command to the machine, then poll it, even when the command failed."""
+    try:
+        async with machine_write():
+            await command
+    finally:
+        await coordinator.async_request_refresh()

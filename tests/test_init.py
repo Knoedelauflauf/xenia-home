@@ -439,6 +439,16 @@ async def test_execute_script_rejects_ids_below_one(
     assert mock_xenia_api.bodies("post", "scripts/execute") == []
 
 
+async def test_execute_script_polls_the_machine(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+) -> None:
+    """The action is followed by a poll, so the running script shows right away."""
+    polls = len(mock_xenia_api.bodies("get", "overview"))
+    await _execute_script(hass, {"script_id": 10})
+    await hass.async_block_till_done()
+    assert len(mock_xenia_api.bodies("get", "overview")) > polls
+
+
 async def test_execute_script_by_a_shared_name(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
 ) -> None:

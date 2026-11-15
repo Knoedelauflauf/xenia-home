@@ -36,7 +36,7 @@ from .coordinator import (
     XeniaDataUpdateCoordinator,
 )
 from .entity import XeniaEntity, build_device_info, machine_id
-from .errors import machine_write
+from .errors import async_write, machine_write
 from .script_parser import get_weight_target, set_weight_target
 from .xenia import Xenia
 
@@ -128,12 +128,11 @@ class XeniaNumber(XeniaEntity, NumberEntity):
 
     @override
     async def async_set_native_value(self, value: float) -> None:
-        """Write the setpoint, then poll the machine even if the write failed."""
-        try:
-            async with machine_write():
-                await self.entity_description.set_fn(self.coordinator.xenia, value)
-        finally:
-            await self.coordinator.async_request_refresh()
+        """Write the setpoint."""
+        await async_write(
+            self.coordinator,
+            self.entity_description.set_fn(self.coordinator.xenia, value),
+        )
 
 
 class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity):
@@ -203,10 +202,9 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
                 translation_key="managed_script_unreadable",
                 translation_placeholders={"script_id": str(script_id)},
             ) from err
-        try:
-            async with machine_write():
-                await self.coordinator.xenia.update_script(
-                    script_id, script.get("Title", ""), instruction
-                )
-        finally:
-            await self.coordinator.async_request_refresh()
+        await async_write(
+            self.coordinator,
+            self.coordinator.xenia.update_script(
+                script_id, script.get("Title", ""), instruction
+            ),
+        )

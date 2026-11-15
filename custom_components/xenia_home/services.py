@@ -9,7 +9,7 @@ import probatio
 
 from .const import XENIA_DOMAIN
 from .coordinator import XeniaConfigEntry
-from .errors import machine_write
+from .errors import async_write
 
 SERVICE_EXECUTE_SCRIPT = "execute_script"
 ATTR_SCRIPT_ID = "script_id"
@@ -50,8 +50,9 @@ async def _execute_script(call: ServiceCall) -> None:
                 translation_key="script_not_found",
                 translation_placeholders={"script_name": str(script_name)},
             )
-    async with machine_write():
-        await runtime.coordinator.xenia.execute_script(script_id)
+    await async_write(
+        runtime.coordinator, runtime.coordinator.xenia.execute_script(script_id)
+    )
 
 
 @callback

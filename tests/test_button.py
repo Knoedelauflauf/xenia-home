@@ -95,6 +95,21 @@ async def test_scripts_sharing_a_name_are_told_apart(
     assert mock_xenia_api.bodies("post", "scripts/execute") == ['{"ID":12}']
 
 
+@pytest.mark.parametrize("entity_id", [EXECUTE, STOP])
+async def test_press_polls_the_machine(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    entity_id: str,
+) -> None:
+    """A pressed button is followed by a poll, so its effect shows right away."""
+    await _select_script(hass, "MyShot")
+    polls = len(mock_xenia_api.bodies("get", "overview"))
+    await _press(hass, entity_id)
+    await hass.async_block_till_done()
+    assert len(mock_xenia_api.bodies("get", "overview")) > polls
+
+
 async def test_stop_stops_the_script(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
 ) -> None:

@@ -1,6 +1,5 @@
 """Switch platform for the Xenia espresso machine."""
 
-from collections.abc import Coroutine
 from typing import Any, override
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
@@ -10,7 +9,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from .const import PowerOnBehavior
 from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
 from .entity import XeniaEntity
-from .errors import machine_write
+from .errors import async_write
 from .xenia import ACTIVE_STATUSES, MachineStatus, SteamBoilerStatus
 
 PARALLEL_UPDATES = 1
@@ -40,16 +39,11 @@ class XeniaSwitch(XeniaEntity, SwitchEntity):
         super().__init__(coordinator)
         self._attr_unique_id = f"{self.machine_id}_{self.entity_description.key}"
 
-    async def _async_write(self, command: Coroutine[Any, Any, None]) -> None:
-        try:
-            async with machine_write():
-                await command
-        finally:
-            await self.coordinator.async_request_refresh()
-
     async def _async_turn_machine_on(self) -> None:
         steam_on = self.runtime_data.power_on_behavior is PowerOnBehavior.STEAM_ON
-        await self._async_write(self.coordinator.xenia.machine_turn_on(sb_on=steam_on))
+        await async_write(
+            self.coordinator, self.coordinator.xenia.machine_turn_on(sb_on=steam_on)
+        )
 
 
 class XeniaPowerSwitch(XeniaSwitch):
@@ -71,7 +65,7 @@ class XeniaPowerSwitch(XeniaSwitch):
     @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the machine off."""
-        await self._async_write(self.coordinator.xenia.machine_turn_off())
+        await async_write(self.coordinator, self.coordinator.xenia.machine_turn_off())
 
 
 class XeniaEcoSwitch(XeniaSwitch):
@@ -99,7 +93,7 @@ class XeniaEcoSwitch(XeniaSwitch):
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enter eco mode."""
-        await self._async_write(self.coordinator.xenia.machine_set_eco())
+        await async_write(self.coordinator, self.coordinator.xenia.machine_set_eco())
 
     @override
     async def async_turn_off(self, **kwargs: Any) -> None:
@@ -132,9 +126,9 @@ class XeniaSteamBoilerSwitch(XeniaSwitch):
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the steam boiler on."""
-        await self._async_write(self.coordinator.xenia.sb_turn_on())
+        await async_write(self.coordinator, self.coordinator.xenia.sb_turn_on())
 
     @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the steam boiler off."""
-        await self._async_write(self.coordinator.xenia.sb_turn_off())
+        await async_write(self.coordinator, self.coordinator.xenia.sb_turn_off())

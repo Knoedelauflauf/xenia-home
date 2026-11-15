@@ -10,7 +10,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from .const import XENIA_DOMAIN
 from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
 from .entity import XeniaEntity
-from .errors import machine_write
+from .errors import async_write
 
 PARALLEL_UPDATES = 1
 
@@ -45,8 +45,9 @@ class XeniaExecuteScriptButton(XeniaEntity, ButtonEntity):
             raise ServiceValidationError(
                 translation_domain=XENIA_DOMAIN, translation_key="no_script_selected"
             )
-        async with machine_write():
-            await self.coordinator.xenia.execute_script(script_id)
+        await async_write(
+            self.coordinator, self.coordinator.xenia.execute_script(script_id)
+        )
 
 
 class XeniaStopScriptButton(XeniaEntity, ButtonEntity):
@@ -62,5 +63,4 @@ class XeniaStopScriptButton(XeniaEntity, ButtonEntity):
     @override
     async def async_press(self) -> None:
         """Stop the running script."""
-        async with machine_write():
-            await self.coordinator.xenia.stop_script()
+        await async_write(self.coordinator, self.coordinator.xenia.stop_script())
