@@ -15,10 +15,12 @@ from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
 )
+from pytest_homeassistant_custom_component.syrupy import HomeAssistantSnapshotExtension
 from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
     AiohttpClientMockResponse,
 )
+from syrupy.assertion import SnapshotAssertion
 from yarl import URL
 
 from custom_components.xenia_home.const import XENIA_DOMAIN
@@ -44,6 +46,16 @@ WRITE_ENDPOINTS = {
     ("post", "switches"),
     ("post", "toggle/sb"),
 }
+
+
+@pytest.fixture
+def snapshot(snapshot: SnapshotAssertion) -> SnapshotAssertion:
+    """Return the snapshot assertion with the Home Assistant extension.
+
+    The plugin fixture of the same name can be shadowed by syrupy's own,
+    depending on the order pytest discovers the installed plugins.
+    """
+    return snapshot.use_extension(HomeAssistantSnapshotExtension)
 
 
 class XeniaMockResponse(AiohttpClientMockResponse):
