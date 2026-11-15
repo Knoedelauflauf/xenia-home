@@ -18,14 +18,13 @@ def machine_id(entry: XeniaConfigEntry) -> str:
     return entry.unique_id
 
 
-def build_device_info(
-    entry: XeniaConfigEntry, machine: XeniaMachineData, mac: str | None = None
-) -> DeviceInfo:
+def build_device_info(entry: XeniaConfigEntry, machine: XeniaMachineData) -> DeviceInfo:
     """Build the device info of the machine."""
     fw_version = machine.fw_version()
     esp_fw_version = machine.esp_fw_version()
-    info = DeviceInfo(
+    return DeviceInfo(
         identifiers={(XENIA_DOMAIN, machine_id(entry))},
+        connections={(CONNECTION_NETWORK_MAC, machine_id(entry))},
         name="Xenia Espresso Machine",
         manufacturer="Xenia Espresso GmbH",
         model="DBL",
@@ -34,9 +33,6 @@ def build_device_info(
         ),
         serial_number=machine.ma_sn,
     )
-    if mac:
-        info["connections"] = {(CONNECTION_NETWORK_MAC, mac)}
-    return info
 
 
 class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
@@ -76,5 +72,4 @@ class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
         return build_device_info(
             self.coordinator.config_entry,
             self.runtime_data.config_coordinator.data.machine,
-            self.coordinator.data.overview_single.ma_mac,
         )

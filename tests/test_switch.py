@@ -204,9 +204,12 @@ async def test_refused_command_raises(
     service: str,
     path: str,
 ) -> None:
-    """A refused command raises a translated error naming the cause."""
+    """A refused command raises a translated error and still polls the machine."""
     mock_xenia_api.fail("post", path)
+    polls = len(mock_xenia_api.bodies("get", "overview"))
     with pytest.raises(HomeAssistantError) as exc_info:
         await _switch(hass, service, entity_id)
     assert exc_info.value.translation_key == "write_failed"
     assert "Internal Server Error" in exc_info.value.translation_placeholders["error"]
+    await hass.async_block_till_done()
+    assert len(mock_xenia_api.bodies("get", "overview")) > polls

@@ -63,8 +63,8 @@ def _resolve_store(
         probatio.Optional("limit"): probatio.All(int, probatio.Range(min=1)),
     }
 )
-@websocket_api.async_response
-async def ws_list_shots(
+@callback
+def ws_list_shots(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],

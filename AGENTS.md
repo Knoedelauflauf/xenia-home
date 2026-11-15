@@ -78,7 +78,7 @@ self._attr_unique_id = f"{self.machine_id}_{description.key}"
 
 | Fixture | Purpose |
 |---|---|
-| `mock_xenia_api` | Autouse fake machine on `xenia.local`, built on `aioclient_mock`. Setters (`set_overview`, `set_scripts`, `set_script`, ...) change the answers at any time; write endpoints accept every request. `override`, `fail` and `restore` change single endpoints, `bodies` and `assert_post_called_with` inspect the requests. `for_host` adds a second machine. |
+| `mock_xenia_api` | Autouse fake machine on `xenia.local`, built on `aioclient_mock`. Setters (`set_overview`, `set_scripts`, `set_script`, ...) change the answers at any time; write endpoints accept every request. `override`, `fail` and `restore` change single endpoints, `bodies` inspects the requests. `for_host` adds a second machine. |
 | `mock_config_entry` | A `MockConfigEntry` for `xenia.local` without options. |
 | `mock_config_entry_factory_with_options` | Factory for a `MockConfigEntry` with the given options. |
 | `init_integration` | Sets up `mock_config_entry` and returns it. |

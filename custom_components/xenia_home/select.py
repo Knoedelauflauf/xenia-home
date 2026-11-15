@@ -159,10 +159,11 @@ class SwitchConfigSelect(XeniaEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         """Assign a script to the switch."""
         config_coordinator = self.runtime_data.config_coordinator
-        async with machine_write():
-            await self.coordinator.xenia.set_switch(
-                self.entity_description.key,
-                _script_id(config_coordinator.data.scripts, option),
-            )
-        await config_coordinator.async_request_refresh()
-        self.async_write_ha_state()
+        try:
+            async with machine_write():
+                await self.coordinator.xenia.set_switch(
+                    self.entity_description.key,
+                    _script_id(config_coordinator.data.scripts, option),
+                )
+        finally:
+            await config_coordinator.async_request_refresh()

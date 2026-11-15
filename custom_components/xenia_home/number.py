@@ -197,8 +197,10 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
                 translation_key="managed_script_unreadable",
                 translation_placeholders={"script_id": str(script_id)},
             ) from err
-        async with machine_write():
-            await self.coordinator.xenia.update_script(
-                script_id, script.get("Title", ""), instruction
-            )
-        await self.coordinator.async_request_refresh()
+        try:
+            async with machine_write():
+                await self.coordinator.xenia.update_script(
+                    script_id, script.get("Title", ""), instruction
+                )
+        finally:
+            await self.coordinator.async_request_refresh()

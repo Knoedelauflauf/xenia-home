@@ -20,8 +20,6 @@ class MachineControl(IntEnum):
     OFF = 0
     ON = 1
     ECO = 2
-    SB_OFF = 3
-    SB_ON = 4
     ON_SB_OFF = 5
 
 
@@ -103,7 +101,7 @@ class XeniaOverviewData:
             bb_level_pw_control=data.get("BB_LEVEL_PW_CONTROL", 0),
             sb_status=sb_status_enum,
             scale_weight=float(data.get("SCALE_WEIGHT", 0.0)),
-            pu_sens_scale_rate=_optional_float(data, "PU_SENS_SCALE_RATE"),
+            pu_sens_scale_rate=_safe_float(data.get("PU_SENS_SCALE_RATE")),
         )
 
 
@@ -174,19 +172,15 @@ class XeniaMachineData:
 
 
 def _safe_int(value: Any) -> int | None:
-    if value is None:
-        return None
     try:
         return int(value)
     except TypeError, ValueError:
         return None
 
 
-def _optional_float(data: dict, key: str) -> float | None:
-    if key not in data:
-        return None
+def _safe_float(value: Any) -> float | None:
     try:
-        return float(data[key])
+        return float(value)
     except TypeError, ValueError:
         return None
 
@@ -244,7 +238,7 @@ class Xenia:
             return str(mac)
         raise ClientPayloadError("The machine reported no MAC address")
 
-    async def machine_turn_on(self, sb_on: bool = True) -> None:
+    async def machine_turn_on(self, sb_on: bool) -> None:
         """Turn the machine on, optionally suppressing the steam boiler."""
         if sb_on:
             await self._control_machine(MachineControl.ON)
@@ -279,12 +273,9 @@ class Xenia:
             _raise_for_status(resp)
             return await resp.read()
 
-    async def _get_overview_raw(self) -> dict[str, Any]:
-        return _json(await self._get("overview"))
-
     async def get_overview(self) -> XeniaOverviewData:
         """Fetch and decode the fast-changing overview payload."""
-        return XeniaOverviewData.from_dict(await self._get_overview_raw())
+        return XeniaOverviewData.from_dict(_json(await self._get("overview")))
 
     async def get_overview_single(self) -> XeniaOverviewSingleData:
         """Fetch and decode the setpoint / configuration overview payload."""

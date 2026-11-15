@@ -268,7 +268,10 @@ async def test_options_create_new_script(
         result["flow_id"], {CONF_MANAGED_SCRIPT_ID: CREATE_NEW_SCRIPT}
     )
     assert result["step_id"] == "configure_weight"
-    mock_xenia_api.assert_post_called_with("scripts/create", DEFAULT_SCRIPT_NAME)
+    assert mock_xenia_api.bodies("post", "scripts/create") == [
+        '{"script_id":null,"Edit":"Disabled","switch":null,"script":"none",'
+        '"name":"HA Espresso","instruction":"1;13;3 70 5000;12 5000;27 40;17;7;"}'
+    ]
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], WEIGHT_SETTINGS

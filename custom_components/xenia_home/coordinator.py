@@ -1,7 +1,7 @@
 """Data update coordinators for the Xenia espresso machine."""
 
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 import logging
 
@@ -49,7 +49,7 @@ class XeniaCoordinatorData:
 
     overview: XeniaOverviewData
     overview_single: XeniaOverviewSingleData
-    shot_start_time: datetime | None = None
+    shot_start_time: datetime | None
 
 
 @dataclass
@@ -58,9 +58,9 @@ class XeniaConfigData:
 
     machine: XeniaMachineData
     # Script titles, with the id added to titles several scripts share.
-    scripts: dict[int, str] = field(default_factory=dict)
-    switches: dict[str, int] = field(default_factory=dict)
-    managed_script_instruction: str | None = None
+    scripts: dict[int, str]
+    switches: dict[str, int]
+    managed_script_instruction: str | None
 
 
 @dataclass

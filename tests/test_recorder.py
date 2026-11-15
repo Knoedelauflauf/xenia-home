@@ -72,7 +72,7 @@ async def legacy_install(
     return mock_config_entry
 
 
-async def _shot_ids(entry: MockConfigEntry) -> list[str]:
+def _shot_ids(entry: MockConfigEntry) -> list[str]:
     return [shot["shot_id"] for shot in entry.runtime_data.shot_store.list_shots()]
 
 
@@ -112,14 +112,14 @@ async def test_legacy_shots_are_imported_once(
     """Complete shots from the recorder are imported, and only on the first start."""
     await setup_integration(hass, legacy_install)
     await hass.async_block_till_done(wait_background_tasks=True)
-    assert await _shot_ids(legacy_install) == [LEGACY_SHOT["start_time"]]
+    assert _shot_ids(legacy_install) == [LEGACY_SHOT["start_time"]]
     store = legacy_install.runtime_data.shot_store
     [shot] = await store.async_get_shots([LEGACY_SHOT["start_time"]])
     assert shot["weights"] == LEGACY_SHOT["weights"]
 
     await store.async_delete_shot(LEGACY_SHOT["start_time"])
     await _reload(hass, legacy_install)
-    assert await _shot_ids(legacy_install) == []
+    assert _shot_ids(legacy_install) == []
 
 
 async def test_import_waits_for_home_assistant_to_start(
@@ -128,12 +128,12 @@ async def test_import_waits_for_home_assistant_to_start(
     """An import cut short by an unload before the start runs at the next start."""
     hass.set_state(CoreState.not_running)
     await setup_integration(hass, legacy_install)
-    assert await _shot_ids(legacy_install) == []
+    assert _shot_ids(legacy_install) == []
     await hass.config_entries.async_unload(legacy_install.entry_id)
 
     hass.set_state(CoreState.running)
     await _reload(hass, legacy_install)
-    assert await _shot_ids(legacy_install) == [LEGACY_SHOT["start_time"]]
+    assert _shot_ids(legacy_install) == [LEGACY_SHOT["start_time"]]
 
 
 async def test_failed_import_is_not_retried(
@@ -148,7 +148,7 @@ async def test_failed_import_is_not_retried(
     assert "One-time shot import from the recorder failed" in caplog.text
 
     await _reload(hass, legacy_install)
-    assert await _shot_ids(legacy_install) == []
+    assert _shot_ids(legacy_install) == []
 
 
 async def test_new_install_imports_nothing(
@@ -159,5 +159,5 @@ async def test_new_install_imports_nothing(
     """A new install starts with an empty shot history."""
     await setup_integration(hass, mock_config_entry)
     await hass.async_block_till_done(wait_background_tasks=True)
-    assert await _shot_ids(mock_config_entry) == []
+    assert _shot_ids(mock_config_entry) == []
     assert "shot import" not in caplog.text

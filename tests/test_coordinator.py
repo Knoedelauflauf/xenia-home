@@ -51,14 +51,17 @@ async def test_poll_interval_follows_the_machine(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
     status: MachineStatus,
     interval: int,
 ) -> None:
     """The machine is polled every second while on, else every five seconds."""
     mock_xenia_api.set_overview(MA_STATUS=int(status))
     await setup_integration(hass, mock_config_entry)
-    coordinator = mock_config_entry.runtime_data.coordinator
-    assert coordinator.update_interval == timedelta(seconds=interval)
+    polls = len(mock_xenia_api.bodies("get", "overview"))
+    for _ in range(10):
+        await _pass(hass, freezer, 1)
+    assert len(mock_xenia_api.bodies("get", "overview")) == polls + 10 // interval
 
 
 async def test_poll_interval_changes_with_the_machine(
@@ -68,14 +71,20 @@ async def test_poll_interval_changes_with_the_machine(
     freezer: FrozenDateTimeFactory,
 ) -> None:
     """Turning the machine to eco slows polling down, turning it on speeds it up."""
-    coordinator = init_integration.runtime_data.coordinator
     mock_xenia_api.set_overview(MA_STATUS=int(MachineStatus.ECO))
     await _pass(hass, freezer, 1)
-    assert coordinator.update_interval == timedelta(seconds=5)
+    polls = len(mock_xenia_api.bodies("get", "overview"))
+    for _ in range(10):
+        await _pass(hass, freezer, 1)
+    assert len(mock_xenia_api.bodies("get", "overview")) == polls + 2
 
     mock_xenia_api.set_overview(MA_STATUS=int(MachineStatus.ON))
-    await _pass(hass, freezer, 5)
-    assert coordinator.update_interval == timedelta(seconds=1)
+    for _ in range(5):
+        await _pass(hass, freezer, 1)
+    polls = len(mock_xenia_api.bodies("get", "overview"))
+    for _ in range(3):
+        await _pass(hass, freezer, 1)
+    assert len(mock_xenia_api.bodies("get", "overview")) == polls + 3
 
 
 @pytest.mark.parametrize("path", ["overview", "overview_single"])

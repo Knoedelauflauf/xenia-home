@@ -179,13 +179,6 @@ class MockXeniaApi:
         """Return the bodies of all `method` requests to `path`, oldest first."""
         return [body for m, p, body in self._calls if (m, p) == (method, path)]
 
-    def assert_post_called_with(self, path: str, substring: str) -> None:
-        """Assert that some POST to `path` had `substring` in its body."""
-        bodies = self.bodies("post", path)
-        assert any(substring in body for body in bodies), (
-            f"No POST to {path} contained {substring!r}; bodies: {bodies}"
-        )
-
     async def _respond(self, method: str, url: URL, data: Any) -> XeniaMockResponse:
         method = method.lower()
         path = url.path.removeprefix("/api/v2/")
