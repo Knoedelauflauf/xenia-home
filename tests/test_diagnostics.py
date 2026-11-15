@@ -11,7 +11,6 @@ from custom_components.xenia_home.const import CONF_WEIGHT_MIN
 
 from tests import setup_integration
 from tests.conftest import MockXeniaApi
-from tests.fixtures.api_responses import MACHINE_NEW_FW_FIELDS
 from tests.fixtures.shots import shot_payload
 
 
@@ -23,7 +22,6 @@ async def test_diagnostics(
     snapshot: SnapshotAssertion,
 ) -> None:
     """The diagnostics hold the machine data with host, serial and MAC redacted."""
-    mock_xenia_api.set_machine(**MACHINE_NEW_FW_FIELDS)
     entry = mock_config_entry_factory_with_options({CONF_WEIGHT_MIN: 20.0})
     await setup_integration(hass, entry)
     await entry.runtime_data.shot_store.async_add_shot(

@@ -22,7 +22,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from syrupy.assertion import SnapshotAssertion
 
 from custom_components.xenia_home.const import PowerOnBehavior
-from custom_components.xenia_home.xenia import MachineStatus, SteamBoilerStatus
+from custom_components.xenia_home.xenia import MachineStatus
 
 from tests import setup_integration
 from tests.conftest import MockXeniaApi
@@ -93,20 +93,21 @@ async def test_states_follow_the_machine(
     assert hass.states.get(STEAM_BOILER).state == steam_boiler
 
 
-async def test_steam_boiler_off(
+@pytest.mark.parametrize(
+    ("sb_status", "expected"), [(1, STATE_OFF), (2, STATE_ON), (7, STATE_OFF)]
+)
+async def test_steam_boiler_follows_the_boiler(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_xenia_api: MockXeniaApi,
+    sb_status: int,
+    expected: str,
 ) -> None:
-    """The steam boiler switch is off while the boiler is off."""
+    """The steam boiler switch is on only while the boiler reports on."""
     await _setup_with_status(
-        hass,
-        mock_config_entry,
-        mock_xenia_api,
-        MachineStatus.ON,
-        SB_STATUS=int(SteamBoilerStatus.OFF),
+        hass, mock_config_entry, mock_xenia_api, MachineStatus.ON, SB_STATUS=sb_status
     )
-    assert hass.states.get(STEAM_BOILER).state == STATE_OFF
+    assert hass.states.get(STEAM_BOILER).state == expected
 
 
 async def test_switches_unavailable_without_machine(

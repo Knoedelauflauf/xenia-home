@@ -54,7 +54,7 @@
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,
-    'state': '130.0',
+    'state': '92.4',
   })
 # ---
 # name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_brewgroup_temperature-registry]
@@ -340,6 +340,60 @@
     'last_reported': <ANY>,
     'last_updated': <ANY>,
     'state': '9.1',
+  })
+# ---
+# name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_scale_flow_rate-registry]
+  EntityRegistryEntrySnapshot({
+    'aliases': list([
+      None,
+    ]),
+    'area_id': None,
+    'capabilities': dict({
+      <SensorEntityCapabilityAttribute.STATE_CLASS: 'state_class'>: <SensorStateClass.MEASUREMENT: 'measurement'>,
+    }),
+    'config_entry_id': <ANY>,
+    'config_subentry_id': <ANY>,
+    'device_class': None,
+    'device_id': <ANY>,
+    'disabled_by': None,
+    'domain': 'sensor',
+    'entity_category': None,
+    'entity_id': 'sensor.xenia_espresso_machine_scale_flow_rate',
+    'has_entity_name': True,
+    'hidden_by': None,
+    'icon': None,
+    'id': <ANY>,
+    'labels': set({
+    }),
+    'name': None,
+    'object_id_base': 'Scale flow rate',
+    'options': dict({
+    }),
+    'original_device_class': None,
+    'original_icon': None,
+    'original_name': 'Scale flow rate',
+    'platform': 'xenia_home',
+    'previous_unique_id': None,
+    'suggested_object_id': None,
+    'supported_features': 0,
+    'translation_key': 'scale_flow_rate',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_scale_flow_rate',
+    'unit_of_measurement': 'g/s',
+  })
+# ---
+# name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_scale_flow_rate-state]
+  StateSnapshot({
+    'attributes': ReadOnlyDict({
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Scale flow rate',
+      <SensorEntityCapabilityAttribute.STATE_CLASS: 'state_class'>: <SensorStateClass.MEASUREMENT: 'measurement'>,
+      <EntityStateAttribute.UNIT_OF_MEASUREMENT: 'unit_of_measurement'>: 'g/s',
+    }),
+    'context': <ANY>,
+    'entity_id': 'sensor.xenia_espresso_machine_scale_flow_rate',
+    'last_changed': <ANY>,
+    'last_reported': <ANY>,
+    'last_updated': <ANY>,
+    'state': '1.27',
   })
 # ---
 # name: test_sensor_entities_snapshot[sensor.xenia_espresso_machine_shot_start_time-registry]

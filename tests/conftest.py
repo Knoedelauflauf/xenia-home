@@ -28,6 +28,8 @@ from custom_components.xenia_home.const import XENIA_DOMAIN
 from tests import setup_integration
 from tests.fixtures.api_responses import (
     MACHINE_PAYLOAD,
+    OLD_FW_MACHINE_PAYLOAD,
+    OLD_FW_OVERVIEW_PAYLOAD,
     OVERVIEW_PAYLOAD,
     OVERVIEW_SINGLE_PAYLOAD,
     SCRIPTS_PAYLOAD,
@@ -97,6 +99,10 @@ class MockXeniaApi:
         """Answer every request to the API of `host`."""
         self._aioclient_mock = aioclient_mock
         self._host = host
+        self._base: dict[str, dict[str, Any]] = {
+            "overview": OVERVIEW_PAYLOAD,
+            "machine": MACHINE_PAYLOAD,
+        }
         self._payloads: dict[str, dict[str, Any]] = {
             "overview": dict(OVERVIEW_PAYLOAD),
             "overview_single": dict(OVERVIEW_SINGLE_PAYLOAD),
@@ -120,9 +126,18 @@ class MockXeniaApi:
         """Return a second machine on another host."""
         return MockXeniaApi(self._aioclient_mock, host)
 
+    def use_old_firmware(self) -> None:
+        """Answer like firmware before 4.159, without scale rate and serial."""
+        self._base = {
+            "overview": OLD_FW_OVERVIEW_PAYLOAD,
+            "machine": OLD_FW_MACHINE_PAYLOAD,
+        }
+        self.set_overview()
+        self.set_machine()
+
     def set_overview(self, **fields: Any) -> None:
         """Serve the default overview with `fields` replaced."""
-        self._payloads["overview"] = {**OVERVIEW_PAYLOAD, **fields}
+        self._payloads["overview"] = {**self._base["overview"], **fields}
 
     def set_overview_single(self, **fields: Any) -> None:
         """Serve the default overview_single with `fields` replaced."""
@@ -130,7 +145,7 @@ class MockXeniaApi:
 
     def set_machine(self, **fields: Any) -> None:
         """Serve the default machine payload with `fields` replaced."""
-        self._payloads["machine"] = {**MACHINE_PAYLOAD, **fields}
+        self._payloads["machine"] = {**self._base["machine"], **fields}
 
     def set_scripts(self, scripts: dict[int, str]) -> None:
         """Serve `scripts` as {id: title} from the script list."""
@@ -188,12 +203,17 @@ class MockXeniaApi:
         if method == "get" and path in self._payloads:
             return XeniaMockResponse(method, url, json=self._payloads[path])
         if (method, path) == ("post", "scripts/read"):
-            script = self._script_files.get(json.loads(data)["FILE_NAME"])
-            if script is not None:
-                return XeniaMockResponse(method, url, json=script)
-        elif (method, path) in WRITE_ENDPOINTS:
+            # The machine answers an unknown or deleted script with empty fields.
+            script = self._script_files.get(
+                json.loads(data)["FILE_NAME"], {"Content": "", "Title": ""}
+            )
+            return XeniaMockResponse(method, url, json=script)
+        if (method, path) in WRITE_ENDPOINTS:
             return XeniaMockResponse(method, url)
-        return XeniaMockResponse(method, url, status=HTTPStatus.NOT_FOUND)
+        # The firmware redirects unknown paths to its web UI.
+        return XeniaMockResponse(
+            method, url, status=HTTPStatus.MOVED_PERMANENTLY, headers={"Location": "/"}
+        )
 
 
 @pytest.fixture(autouse=True)

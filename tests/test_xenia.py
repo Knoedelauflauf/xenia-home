@@ -8,22 +8,9 @@ from aiohttp import ClientError, ClientResponseError
 import pytest
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.xenia_home.xenia import (
-    MachineStatus,
-    SteamBoilerStatus,
-    Xenia,
-    XeniaMachineData,
-    XeniaOverviewData,
-    XeniaOverviewSingleData,
-)
+from custom_components.xenia_home.xenia import Xenia
 
 from tests.conftest import MockXeniaApi
-from tests.fixtures.api_responses import (
-    MACHINE_NEW_FW_FIELDS,
-    MACHINE_PAYLOAD,
-    OVERVIEW_NEW_FW_FIELDS,
-    OVERVIEW_PAYLOAD,
-)
 
 
 @pytest.fixture
@@ -34,107 +21,6 @@ async def xenia(
     session = aioclient_mock.create_session(asyncio.get_running_loop())
     yield Xenia(mock_xenia_api.host, session)
     await session.close()
-
-
-def test_overview_from_dict() -> None:
-    """The overview maps the API keys and casts numbers to float."""
-    data = XeniaOverviewData.from_dict(
-        {"MA_EXTRACTIONS": 100, "MA_STATUS": 1, "MA_CUR_PWR": "3", "SB_STATUS": 2}
-    )
-    assert data.ma_extractions == 100
-    assert data.ma_status is MachineStatus.ON
-    assert data.sb_status is SteamBoilerStatus.ON
-    assert data.ma_cur_pwr == 3.0
-
-
-@pytest.mark.parametrize("payload", [{}, {"MA_STATUS": 55, "SB_STATUS": 7}])
-def test_overview_without_known_values(payload: dict) -> None:
-    """Missing values read as None, unknown state codes as UNKNOWN."""
-    data = XeniaOverviewData.from_dict(payload)
-    assert data.ma_extractions is None
-    assert data.ma_status is MachineStatus.UNKNOWN
-    assert data.sb_status is SteamBoilerStatus.UNKNOWN
-    assert data.bg_sens_temp_a is None
-
-
-@pytest.mark.parametrize(
-    ("status", "expected"),
-    [
-        (0, MachineStatus.OFF),
-        (2, MachineStatus.ECO),
-        (3, MachineStatus.BREWING),
-        (4, MachineStatus.DRAINING),
-        (55, MachineStatus.UNKNOWN),
-    ],
-)
-def test_overview_status(status: int, expected: MachineStatus) -> None:
-    """MA_STATUS maps to the machine status; unknown values to UNKNOWN."""
-    assert XeniaOverviewData.from_dict({"MA_STATUS": status}).ma_status is expected
-
-
-@pytest.mark.parametrize(
-    ("fields", "expected"),
-    [
-        (OVERVIEW_NEW_FW_FIELDS, 1.27),
-        ({}, None),
-        ({"PU_SENS_SCALE_RATE": ""}, None),
-    ],
-)
-def test_overview_scale_rate(fields: dict, expected: float | None) -> None:
-    """The scale rate exists on firmware with a scale and is None otherwise."""
-    data = XeniaOverviewData.from_dict({**OVERVIEW_PAYLOAD, **fields})
-    assert data.pu_sens_scale_rate == expected
-
-
-def test_overview_single_from_dict() -> None:
-    """The setpoint overview maps the API keys; POP_UP is optional."""
-    data = XeniaOverviewSingleData.from_dict(
-        {"BG_SET_TEMP": 93.5, "MA_MAC": "AA:BB:CC:DD:EE:FF", "POP_UP": 5}
-    )
-    assert data.bg_set_temp == 93.5
-    assert data.ma_mac == "AA:BB:CC:DD:EE:FF"
-    assert data.pop_up == 5
-    empty = XeniaOverviewSingleData.from_dict({})
-    assert empty.pop_up is None
-    assert empty.bg_set_temp is None
-    assert empty.ma_mac == ""
-
-
-def test_machine_from_dict() -> None:
-    """Firmware versions read as major.minor."""
-    data = XeniaMachineData.from_dict(MACHINE_PAYLOAD)
-    assert data.ma_type == 1
-    assert data.fw_version() == "2.3"
-    assert data.esp_fw_version() == "1.5"
-    zero = XeniaMachineData.from_dict({"FW_VERSION_MAJOR": 0, "FW_VERSION_MINOR": "0"})
-    assert zero.fw_version() == "0.0"
-
-
-@pytest.mark.parametrize(
-    "payload",
-    [
-        {"FW_VERSION_MAJOR": 2},
-        {"FW_VERSION_MINOR": 3},
-        {"FW_VERSION_MAJOR": "3.0", "FW_VERSION_MINOR": 1},
-        {"FW_VERSION_MAJOR": [], "FW_VERSION_MINOR": 1},
-    ],
-)
-def test_machine_unknown_firmware(payload: dict) -> None:
-    """A missing or malformed version part makes the version unknown."""
-    assert XeniaMachineData.from_dict(payload).fw_version() is None
-    esp = {
-        key.replace("FW_VERSION_", "ESP_FW_"): value for key, value in payload.items()
-    }
-    assert XeniaMachineData.from_dict(esp).esp_fw_version() is None
-
-
-@pytest.mark.parametrize(
-    ("fields", "expected"),
-    [(MACHINE_NEW_FW_FIELDS, "300200000000"), ({}, None), ({"MA_SN": ""}, None)],
-)
-def test_machine_serial_number(fields: dict, expected: str | None) -> None:
-    """New firmware reports a serial number; old firmware none."""
-    assert XeniaMachineData.from_dict({**MACHINE_PAYLOAD, **fields}).ma_sn == expected
 
 
 async def test_get_mac(xenia: Xenia) -> None:
@@ -159,18 +45,6 @@ async def test_get_mac_fails_without_a_mac(
     mock_xenia_api.override("get", "overview_single", **fault)
     with pytest.raises((ClientError, OSError)):
         await xenia.get_mac()
-
-
-async def test_reads(xenia: Xenia, mock_xenia_api: MockXeniaApi) -> None:
-    """The read endpoints decode the machine's payloads."""
-    mock_xenia_api.set_overview(MA_STATUS=3)
-    mock_xenia_api.set_overview_single(BG_SET_TEMP=95.0)
-    mock_xenia_api.set_machine(FW_VERSION_MAJOR=4)
-    mock_xenia_api.set_switches({"SWITCH_SET_LEFT_LEFT_0": 1})
-    assert (await xenia.get_overview()).ma_status is MachineStatus.BREWING
-    assert (await xenia.get_overview_single()).bg_set_temp == 95.0
-    assert (await xenia.get_machine()).fw_version() == "4.3"
-    assert await xenia.get_switches() == {"SWITCH_SET_LEFT_LEFT_0": 1}
 
 
 @pytest.mark.parametrize(

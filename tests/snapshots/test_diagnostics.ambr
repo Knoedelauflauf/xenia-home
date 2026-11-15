@@ -3,12 +3,12 @@
   dict({
     'config': dict({
       'machine': dict({
-        'esp_fw_major': 1,
-        'esp_fw_minor': 5,
-        'fw_version_major': 2,
-        'fw_version_minor': 3,
+        'esp_fw_major': 3,
+        'esp_fw_minor': 95,
+        'fw_version_major': 4,
+        'fw_version_minor': 255,
         'ma_sn': '**REDACTED**',
-        'ma_type': 1,
+        'ma_type': 3,
       }),
       'managed_script_instruction': None,
       'scripts': dict({
@@ -33,7 +33,7 @@
     }),
     'overview': dict({
       'bb_level_pw_control': 60,
-      'bb_sens_temp_a': 130.0,
+      'bb_sens_temp_a': 92.4,
       'bg_level_pw_control': 50,
       'bg_sens_temp_a': 93.0,
       'ma_clock': 0,
@@ -44,16 +44,16 @@
       'ma_operating_hours': 720,
       'ma_status': 1,
       'pu_level_pw_control': 80,
-      'pu_sens_flow_meter_ml': 12.3,
+      'pu_sens_flow_meter_ml': 0.0,
       'pu_sens_press': 9.1,
-      'pu_sens_scale_rate': None,
+      'pu_sens_scale_rate': 1.27,
       'pu_set_level_pw_control': 80,
       'sb_sens_press': 1.2,
       'sb_status': 2,
       'scale_weight': 18.5,
     }),
     'overview_single': dict({
-      'bb_set_temp': 130.0,
+      'bb_set_temp': 92.0,
       'bg_set_temp': 93.5,
       'ma_extractions_start': 100,
       'ma_mac': '**REDACTED**',

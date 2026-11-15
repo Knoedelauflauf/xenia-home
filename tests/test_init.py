@@ -41,7 +41,6 @@ from custom_components.xenia_home.services import (
 
 from tests import setup_integration, setup_second_machine
 from tests.conftest import MockXeniaApi
-from tests.fixtures.api_responses import MACHINE_NEW_FW_FIELDS
 
 POWER_ON_BEHAVIOR = "select.xenia_espresso_machine_power_on_behavior"
 MAC = "aa:bb:cc:dd:ee:ff"
@@ -65,35 +64,61 @@ async def test_unload_and_reload(
     assert init_integration.state is ConfigEntryState.LOADED
 
 
-async def test_device_of_old_firmware(
+async def test_device(
     hass: HomeAssistant,
     device_registry: dr.DeviceRegistry,
     init_integration: MockConfigEntry,
 ) -> None:
-    """Old firmware reports no serial number; the MAC address links the device."""
+    """The device is keyed on the MAC address and shows serial number and firmware."""
     [device] = dr.async_entries_for_config_entry(
         device_registry, init_integration.entry_id
     )
     assert device.identifiers == {(XENIA_DOMAIN, "aa:bb:cc:dd:ee:ff")}
-    assert device.manufacturer == "Xenia Espresso GmbH"
-    assert device.sw_version == "2.3/1.5"
-    assert device.serial_number is None
     assert device.connections == {(dr.CONNECTION_NETWORK_MAC, "aa:bb:cc:dd:ee:ff")}
+    assert device.manufacturer == "Xenia Espresso GmbH"
+    assert device.serial_number == "300200000000"
+    assert device.sw_version == "4.255/3.95"
 
 
-async def test_device_of_new_firmware(
+async def test_device_of_old_firmware(
     hass: HomeAssistant,
     device_registry: dr.DeviceRegistry,
     mock_config_entry: MockConfigEntry,
     mock_xenia_api: MockXeniaApi,
 ) -> None:
-    """New firmware reports the serial number of the machine."""
-    mock_xenia_api.set_machine(**MACHINE_NEW_FW_FIELDS)
+    """Firmware before 4.159 reports no serial number."""
+    mock_xenia_api.use_old_firmware()
     await setup_integration(hass, mock_config_entry)
     [device] = dr.async_entries_for_config_entry(
         device_registry, mock_config_entry.entry_id
     )
-    assert device.serial_number == "300200000000"
+    assert device.serial_number is None
+    assert device.sw_version == "4.22/3.22"
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"FW_VERSION_MAJOR": None},
+        {"ESP_FW_MINOR": None},
+        {"FW_VERSION_MAJOR": "3.0"},
+        {"ESP_FW_MAJOR": []},
+    ],
+)
+async def test_device_of_unknown_firmware(
+    hass: HomeAssistant,
+    device_registry: dr.DeviceRegistry,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    fields: dict[str, object],
+) -> None:
+    """A missing or malformed version part leaves the firmware version out."""
+    mock_xenia_api.set_machine(**fields)
+    await setup_integration(hass, mock_config_entry)
+    [device] = dr.async_entries_for_config_entry(
+        device_registry, mock_config_entry.entry_id
+    )
+    assert device.sw_version is None
 
 
 @pytest.mark.parametrize(

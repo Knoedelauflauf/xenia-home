@@ -20,13 +20,18 @@ OVERVIEW_PAYLOAD: dict[str, Any] = {
     "PU_SENS_PRESS": 9.1,
     "PU_LEVEL_PW_CONTROL": 80,
     "PU_SET_LEVEL_PW_CONTROL": 80,
-    "PU_SENS_FLOW_METER_ML": 12.3,
+    "PU_SENS_FLOW_METER_ML": 0,
     "SB_SENS_PRESS": 1.2,
-    "BB_SENS_TEMP_A": 130.0,
+    "BB_SENS_TEMP_A": 92.4,
     "BB_LEVEL_PW_CONTROL": 60,
     "SB_STATUS": 2,
     "MA_LAST_EXTRACTION_ML": "",
+    "MA_SET_TIMER_POWERDOWN": 10,
+    "PU_SENS_SCALE_VOLUME": 18.5,
     "SCALE_WEIGHT": 18.5,
+    "PU_SENS_SCALE_RATE": 1.27,
+    "PU_SENS_FLOW_METER_VOLUME": 0,
+    "PU_SENS_FLOW_METER_FLOWRATE": 0,
 }
 
 OVERVIEW_SINGLE_PAYLOAD: dict[str, Any] = {
@@ -34,7 +39,7 @@ OVERVIEW_SINGLE_PAYLOAD: dict[str, Any] = {
     "PU_SET_PRESS": 9.0,
     "PU_SENS_WATER_TANK_LEVEL": 1,
     "SB_SET_PRESS": 1.5,
-    "BB_SET_TEMP": 130.0,
+    "BB_SET_TEMP": 92.0,
     "PSP": 0,
     "MA_MAC": "AA:BB:CC:DD:EE:FF",
     "MA_EXTRACTIONS_START": 100,
@@ -42,11 +47,15 @@ OVERVIEW_SINGLE_PAYLOAD: dict[str, Any] = {
 }
 
 MACHINE_PAYLOAD: dict[str, Any] = {
-    "MA_TYPE": 1,
-    "FW_VERSION_MAJOR": 2,
-    "FW_VERSION_MINOR": 3,
-    "ESP_FW_MAJOR": 1,
-    "ESP_FW_MINOR": 5,
+    "MA_TYPE": 3,
+    "MA_SN": "300200000000",
+    "MA_MAX_AMPERE": 10,
+    "MA_SET_TIMER_ECO_MA": 5,
+    "MA_SET_TIMER_POWERDOWN": 10,
+    "FW_VERSION_MAJOR": 4,
+    "FW_VERSION_MINOR": 255,
+    "ESP_FW_MAJOR": 3,
+    "ESP_FW_MINOR": 95,
 }
 
 SCRIPTS_PAYLOAD: dict[str, Any] = {
@@ -59,19 +68,23 @@ SWITCHES_PAYLOAD: dict[str, Any] = {
     "SWITCH_SET_LEFT_LEFT_1": 2,
 }
 
-# Extra keys firmware 4.159 adds on top of the old payloads. Tests spread
-# these over the canonical payloads to simulate a new-firmware machine.
-OVERVIEW_NEW_FW_FIELDS: dict[str, Any] = {
-    "MA_SET_TIMER_POWERDOWN": 10,
-    "PU_SENS_SCALE_VOLUME": 18.5,
-    "PU_SENS_SCALE_RATE": 1.27,
-    "PU_SENS_FLOW_METER_VOLUME": 0,
-    "PU_SENS_FLOW_METER_FLOWRATE": 0,
+# Firmware before 4.159 lacks these keys and reports the flow in ml/s from
+# the flow meter instead of the scale rate.
+NEW_FW_OVERVIEW_KEYS = (
+    "MA_SET_TIMER_POWERDOWN",
+    "PU_SENS_SCALE_VOLUME",
+    "PU_SENS_SCALE_RATE",
+    "PU_SENS_FLOW_METER_VOLUME",
+    "PU_SENS_FLOW_METER_FLOWRATE",
+)
+OLD_FW_OVERVIEW_PAYLOAD: dict[str, Any] = {
+    **{k: v for k, v in OVERVIEW_PAYLOAD.items() if k not in NEW_FW_OVERVIEW_KEYS},
+    "PU_SENS_FLOW_METER_ML": 12.3,
 }
-
-MACHINE_NEW_FW_FIELDS: dict[str, Any] = {
-    "MA_SN": "300200000000",
-    "MA_MAX_AMPERE": 10,
-    "MA_SET_TIMER_ECO_MA": 5,
-    "MA_SET_TIMER_POWERDOWN": 10,
+OLD_FW_MACHINE_PAYLOAD: dict[str, Any] = {
+    "MA_TYPE": 1,
+    "FW_VERSION_MAJOR": 4,
+    "FW_VERSION_MINOR": 22,
+    "ESP_FW_MAJOR": 3,
+    "ESP_FW_MINOR": 22,
 }

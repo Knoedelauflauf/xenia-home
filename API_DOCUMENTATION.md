@@ -233,6 +233,12 @@ The file name is the script ID zero-padded to 3 digits.
 
 The `Content` field contains semicolon-separated script commands (see script instruction format below).
 
+A script ID that was never used or has been deleted is answered with status 200 and empty fields (verified on firmware 4.255):
+
+```json
+{"Content": "", "Title": ""}
+```
+
 ---
 
 ### `/api/v2/scripts/create`
@@ -265,6 +271,22 @@ Creates or updates a script.
   "instruction": "1;13;27 45;7;"
 }
 ```
+
+---
+
+### `/api/v2/scripts/delete`
+
+Deletes a user script. The integration does not use it; the machine's web UI does.
+
+**Method:** POST
+**Content-Type:** `application/x-www-form-urlencoded`
+
+**Body:**
+```json
+{"scr_file_name": "017.S", "title_file_name": "017.T"}
+```
+
+The file names are the script ID zero-padded to 3 digits with the suffixes `.S` (instruction) and `.T` (title). The response is `{}`. The web UI only deletes IDs above 9; `GET /api/v2/scripts/alldelete` deletes every user script.
 
 ---
 

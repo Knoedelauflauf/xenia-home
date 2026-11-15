@@ -13,7 +13,6 @@ from custom_components.xenia_home.xenia import MachineStatus
 
 from tests import setup_integration
 from tests.conftest import MockXeniaApi
-from tests.fixtures.api_responses import OVERVIEW_NEW_FW_FIELDS
 
 STATUS = "sensor.xenia_espresso_machine_status"
 SHOT_START = "sensor.xenia_espresso_machine_shot_start_time"
@@ -27,7 +26,7 @@ async def test_sensor_entities_snapshot(
     snapshot: SnapshotAssertion,
     entity_registry: er.EntityRegistry,
 ) -> None:
-    """The sensors of old firmware match the snapshot."""
+    """The sensors match the snapshot."""
     entity_ids = sorted(
         e.entity_id
         for e in er.async_entries_for_config_entry(
@@ -35,7 +34,7 @@ async def test_sensor_entities_snapshot(
         )
         if e.domain == SENSOR_DOMAIN
     )
-    assert len(entity_ids) == 10
+    assert len(entity_ids) == 11
     for entity_id in entity_ids:
         assert hass.states.get(entity_id) == snapshot(name=f"{entity_id}-state")
         assert entity_registry.async_get(entity_id) == snapshot(
@@ -102,7 +101,6 @@ async def test_scale_flow_rate_on_new_firmware(
     mock_xenia_api: MockXeniaApi,
 ) -> None:
     """Firmware with a scale adds the scale flow rate sensor."""
-    mock_xenia_api.set_overview(**OVERVIEW_NEW_FW_FIELDS)
     await setup_integration(hass, mock_config_entry)
     state = hass.states.get(SCALE_FLOW)
     assert state.state == "1.27"
@@ -110,15 +108,26 @@ async def test_scale_flow_rate_on_new_firmware(
 
 
 async def test_no_scale_flow_rate_on_old_firmware(
-    hass: HomeAssistant, init_integration: MockConfigEntry
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
 ) -> None:
     """Firmware without a scale has no scale flow rate sensor."""
+    mock_xenia_api.use_old_firmware()
+    await setup_integration(hass, mock_config_entry)
     assert hass.states.get(SCALE_FLOW) is None
 
 
 @pytest.mark.parametrize(
     ("status", "expected"),
-    [(3, "brewing"), (4, "draining"), (2, "eco"), (42, STATE_UNKNOWN)],
+    [
+        (0, "off"),
+        (1, "on"),
+        (2, "eco"),
+        (3, "brewing"),
+        (4, "draining"),
+        (42, STATE_UNKNOWN),
+    ],
 )
 async def test_status(
     hass: HomeAssistant,

@@ -9,12 +9,10 @@ from syrupy.assertion import SnapshotAssertion
 from custom_components.xenia_home.xenia import MachineStatus
 
 from tests.conftest import MockXeniaApi
-from tests.fixtures.api_responses import OVERVIEW_PAYLOAD
 
 TRACKER = "event.xenia_espresso_machine_shot_tracker"
 BREWING = int(MachineStatus.BREWING)
 ON = int(MachineStatus.ON)
-FLOW_METER = OVERVIEW_PAYLOAD["PU_SENS_FLOW_METER_ML"]
 
 
 def _shot(hass: HomeAssistant) -> dict | None:
@@ -141,17 +139,24 @@ async def test_sample_with_a_missing_value_is_skipped(
 
 
 @pytest.mark.parametrize(
-    ("fields", "flow"),
+    ("old_firmware", "fields", "flow"),
     [
-        ({"PU_SENS_SCALE_RATE": 1.27, "PU_SENS_FLOW_METER_ML": 99.0}, 1.27),
-        ({}, FLOW_METER),
-        ({"PU_SENS_SCALE_RATE": ""}, FLOW_METER),
+        (False, {"PU_SENS_SCALE_RATE": 1.35}, 1.35),
+        (False, {"PU_SENS_SCALE_RATE": ""}, 0.0),
+        (True, {}, 12.3),
     ],
 )
 async def test_flow_comes_from_scale_rate_or_flow_meter(
-    hass: HomeAssistant, poll, fields: dict, flow: float
+    hass: HomeAssistant,
+    mock_xenia_api: MockXeniaApi,
+    poll,
+    old_firmware: bool,
+    fields: dict,
+    flow: float,
 ) -> None:
     """The scale rate is the flow; without a usable one the flow meter is."""
+    if old_firmware:
+        mock_xenia_api.use_old_firmware()
     await brew(poll, 12, **fields)
     await end_brew(poll, weight=18.0)
     shot = _shot(hass)
