@@ -1,5 +1,7 @@
 """Tests for the setpoint and weight target numbers."""
 
+import json
+
 from homeassistant.components.number import (
     ATTR_VALUE,
     DOMAIN as NUMBER_DOMAIN,
@@ -111,6 +113,55 @@ async def test_weight_target(
     assert state.attributes["max"] == 50.0
     assert state.attributes["step"] == 0.5
     assert state.attributes["unit_of_measurement"] == "g"
+
+
+@pytest.mark.parametrize(
+    ("instruction", "expected"),
+    [
+        ("1;13;3 70 5000;27 45;17;7;", "45.0"),
+        ("1;27 36.5;7;", "36.5"),
+        ("1;27 2;3 70 5000;27 45;17;7;", "45.0"),
+        ("1;27 45;27;7;", "45.0"),
+        ("1;13;7;", "unknown"),
+    ],
+)
+async def test_weight_target_is_the_last_weight_command(
+    hass: HomeAssistant,
+    init_with_weight: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    instruction: str,
+    expected: str,
+) -> None:
+    """The target is the last weight command with a value, like the one ending a shot."""
+    mock_xenia_api.set_script(17, instruction, "Test Shot")
+    await hass.config_entries.async_reload(init_with_weight.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get(WEIGHT).state == expected
+
+
+@pytest.mark.parametrize(
+    ("instruction", "weight", "written"),
+    [
+        ("1;13;3 70 5000;27 45;17;7;", 38.0, "1;13;3 70 5000;27 38;17;7;"),
+        ("1;27 2;3 70 5000;27 45;17;7;", 38.0, "1;27 2;3 70 5000;27 38;17;7;"),
+        ("1;27;7;", 40.0, "1;27 40;7;"),
+        ("1;13;7;", 42.0, "1;13;27 42;7;"),
+        (" 1 ; 13;27 45;;7; ", 36.5, "1;13;27 36.5;7;"),
+    ],
+)
+async def test_setting_the_weight_target_changes_only_the_last_weight_command(
+    hass: HomeAssistant,
+    init_with_weight: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    instruction: str,
+    weight: float,
+    written: str,
+) -> None:
+    """Only the last weight command changes; without one it is added before the end."""
+    mock_xenia_api.set_script(17, instruction, "Test Shot")
+    await _set(hass, WEIGHT, weight)
+    [body] = mock_xenia_api.bodies("post", "scripts/create")
+    assert json.loads(body)["instruction"] == written
 
 
 async def test_weight_target_range_defaults(
