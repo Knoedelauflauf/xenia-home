@@ -82,13 +82,13 @@ self._attr_unique_id = f"{self.machine_id}_{description.key}"
 
 | Fixture | Purpose |
 |---|---|
-| `mock_xenia_api` | Autouse fake machine on `xenia.local`, built on `aioclient_mock`. Setters (`set_overview`, `set_scripts`, `set_script`, ...) change the answers at any time; write endpoints accept every request. `override`, `fail` and `restore` change single endpoints, `bodies` inspects the requests. `for_host` adds a second machine. |
+| `mock_xenia_api` | Autouse fake machine on `xenia.local`, built on `aioclient_mock`, answering like firmware 4.255; `use_old_firmware` switches to firmware before 4.159. Setters (`set_overview`, `set_scripts`, `set_script`, ...) change the answers at any time; write endpoints accept every request, an unknown script reads as empty fields and an unknown path redirects, as on the machine. `override`, `fail` and `restore` change single endpoints, `bodies` inspects the requests. `for_host` adds a second machine. |
 | `mock_config_entry` | A `MockConfigEntry` for `xenia.local` without options. |
 | `mock_config_entry_factory_with_options` | Factory for a `MockConfigEntry` with the given options. |
 | `init_integration` | Sets up `mock_config_entry` and returns it. |
 | `poll` | Serves an overview and lets one second pass, so the live coordinator polls once while the machine is on. |
 
-`tests/__init__.py` holds `setup_integration` and `setup_second_machine`. Tests drive the machine through `mock_xenia_api` and time through `poll` or `freezer`, and assert on states, actions, events and the stored shots; they do not reach into coordinators or entities.
+`tests/__init__.py` holds `setup_integration`, `setup_second_machine`, `ws_command`, `listed_shots` and `stored_shots` (shot history files in the format 0.7.0 wrote). Tests drive the machine through `mock_xenia_api` and time through `poll` or `freezer`, and assert on states, registries, actions, events and the websocket API; they do not reach into coordinators, entities or `runtime_data`. Documented names (action fields, option keys, select options, API status values) are written out in tests rather than imported, so renaming one fails a test.
 
 ## References
 
