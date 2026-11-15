@@ -90,6 +90,10 @@
     "abort": {
       "cannot_connect": "Verbindung zur Espressomaschine fehlgeschlagen",
       "script_not_created": "Das Skript wurde angelegt, aber die Maschine listet es nicht."
+    },
+    "error": {
+      "weight_max_not_above_min": "Muss über dem Mindestgewicht liegen.",
+      "weight_step_not_positive": "Muss größer als 0 sein."
     }
   },
   "entity": {
@@ -231,6 +235,13 @@
     },
     "duplicate_machine": {
       "message": "Diese Espressomaschine ist bereits als {title} eingerichtet. Lösche diesen doppelten Eintrag."
+    }
+  },
+  "selector": {
+    "managed_script_id": {
+      "options": {
+        "create_new": "Neues Skript anlegen (HA Espresso)"
+      }
     }
   }
 }

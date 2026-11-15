@@ -90,6 +90,10 @@
     "abort": {
       "cannot_connect": "Failed to connect to the espresso machine",
       "script_not_created": "The script was created, but the machine does not list it."
+    },
+    "error": {
+      "weight_max_not_above_min": "Must be above the minimum weight.",
+      "weight_step_not_positive": "Must be above 0."
     }
   },
   "entity": {
@@ -231,6 +235,13 @@
     },
     "duplicate_machine": {
       "message": "This espresso machine is already set up as {title}. Delete this duplicate entry."
+    }
+  },
+  "selector": {
+    "managed_script_id": {
+      "options": {
+        "create_new": "Create new script (HA Espresso)"
+      }
     }
   }
 }

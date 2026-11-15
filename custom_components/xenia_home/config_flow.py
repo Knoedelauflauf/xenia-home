@@ -13,6 +13,14 @@ from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import format_mac
+from homeassistant.helpers.selector import (
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+)
 import probatio
 
 from .const import (
@@ -38,7 +46,12 @@ _LOGGER = logging.getLogger(__name__)
 
 HOST_SCHEMA = probatio.Schema({probatio.Required(CONF_HOST, default=DEFAULT_HOST): str})
 
-CREATE_NEW_SCRIPT = "__create_new__"
+CREATE_NEW_SCRIPT = "create_new"
+WEIGHT_SELECTOR = NumberSelector(
+    NumberSelectorConfig(
+        min=0, step="any", unit_of_measurement="g", mode=NumberSelectorMode.BOX
+    )
+)
 
 
 async def _async_get_machine_id(hass: HomeAssistant, host: str) -> str | None:
@@ -121,6 +134,7 @@ class XeniaOptionsFlow(OptionsFlowWithReload):
     def __init__(self) -> None:
         """Initialize the options flow."""
         self._managed_script_id: int | None = None
+        self._known_script_ids: set[int] = set()
 
     def _xenia(self) -> Xenia:
         return Xenia(
@@ -171,7 +185,8 @@ class XeniaOptionsFlow(OptionsFlowWithReload):
         except REQUEST_ERRORS:
             return self.async_abort(reason="cannot_connect")
 
-        options: dict[str, str] = {}
+        self._known_script_ids = set(scripts)
+        options = [SelectOptionDict(value=CREATE_NEW_SCRIPT, label=DEFAULT_SCRIPT_NAME)]
         for script_id, title in scripts.items():
             try:
                 script = await xenia.read_script(script_id)
@@ -181,16 +196,21 @@ class XeniaOptionsFlow(OptionsFlowWithReload):
             if parse_instruction(script.get("Content", "")).has_command(
                 COMMAND_WEIGHT_TARGET
             ):
-                options[str(script_id)] = title
-        options[CREATE_NEW_SCRIPT] = f"{DEFAULT_SCRIPT_NAME} (create new)"
+                options.append(SelectOptionDict(value=str(script_id), label=title))
 
         current = str(self.config_entry.options.get(CONF_MANAGED_SCRIPT_ID))
         schema = probatio.Schema(
             {
                 probatio.Required(
                     CONF_MANAGED_SCRIPT_ID,
-                    default=current if current in options else probatio.UNDEFINED,
-                ): probatio.In(options),
+                    default=current
+                    if any(o["value"] == current for o in options)
+                    else probatio.UNDEFINED,
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=options, translation_key=CONF_MANAGED_SCRIPT_ID
+                    )
+                ),
             }
         )
         return self.async_show_form(step_id="select_script", data_schema=schema)
@@ -199,7 +219,13 @@ class XeniaOptionsFlow(OptionsFlowWithReload):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Set the range and step of the weight target."""
+        errors: dict[str, str] = {}
         if user_input is not None:
+            if user_input[CONF_WEIGHT_MIN] >= user_input[CONF_WEIGHT_MAX]:
+                errors[CONF_WEIGHT_MAX] = "weight_max_not_above_min"
+            if user_input[CONF_WEIGHT_STEP] <= 0:
+                errors[CONF_WEIGHT_STEP] = "weight_step_not_positive"
+        if user_input is not None and not errors:
             return self.async_create_entry(
                 data={
                     **self.config_entry.options,
@@ -215,18 +241,22 @@ class XeniaOptionsFlow(OptionsFlowWithReload):
                 probatio.Required(
                     CONF_WEIGHT_MIN,
                     default=options.get(CONF_WEIGHT_MIN, DEFAULT_WEIGHT_MIN),
-                ): probatio.Coerce(float),
+                ): WEIGHT_SELECTOR,
                 probatio.Required(
                     CONF_WEIGHT_MAX,
                     default=options.get(CONF_WEIGHT_MAX, DEFAULT_WEIGHT_MAX),
-                ): probatio.Coerce(float),
+                ): WEIGHT_SELECTOR,
                 probatio.Required(
                     CONF_WEIGHT_STEP,
                     default=options.get(CONF_WEIGHT_STEP, DEFAULT_WEIGHT_STEP),
-                ): probatio.Coerce(float),
+                ): WEIGHT_SELECTOR,
             }
         )
-        return self.async_show_form(step_id="configure_weight", data_schema=schema)
+        return self.async_show_form(
+            step_id="configure_weight",
+            data_schema=self.add_suggested_values_to_schema(schema, user_input),
+            errors=errors,
+        )
 
     async def _async_create_script(self) -> ConfigFlowResult:
         xenia = self._xenia()
@@ -238,7 +268,12 @@ class XeniaOptionsFlow(OptionsFlowWithReload):
 
         # The create endpoint does not return the id of the new script.
         new_id = next(
-            (sid for sid, title in scripts.items() if title == DEFAULT_SCRIPT_NAME),
+            (
+                script_id
+                for script_id, title in scripts.items()
+                if title == DEFAULT_SCRIPT_NAME
+                and script_id not in self._known_script_ids
+            ),
             None,
         )
         if new_id is None:

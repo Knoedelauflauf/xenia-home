@@ -248,11 +248,11 @@ async def test_options_offer_only_scripts_with_a_weight_target(
     mock_xenia_api.set_script(20, "1;13;7;", "NoWeight")
     result = await _start_weight_options(hass, init_integration)
 
-    schema = result["data_schema"].schema
-    assert schema[CONF_MANAGED_SCRIPT_ID].container == {
-        "10": "WithWeight",
-        CREATE_NEW_SCRIPT: f"{DEFAULT_SCRIPT_NAME} (create new)",
-    }
+    selector = result["data_schema"].schema[CONF_MANAGED_SCRIPT_ID]
+    assert selector.config["options"] == [
+        {"value": CREATE_NEW_SCRIPT, "label": DEFAULT_SCRIPT_NAME},
+        {"value": "10", "label": "WithWeight"},
+    ]
 
 
 async def test_options_create_new_script(
@@ -272,6 +272,69 @@ async def test_options_create_new_script(
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert init_integration.options[CONF_MANAGED_SCRIPT_ID] == 25
+
+
+async def test_options_create_new_script_next_to_one_of_the_same_name(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+) -> None:
+    """A script of the default name that existed before is not taken over."""
+    mock_xenia_api.set_scripts({12: DEFAULT_SCRIPT_NAME})
+    result = await _start_weight_options(hass, init_integration)
+    mock_xenia_api.set_scripts({12: DEFAULT_SCRIPT_NAME, 26: DEFAULT_SCRIPT_NAME})
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_MANAGED_SCRIPT_ID: CREATE_NEW_SCRIPT}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], WEIGHT_SETTINGS
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert init_integration.options[CONF_MANAGED_SCRIPT_ID] == 26
+
+
+@pytest.mark.parametrize(
+    ("settings", "errors"),
+    [
+        (
+            {CONF_WEIGHT_MIN: 50.0, CONF_WEIGHT_MAX: 25.0, CONF_WEIGHT_STEP: 0.5},
+            {CONF_WEIGHT_MAX: "weight_max_not_above_min"},
+        ),
+        (
+            {CONF_WEIGHT_MIN: 30.0, CONF_WEIGHT_MAX: 30.0, CONF_WEIGHT_STEP: 0.0},
+            {
+                CONF_WEIGHT_MAX: "weight_max_not_above_min",
+                CONF_WEIGHT_STEP: "weight_step_not_positive",
+            },
+        ),
+    ],
+)
+async def test_options_reject_an_unusable_weight_range(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    settings: dict[str, float],
+    errors: dict[str, str],
+) -> None:
+    """An empty range or a step of zero is shown as an error and can be fixed."""
+    mock_xenia_api.set_script(10, "1;13;27 45;7;", "MyShot")
+    result = await _start_weight_options(hass, init_integration)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_MANAGED_SCRIPT_ID: "10"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], settings
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == errors
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], WEIGHT_SETTINGS
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert init_integration.options == {
+        CONF_WEIGHT_MANAGEMENT_ENABLED: True,
+        CONF_MANAGED_SCRIPT_ID: 10,
+        **WEIGHT_SETTINGS,
+    }
 
 
 async def test_options_abort_when_created_script_is_missing(
