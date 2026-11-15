@@ -83,7 +83,8 @@ class PowerOnBehaviorSelect(XeniaEntity, SelectEntity, RestoreEntity):
     @callback
     def async_entity_id_changed(self, old_entity_id: str) -> None:
         """Keep the entity when its entity_id changes; nothing is keyed on it."""
-        # Called from Home Assistant 2026.11 on, which added the hook.
+        # Called from Home Assistant 2026.11 on, which only counts the hook of
+        # the class that overrides async_added_to_hass, so XeniaEntity's is not enough.
         super().async_entity_id_changed(old_entity_id)  # type: ignore[misc]
 
     @property

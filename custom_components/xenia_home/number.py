@@ -180,7 +180,7 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
 
     async def async_set_native_value(self, value: float) -> None:
         """Rewrite the weight target in the managed script on the machine."""
-        script_id = int(self.coordinator.config_entry.options[CONF_MANAGED_SCRIPT_ID])
+        script_id = self.coordinator.config_entry.options[CONF_MANAGED_SCRIPT_ID]
         async with machine_write():
             script = await self.coordinator.xenia.read_script(script_id)
         if not script.get("Content"):

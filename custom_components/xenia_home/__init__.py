@@ -3,7 +3,11 @@
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
-from homeassistant.helpers import config_validation as cv, device_registry as dr
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    issue_registry as ir,
+)
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
@@ -107,7 +111,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> bo
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> None:
-    """Delete the entry's shot history files."""
+    """Delete the entry's shot history files and repair issue."""
+    ir.async_delete_issue(
+        hass, XENIA_DOMAIN, f"managed_script_missing_{entry.entry_id}"
+    )
     store = XeniaShotStore(hass, entry.entry_id)
     await store.async_load()
     await store.async_remove()

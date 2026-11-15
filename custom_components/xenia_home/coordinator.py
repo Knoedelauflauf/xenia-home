@@ -7,6 +7,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
@@ -17,6 +18,7 @@ from .const import (
     POLL_INTERVAL_CONFIG,
     POLL_INTERVAL_CONFIG_RETRY,
     POLL_INTERVAL_IDLE,
+    XENIA_DOMAIN,
     PowerOnBehavior,
 )
 from .errors import REQUEST_ERRORS, update_failed
@@ -59,7 +61,6 @@ class XeniaConfigData:
     scripts: dict[int, str] = field(default_factory=dict)
     switches: dict[str, int] = field(default_factory=dict)
     managed_script_instruction: str | None = None
-    managed_script_name: str | None = None
 
 
 @dataclass
@@ -158,34 +159,38 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
         }
 
         managed_instruction: str | None = None
-        managed_name: str | None = None
         options = self.config_entry.options
+        issue_id = f"managed_script_missing_{self.config_entry.entry_id}"
         if options.get(CONF_WEIGHT_MANAGEMENT_ENABLED):
-            script_id = options.get(CONF_MANAGED_SCRIPT_ID)
-            if script_id is not None:
-                try:
-                    script_data = await self.xenia.read_script(int(script_id))
-                except REQUEST_ERRORS as err:
-                    _LOGGER.warning(
-                        "Failed to read managed script %s: %s", script_id, err
+            script_id = options[CONF_MANAGED_SCRIPT_ID]
+            try:
+                script = await self.xenia.read_script(script_id)
+            except REQUEST_ERRORS as err:
+                _LOGGER.warning("Failed to read managed script %s: %s", script_id, err)
+                self.update_interval = POLL_INTERVAL_CONFIG_RETRY
+            else:
+                managed_instruction = script.get("Content") or None
+                if managed_instruction is None:
+                    ir.async_create_issue(
+                        self.hass,
+                        XENIA_DOMAIN,
+                        issue_id,
+                        is_fixable=False,
+                        severity=ir.IssueSeverity.WARNING,
+                        translation_key="managed_script_missing",
+                        translation_placeholders={
+                            "script_id": str(script_id),
+                            "title": self.config_entry.title,
+                        },
                     )
-                    self.update_interval = POLL_INTERVAL_CONFIG_RETRY
                 else:
-                    content = script_data.get("Content") or None
-                    title = script_data.get("Title") or None
-                    if content is None:
-                        _LOGGER.warning(
-                            "Managed script %s no longer exists on the machine; "
-                            "reconfigure weight management to pick another script",
-                            script_id,
-                        )
-                    managed_instruction = content
-                    managed_name = title
+                    ir.async_delete_issue(self.hass, XENIA_DOMAIN, issue_id)
+        else:
+            ir.async_delete_issue(self.hass, XENIA_DOMAIN, issue_id)
 
         return XeniaConfigData(
             machine=machine,
             scripts=scripts,
             switches=switches,
             managed_script_instruction=managed_instruction,
-            managed_script_name=managed_name,
         )

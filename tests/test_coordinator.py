@@ -6,6 +6,7 @@ from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 import pytest
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -15,6 +16,7 @@ from pytest_homeassistant_custom_component.common import (
 from custom_components.xenia_home.const import (
     CONF_MANAGED_SCRIPT_ID,
     CONF_WEIGHT_MANAGEMENT_ENABLED,
+    XENIA_DOMAIN,
 )
 from custom_components.xenia_home.xenia import MachineStatus
 
@@ -191,14 +193,56 @@ async def test_unreadable_managed_script_only_affects_the_weight(
     assert hass.states.get(WEIGHT).state == "45.0"
 
 
-async def test_deleted_managed_script_is_reported(
+async def test_deleted_managed_script_raises_a_repair_issue(
     hass: HomeAssistant,
     weight_entry: MockConfigEntry,
     mock_xenia_api: MockXeniaApi,
-    caplog: pytest.LogCaptureFixture,
+    issue_registry: ir.IssueRegistry,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
-    """A managed script the machine no longer has leaves the weight unavailable."""
+    """A managed script the machine no longer has is a repair issue until it is back."""
+    issue_id = f"managed_script_missing_{weight_entry.entry_id}"
     mock_xenia_api.set_script(17, "", "")
     await setup_integration(hass, weight_entry)
     assert hass.states.get(WEIGHT).state == STATE_UNAVAILABLE
-    assert "Managed script 17 no longer exists" in caplog.text
+    issue = issue_registry.async_get_issue(XENIA_DOMAIN, issue_id)
+    assert issue is not None
+    assert issue.translation_placeholders == {
+        "script_id": "17",
+        "title": weight_entry.title,
+    }
+
+    mock_xenia_api.set_script(17, "1;13;27 45;7;", "My Shot")
+    await _pass(hass, freezer, 3601)
+    assert hass.states.get(WEIGHT).state == "45.0"
+    assert issue_registry.async_get_issue(XENIA_DOMAIN, issue_id) is None
+
+
+async def test_repair_issue_ends_with_weight_management(
+    hass: HomeAssistant,
+    weight_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    issue_registry: ir.IssueRegistry,
+) -> None:
+    """Turning weight management off, or removing the entry, clears the issue."""
+    issue_id = f"managed_script_missing_{weight_entry.entry_id}"
+    mock_xenia_api.set_script(17, "", "")
+    await setup_integration(hass, weight_entry)
+    assert issue_registry.async_get_issue(XENIA_DOMAIN, issue_id) is not None
+
+    hass.config_entries.async_update_entry(
+        weight_entry, options={CONF_WEIGHT_MANAGEMENT_ENABLED: False}
+    )
+    await hass.config_entries.async_reload(weight_entry.entry_id)
+    await hass.async_block_till_done()
+    assert issue_registry.async_get_issue(XENIA_DOMAIN, issue_id) is None
+
+    hass.config_entries.async_update_entry(
+        weight_entry,
+        options={CONF_WEIGHT_MANAGEMENT_ENABLED: True, CONF_MANAGED_SCRIPT_ID: 17},
+    )
+    await hass.config_entries.async_reload(weight_entry.entry_id)
+    await hass.async_block_till_done()
+    assert issue_registry.async_get_issue(XENIA_DOMAIN, issue_id) is not None
+    await hass.config_entries.async_remove(weight_entry.entry_id)
+    assert issue_registry.async_get_issue(XENIA_DOMAIN, issue_id) is None

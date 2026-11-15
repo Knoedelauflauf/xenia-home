@@ -250,5 +250,11 @@
         "create_new": "Create new script (HA Espresso)"
       }
     }
+  },
+  "issues": {
+    "managed_script_missing": {
+      "title": "Managed script of {title} was deleted",
+      "description": "Script {script_id}, whose weight target {title} manages, no longer exists on the machine. Open the options of the integration and pick another script, or turn weight management off."
+    }
   }
 }
