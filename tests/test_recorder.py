@@ -5,6 +5,7 @@ from functools import partial
 from unittest.mock import patch
 
 from homeassistant.components.recorder import get_instance, history
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
@@ -134,6 +135,22 @@ async def test_import_waits_for_home_assistant_to_start(
     hass.set_state(CoreState.running)
     await _reload(hass, legacy_install)
     assert _shot_ids(legacy_install) == [LEGACY_SHOT["start_time"]]
+
+
+async def test_import_without_shot_tracker_imports_nothing(
+    hass: HomeAssistant,
+    legacy_install: MockConfigEntry,
+    entity_registry: er.EntityRegistry,
+) -> None:
+    """Shots are only imported from the shot tracker of the entry."""
+    hass.set_state(CoreState.not_running)
+    await setup_integration(hass, legacy_install)
+    entity_registry.async_remove(TRACKER)
+
+    hass.set_state(CoreState.running)
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert _shot_ids(legacy_install) == []
 
 
 async def test_failed_import_is_not_retried(
