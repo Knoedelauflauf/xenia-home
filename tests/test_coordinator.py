@@ -14,12 +14,7 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
-from custom_components.xenia_home.const import (
-    CONF_MANAGED_SCRIPT_ID,
-    CONF_WEIGHT_MANAGEMENT_ENABLED,
-    XENIA_DOMAIN,
-)
-from custom_components.xenia_home.xenia import MachineStatus
+from custom_components.xenia_home.const import XENIA_DOMAIN
 
 from tests import setup_integration
 from tests.conftest import MockXeniaApi
@@ -40,12 +35,12 @@ async def _pass(
 @pytest.mark.parametrize(
     ("status", "interval"),
     [
-        (MachineStatus.ON, 1),
-        (MachineStatus.BREWING, 1),
-        (MachineStatus.DRAINING, 1),
-        (MachineStatus.ECO, 5),
-        (MachineStatus.OFF, 5),
-        (MachineStatus.UNKNOWN, 5),
+        (1, 1),
+        (3, 1),
+        (4, 1),
+        (2, 5),
+        (0, 5),
+        (42, 5),
     ],
 )
 async def test_poll_interval_follows_the_machine(
@@ -53,7 +48,7 @@ async def test_poll_interval_follows_the_machine(
     mock_config_entry: MockConfigEntry,
     mock_xenia_api: MockXeniaApi,
     freezer: FrozenDateTimeFactory,
-    status: MachineStatus,
+    status: int,
     interval: int,
 ) -> None:
     """The machine is polled every second while on, else every five seconds."""
@@ -72,14 +67,14 @@ async def test_poll_interval_changes_with_the_machine(
     freezer: FrozenDateTimeFactory,
 ) -> None:
     """Turning the machine to eco slows polling down, turning it on speeds it up."""
-    mock_xenia_api.set_overview(MA_STATUS=int(MachineStatus.ECO))
+    mock_xenia_api.set_overview(MA_STATUS=2)
     await _pass(hass, freezer, 1)
     polls = len(mock_xenia_api.bodies("get", "overview"))
     for _ in range(10):
         await _pass(hass, freezer, 1)
     assert len(mock_xenia_api.bodies("get", "overview")) == polls + 2
 
-    mock_xenia_api.set_overview(MA_STATUS=int(MachineStatus.ON))
+    mock_xenia_api.set_overview(MA_STATUS=1)
     for _ in range(5):
         await _pass(hass, freezer, 1)
     polls = len(mock_xenia_api.bodies("get", "overview"))
@@ -203,7 +198,7 @@ async def test_failed_config_poll_is_retried_within_a_minute(
 def weight_entry(mock_config_entry_factory_with_options) -> MockConfigEntry:
     """Return an entry that manages the weight of script 17."""
     return mock_config_entry_factory_with_options(
-        {CONF_WEIGHT_MANAGEMENT_ENABLED: True, CONF_MANAGED_SCRIPT_ID: 17}
+        {"weight_management_enabled": True, "managed_script_id": 17}
     )
 
 
@@ -273,7 +268,7 @@ async def test_repair_issue_ends_with_weight_management(
     assert issue_registry.async_get_issue(XENIA_DOMAIN, issue_id) is not None
 
     hass.config_entries.async_update_entry(
-        weight_entry, options={CONF_WEIGHT_MANAGEMENT_ENABLED: False}
+        weight_entry, options={"weight_management_enabled": False}
     )
     await hass.config_entries.async_reload(weight_entry.entry_id)
     await hass.async_block_till_done()
@@ -281,7 +276,7 @@ async def test_repair_issue_ends_with_weight_management(
 
     hass.config_entries.async_update_entry(
         weight_entry,
-        options={CONF_WEIGHT_MANAGEMENT_ENABLED: True, CONF_MANAGED_SCRIPT_ID: 17},
+        options={"weight_management_enabled": True, "managed_script_id": 17},
     )
     await hass.config_entries.async_reload(weight_entry.entry_id)
     await hass.async_block_till_done()

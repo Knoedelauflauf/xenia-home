@@ -15,8 +15,6 @@ from pytest_homeassistant_custom_component.common import (
 )
 from syrupy.assertion import SnapshotAssertion
 
-from custom_components.xenia_home.const import PowerOnBehavior
-
 from tests import setup_integration
 from tests.conftest import MockXeniaApi
 
@@ -63,33 +61,33 @@ async def test_power_on_behavior_defaults_to_steam_off(
     hass: HomeAssistant, init_integration: MockConfigEntry
 ) -> None:
     """Without a stored choice the steam boiler stays off on power on."""
-    assert hass.states.get(POWER_ON_BEHAVIOR).state == PowerOnBehavior.STEAM_OFF
+    assert hass.states.get(POWER_ON_BEHAVIOR).state == "steam_off"
 
 
 async def test_power_on_behavior_is_kept_across_reloads(
     hass: HomeAssistant, init_integration: MockConfigEntry
 ) -> None:
     """The choice is a local preference that survives a reload."""
-    await _select(hass, POWER_ON_BEHAVIOR, PowerOnBehavior.STEAM_ON)
-    assert hass.states.get(POWER_ON_BEHAVIOR).state == PowerOnBehavior.STEAM_ON
+    await _select(hass, POWER_ON_BEHAVIOR, "steam_on")
+    assert hass.states.get(POWER_ON_BEHAVIOR).state == "steam_on"
 
     await hass.config_entries.async_reload(init_integration.entry_id)
     await hass.async_block_till_done()
-    assert hass.states.get(POWER_ON_BEHAVIOR).state == PowerOnBehavior.STEAM_ON
+    assert hass.states.get(POWER_ON_BEHAVIOR).state == "steam_on"
 
 
 @pytest.mark.parametrize(
     ("restored", "expected"),
     [
-        (PowerOnBehavior.STEAM_ON, PowerOnBehavior.STEAM_ON),
-        (STATE_UNAVAILABLE, PowerOnBehavior.STEAM_OFF),
+        ("steam_on", "steam_on"),
+        (STATE_UNAVAILABLE, "steam_off"),
     ],
 )
 async def test_power_on_behavior_is_restored_after_restart(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     restored: str,
-    expected: PowerOnBehavior,
+    expected: str,
 ) -> None:
     """The choice is restored after a restart; an unusable stored state is ignored."""
     mock_restore_cache(hass, (State(POWER_ON_BEHAVIOR, restored),))
@@ -110,7 +108,7 @@ async def test_power_on_behavior_stays_available_without_machine(
     mock_xenia_api.override("get", "overview", exc=TimeoutError())
     await poll()
     assert hass.states.get(SCRIPT).state == STATE_UNAVAILABLE
-    assert hass.states.get(POWER_ON_BEHAVIOR).state == PowerOnBehavior.STEAM_OFF
+    assert hass.states.get(POWER_ON_BEHAVIOR).state == "steam_off"
 
 
 async def test_power_on_behavior_rejects_unknown_options(

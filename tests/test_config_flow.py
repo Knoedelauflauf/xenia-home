@@ -8,20 +8,11 @@ from homeassistant.helpers import entity_registry as er
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.xenia_home.config_flow import CREATE_NEW_SCRIPT
-from custom_components.xenia_home.const import (
-    CONF_MANAGED_SCRIPT_ID,
-    CONF_WEIGHT_MANAGEMENT_ENABLED,
-    CONF_WEIGHT_MAX,
-    CONF_WEIGHT_MIN,
-    CONF_WEIGHT_STEP,
-    DEFAULT_SCRIPT_NAME,
-    XENIA_DOMAIN,
-)
+from custom_components.xenia_home.const import DEFAULT_SCRIPT_NAME, XENIA_DOMAIN
 
 from tests.conftest import MockXeniaApi
 
-WEIGHT_SETTINGS = {CONF_WEIGHT_MIN: 20.0, CONF_WEIGHT_MAX: 45.0, CONF_WEIGHT_STEP: 0.1}
+WEIGHT_SETTINGS = {"weight_min": 20.0, "weight_max": 45.0, "weight_step": 0.1}
 
 
 async def test_user_flow_creates_entry(
@@ -208,7 +199,7 @@ async def _start_weight_options(hass: HomeAssistant, entry: MockConfigEntry) -> 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["step_id"] == "init"
     return await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_WEIGHT_MANAGEMENT_ENABLED: True}
+        result["flow_id"], {"weight_management_enabled": True}
     )
 
 
@@ -221,7 +212,7 @@ async def test_options_enable_weight_management(
     assert result["step_id"] == "select_script"
 
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_MANAGED_SCRIPT_ID: "10"}
+        result["flow_id"], {"managed_script_id": "10"}
     )
     assert result["step_id"] == "configure_weight"
     assert {str(key): key.default() for key in result["data_schema"].schema} == {
@@ -236,8 +227,8 @@ async def test_options_enable_weight_management(
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert init_integration.options == {
-        CONF_WEIGHT_MANAGEMENT_ENABLED: True,
-        CONF_MANAGED_SCRIPT_ID: 10,
+        "weight_management_enabled": True,
+        "managed_script_id": 10,
         **WEIGHT_SETTINGS,
     }
     state = hass.states.get("number.xenia_espresso_machine_script_weight_target")
@@ -257,9 +248,9 @@ async def test_options_offer_only_scripts_with_a_weight_target(
     mock_xenia_api.set_script(40, "1;x;27 45;7;", "Malformed")
     result = await _start_weight_options(hass, init_integration)
 
-    selector = result["data_schema"].schema[CONF_MANAGED_SCRIPT_ID]
+    selector = result["data_schema"].schema["managed_script_id"]
     assert selector.config["options"] == [
-        {"value": CREATE_NEW_SCRIPT, "label": DEFAULT_SCRIPT_NAME},
+        {"value": "create_new", "label": DEFAULT_SCRIPT_NAME},
         {"value": "10", "label": "WithWeight"},
     ]
 
@@ -271,7 +262,7 @@ async def test_options_create_new_script(
     result = await _start_weight_options(hass, init_integration)
     mock_xenia_api.set_scripts({25: DEFAULT_SCRIPT_NAME})
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_MANAGED_SCRIPT_ID: CREATE_NEW_SCRIPT}
+        result["flow_id"], {"managed_script_id": "create_new"}
     )
     assert result["step_id"] == "configure_weight"
     assert mock_xenia_api.bodies("post", "scripts/create") == [
@@ -283,7 +274,7 @@ async def test_options_create_new_script(
         result["flow_id"], WEIGHT_SETTINGS
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert init_integration.options[CONF_MANAGED_SCRIPT_ID] == 25
+    assert init_integration.options["managed_script_id"] == 25
 
 
 async def test_options_create_new_script_next_to_one_of_the_same_name(
@@ -294,27 +285,27 @@ async def test_options_create_new_script_next_to_one_of_the_same_name(
     result = await _start_weight_options(hass, init_integration)
     mock_xenia_api.set_scripts({12: DEFAULT_SCRIPT_NAME, 26: DEFAULT_SCRIPT_NAME})
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_MANAGED_SCRIPT_ID: CREATE_NEW_SCRIPT}
+        result["flow_id"], {"managed_script_id": "create_new"}
     )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], WEIGHT_SETTINGS
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert init_integration.options[CONF_MANAGED_SCRIPT_ID] == 26
+    assert init_integration.options["managed_script_id"] == 26
 
 
 @pytest.mark.parametrize(
     ("settings", "errors"),
     [
         (
-            {CONF_WEIGHT_MIN: 50.0, CONF_WEIGHT_MAX: 25.0, CONF_WEIGHT_STEP: 0.5},
-            {CONF_WEIGHT_MAX: "weight_max_not_above_min"},
+            {"weight_min": 50.0, "weight_max": 25.0, "weight_step": 0.5},
+            {"weight_max": "weight_max_not_above_min"},
         ),
         (
-            {CONF_WEIGHT_MIN: 30.0, CONF_WEIGHT_MAX: 30.0, CONF_WEIGHT_STEP: 0.0},
+            {"weight_min": 30.0, "weight_max": 30.0, "weight_step": 0.0},
             {
-                CONF_WEIGHT_MAX: "weight_max_not_above_min",
-                CONF_WEIGHT_STEP: "weight_step_not_positive",
+                "weight_max": "weight_max_not_above_min",
+                "weight_step": "weight_step_not_positive",
             },
         ),
     ],
@@ -330,7 +321,7 @@ async def test_options_reject_an_unusable_weight_range(
     mock_xenia_api.set_script(10, "1;13;27 45;7;", "MyShot")
     result = await _start_weight_options(hass, init_integration)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_MANAGED_SCRIPT_ID: "10"}
+        result["flow_id"], {"managed_script_id": "10"}
     )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], settings
@@ -343,8 +334,8 @@ async def test_options_reject_an_unusable_weight_range(
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert init_integration.options == {
-        CONF_WEIGHT_MANAGEMENT_ENABLED: True,
-        CONF_MANAGED_SCRIPT_ID: 10,
+        "weight_management_enabled": True,
+        "managed_script_id": 10,
         **WEIGHT_SETTINGS,
     }
 
@@ -355,7 +346,7 @@ async def test_options_abort_when_created_script_is_missing(
     """The flow aborts when the machine does not list the created script."""
     result = await _start_weight_options(hass, init_integration)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_MANAGED_SCRIPT_ID: CREATE_NEW_SCRIPT}
+        result["flow_id"], {"managed_script_id": "create_new"}
     )
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "script_not_created"
@@ -365,7 +356,7 @@ async def test_options_abort_when_created_script_is_missing(
     ("method", "path", "choice"),
     [
         ("get", "scripts/list", None),
-        ("post", "scripts/create", CREATE_NEW_SCRIPT),
+        ("post", "scripts/create", "create_new"),
     ],
 )
 async def test_options_abort_when_machine_unreachable(
@@ -380,13 +371,13 @@ async def test_options_abort_when_machine_unreachable(
     result = await hass.config_entries.options.async_init(init_integration.entry_id)
     if choice is not None:
         result = await hass.config_entries.options.async_configure(
-            result["flow_id"], {CONF_WEIGHT_MANAGEMENT_ENABLED: True}
+            result["flow_id"], {"weight_management_enabled": True}
         )
     mock_xenia_api.fail(method, path)
     user_input = (
-        {CONF_WEIGHT_MANAGEMENT_ENABLED: True}
+        {"weight_management_enabled": True}
         if choice is None
-        else {CONF_MANAGED_SCRIPT_ID: choice}
+        else {"managed_script_id": choice}
     )
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], user_input
@@ -403,7 +394,7 @@ async def test_options_disable_weight_management(
     """Turning weight management off removes the weight target number."""
     mock_xenia_api.set_script(10, "1;13;27 45;7;", "MyShot")
     entry = mock_config_entry_factory_with_options(
-        {CONF_WEIGHT_MANAGEMENT_ENABLED: True, CONF_MANAGED_SCRIPT_ID: 10}
+        {"weight_management_enabled": True, "managed_script_id": 10}
     )
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
@@ -413,13 +404,13 @@ async def test_options_disable_weight_management(
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_WEIGHT_MANAGEMENT_ENABLED: False}
+        result["flow_id"], {"weight_management_enabled": False}
     )
     await hass.async_block_till_done()
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options == {
-        CONF_WEIGHT_MANAGEMENT_ENABLED: False,
-        CONF_MANAGED_SCRIPT_ID: None,
+        "weight_management_enabled": False,
+        "managed_script_id": None,
     }
     assert hass.states.get(weight) is None

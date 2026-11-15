@@ -21,9 +21,6 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from syrupy.assertion import SnapshotAssertion
 
-from custom_components.xenia_home.const import PowerOnBehavior
-from custom_components.xenia_home.xenia import MachineStatus
-
 from tests import setup_integration
 from tests.conftest import MockXeniaApi
 
@@ -45,7 +42,7 @@ async def _setup_with_status(
     hass: HomeAssistant,
     entry: MockConfigEntry,
     machine: MockXeniaApi,
-    status: MachineStatus,
+    status: int,
     **fields,
 ) -> None:
     machine.set_overview(MA_STATUS=int(status), **fields)
@@ -69,19 +66,19 @@ async def test_switch_entities_snapshot(
 @pytest.mark.parametrize(
     ("status", "power", "eco", "steam_boiler"),
     [
-        (MachineStatus.ON, STATE_ON, STATE_OFF, STATE_ON),
-        (MachineStatus.BREWING, STATE_ON, STATE_OFF, STATE_ON),
-        (MachineStatus.DRAINING, STATE_ON, STATE_OFF, STATE_ON),
-        (MachineStatus.ECO, STATE_OFF, STATE_ON, STATE_UNAVAILABLE),
-        (MachineStatus.OFF, STATE_OFF, STATE_UNAVAILABLE, STATE_UNAVAILABLE),
-        (MachineStatus.UNKNOWN, STATE_OFF, STATE_UNAVAILABLE, STATE_UNAVAILABLE),
+        (1, STATE_ON, STATE_OFF, STATE_ON),
+        (3, STATE_ON, STATE_OFF, STATE_ON),
+        (4, STATE_ON, STATE_OFF, STATE_ON),
+        (2, STATE_OFF, STATE_ON, STATE_UNAVAILABLE),
+        (0, STATE_OFF, STATE_UNAVAILABLE, STATE_UNAVAILABLE),
+        (42, STATE_OFF, STATE_UNAVAILABLE, STATE_UNAVAILABLE),
     ],
 )
 async def test_states_follow_the_machine(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_xenia_api: MockXeniaApi,
-    status: MachineStatus,
+    status: int,
     power: str,
     eco: str,
     steam_boiler: str,
@@ -105,7 +102,7 @@ async def test_steam_boiler_follows_the_boiler(
 ) -> None:
     """The steam boiler switch is on only while the boiler reports on."""
     await _setup_with_status(
-        hass, mock_config_entry, mock_xenia_api, MachineStatus.ON, SB_STATUS=sb_status
+        hass, mock_config_entry, mock_xenia_api, 1, SB_STATUS=sb_status
     )
     assert hass.states.get(STEAM_BOILER).state == expected
 
@@ -127,25 +124,25 @@ async def test_switches_unavailable_without_machine(
     ("behavior", "body"),
     [
         (None, TURN_ON_WITHOUT_STEAM),
-        (PowerOnBehavior.STEAM_OFF, TURN_ON_WITHOUT_STEAM),
-        (PowerOnBehavior.STEAM_ON, TURN_ON),
+        ("steam_off", TURN_ON_WITHOUT_STEAM),
+        ("steam_on", TURN_ON),
     ],
 )
 @pytest.mark.parametrize(
     ("status", "entity_id", "service"),
     [
-        (MachineStatus.OFF, POWER, SERVICE_TURN_ON),
-        (MachineStatus.ECO, ECO, SERVICE_TURN_OFF),
+        (0, POWER, SERVICE_TURN_ON),
+        (2, ECO, SERVICE_TURN_OFF),
     ],
 )
 async def test_turning_on_honours_the_power_on_behavior(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_xenia_api: MockXeniaApi,
-    status: MachineStatus,
+    status: int,
     entity_id: str,
     service: str,
-    behavior: PowerOnBehavior | None,
+    behavior: str | None,
     body: str,
 ) -> None:
     """Powering on and leaving eco mode start the steam boiler only if chosen."""
@@ -157,7 +154,7 @@ async def test_turning_on_honours_the_power_on_behavior(
             {ATTR_ENTITY_ID: POWER_ON_BEHAVIOR, ATTR_OPTION: behavior},
             blocking=True,
         )
-    mock_xenia_api.set_overview(MA_STATUS=int(MachineStatus.ON))
+    mock_xenia_api.set_overview(MA_STATUS=1)
     await _switch(hass, service, entity_id)
     assert mock_xenia_api.bodies("post", "machine/control") == [body]
     assert hass.states.get(POWER).state == STATE_ON

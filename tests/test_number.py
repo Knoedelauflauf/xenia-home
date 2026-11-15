@@ -13,14 +13,6 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from syrupy.assertion import SnapshotAssertion
 
-from custom_components.xenia_home.const import (
-    CONF_MANAGED_SCRIPT_ID,
-    CONF_WEIGHT_MANAGEMENT_ENABLED,
-    CONF_WEIGHT_MAX,
-    CONF_WEIGHT_MIN,
-    CONF_WEIGHT_STEP,
-)
-
 from tests import setup_integration
 from tests.conftest import MockXeniaApi
 
@@ -48,11 +40,11 @@ async def init_with_weight(
     mock_xenia_api.set_script(17, "1;13;27 45;7;", "Test Shot")
     entry = mock_config_entry_factory_with_options(
         {
-            CONF_WEIGHT_MANAGEMENT_ENABLED: True,
-            CONF_MANAGED_SCRIPT_ID: 17,
-            CONF_WEIGHT_MIN: 25.0,
-            CONF_WEIGHT_MAX: 50.0,
-            CONF_WEIGHT_STEP: 0.5,
+            "weight_management_enabled": True,
+            "managed_script_id": 17,
+            "weight_min": 25.0,
+            "weight_max": 50.0,
+            "weight_step": 0.5,
         }
     )
     await setup_integration(hass, entry)

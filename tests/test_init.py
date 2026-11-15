@@ -10,7 +10,6 @@ from homeassistant.components.select import (
 )
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import (
-    ATTR_CONFIG_ENTRY_ID,
     ATTR_ENTITY_ID,
     ATTR_OPTION,
     CONF_HOST,
@@ -27,17 +26,7 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
-from custom_components.xenia_home.const import (
-    CONF_POWER_ON_BEHAVIOR,
-    CONF_WEIGHT_MIN,
-    XENIA_DOMAIN,
-    PowerOnBehavior,
-)
-from custom_components.xenia_home.services import (
-    ATTR_SCRIPT_ID,
-    ATTR_SCRIPT_NAME,
-    SERVICE_EXECUTE_SCRIPT,
-)
+from custom_components.xenia_home.const import XENIA_DOMAIN
 
 from tests import setup_integration, setup_second_machine
 from tests.conftest import MockXeniaApi
@@ -47,9 +36,7 @@ MAC = "aa:bb:cc:dd:ee:ff"
 
 
 async def _execute_script(hass: HomeAssistant, data: dict[str, Any]) -> None:
-    await hass.services.async_call(
-        XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT, data, blocking=True
-    )
+    await hass.services.async_call(XENIA_DOMAIN, "execute_script", data, blocking=True)
 
 
 async def test_unload_and_reload(
@@ -58,7 +45,7 @@ async def test_unload_and_reload(
     """The entry unloads cleanly and keeps the action registered."""
     assert await hass.config_entries.async_unload(init_integration.entry_id)
     assert init_integration.state is ConfigEntryState.NOT_LOADED
-    assert hass.services.has_service(XENIA_DOMAIN, SERVICE_EXECUTE_SCRIPT)
+    assert hass.services.has_service(XENIA_DOMAIN, "execute_script")
 
     assert await hass.config_entries.async_setup(init_integration.entry_id)
     assert init_integration.state is ConfigEntryState.LOADED
@@ -156,10 +143,10 @@ async def test_entity_id_change_keeps_the_entity_working(
     await hass.services.async_call(
         SELECT_DOMAIN,
         SERVICE_SELECT_OPTION,
-        {ATTR_ENTITY_ID: "select.coffee_steam", ATTR_OPTION: PowerOnBehavior.STEAM_ON},
+        {ATTR_ENTITY_ID: "select.coffee_steam", ATTR_OPTION: "steam_on"},
         blocking=True,
     )
-    assert hass.states.get("select.coffee_steam").state == PowerOnBehavior.STEAM_ON
+    assert hass.states.get("select.coffee_steam").state == "steam_on"
 
 
 async def test_setup_drops_options_of_older_releases(
@@ -170,13 +157,13 @@ async def test_setup_drops_options_of_older_releases(
         {
             "poll_interval_idle": 10.0,
             "ready_threshold": 3.0,
-            CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_ON,
-            CONF_WEIGHT_MIN: 20.0,
+            "power_on_behavior": "steam_on",
+            "weight_min": 20.0,
         }
     )
     await setup_integration(hass, entry)
-    assert entry.options == {CONF_WEIGHT_MIN: 20.0}
-    assert hass.states.get(POWER_ON_BEHAVIOR).state == PowerOnBehavior.STEAM_ON
+    assert entry.options == {"weight_min": 20.0}
+    assert hass.states.get(POWER_ON_BEHAVIOR).state == "steam_on"
 
 
 def _add_entry_of_an_earlier_release(
@@ -433,10 +420,10 @@ async def test_remove_deletes_the_shot_history(
 @pytest.mark.parametrize(
     ("data", "script_id"),
     [
-        ({ATTR_SCRIPT_ID: 10}, 10),
-        ({ATTR_SCRIPT_NAME: "MyShot"}, 10),
-        ({ATTR_SCRIPT_NAME: "Espresso"}, 1),
-        ({ATTR_SCRIPT_ID: 2, ATTR_SCRIPT_NAME: "MyShot"}, 2),
+        ({"script_id": 10}, 10),
+        ({"script_name": "MyShot"}, 10),
+        ({"script_name": "Espresso"}, 1),
+        ({"script_id": 2, "script_name": "MyShot"}, 2),
     ],
 )
 async def test_execute_script(
@@ -460,7 +447,7 @@ async def test_execute_script_rejects_ids_below_one(
 ) -> None:
     """Script ids start at 1, as the action's selector shows."""
     with pytest.raises(probatio.Invalid):
-        await _execute_script(hass, {ATTR_SCRIPT_ID: script_id})
+        await _execute_script(hass, {"script_id": script_id})
     assert mock_xenia_api.bodies("post", "scripts/execute") == []
 
 
@@ -481,9 +468,9 @@ async def test_execute_script_by_a_shared_name(
     mock_xenia_api.set_scripts({12: "Espresso"})
     await hass.config_entries.async_reload(init_integration.entry_id)
     await hass.async_block_till_done()
-    await _execute_script(hass, {ATTR_SCRIPT_NAME: "Espresso (12)"})
+    await _execute_script(hass, {"script_name": "Espresso (12)"})
     with pytest.raises(ServiceValidationError):
-        await _execute_script(hass, {ATTR_SCRIPT_NAME: "Espresso"})
+        await _execute_script(hass, {"script_name": "Espresso"})
     assert mock_xenia_api.bodies("post", "scripts/execute") == ['{"ID":12}']
 
 
@@ -491,9 +478,9 @@ async def test_execute_script_by_a_shared_name(
     ("data", "translation_key"),
     [
         ({}, "script_required"),
-        ({ATTR_SCRIPT_NAME: "Ghost"}, "script_not_found"),
+        ({"script_name": "Ghost"}, "script_not_found"),
         (
-            {ATTR_CONFIG_ENTRY_ID: "nope", ATTR_SCRIPT_ID: 10},
+            {"config_entry_id": "nope", "script_id": 10},
             "service_config_entry_not_found",
         ),
     ],
@@ -516,9 +503,9 @@ async def test_execute_script_needs_a_loaded_machine(
 ) -> None:
     """The action fails while the machine is not loaded."""
     await hass.config_entries.async_unload(init_integration.entry_id)
-    data: dict[str, Any] = {ATTR_SCRIPT_ID: 10}
+    data: dict[str, Any] = {"script_id": 10}
     if address:
-        data[ATTR_CONFIG_ENTRY_ID] = init_integration.entry_id
+        data["config_entry_id"] = init_integration.entry_id
     with pytest.raises(ServiceValidationError) as exc_info:
         await _execute_script(hass, data)
     assert exc_info.value.translation_key == "service_config_entry_not_loaded"
@@ -530,15 +517,13 @@ async def test_execute_script_with_several_machines(
     """With several machines the call has to name one, and only that one runs it."""
     second, second_machine = await setup_second_machine(hass, mock_xenia_api)
     with pytest.raises(ServiceValidationError) as exc_info:
-        await _execute_script(hass, {ATTR_SCRIPT_ID: 10})
+        await _execute_script(hass, {"script_id": 10})
     assert (
         exc_info.value.translation_key
         == "service_found_multiple_config_entry_for_domain"
     )
 
-    await _execute_script(
-        hass, {ATTR_CONFIG_ENTRY_ID: second.entry_id, ATTR_SCRIPT_ID: 1}
-    )
+    await _execute_script(hass, {"config_entry_id": second.entry_id, "script_id": 1})
     assert second_machine.bodies("post", "scripts/execute") == ['{"ID":1}']
     assert mock_xenia_api.bodies("post", "scripts/execute") == []
 
@@ -549,7 +534,7 @@ async def test_execute_script_refused_by_machine(
     """A refused request raises a translated error with the cause."""
     mock_xenia_api.fail("post", "scripts/execute")
     with pytest.raises(HomeAssistantError) as exc_info:
-        await _execute_script(hass, {ATTR_SCRIPT_ID: 10})
+        await _execute_script(hass, {"script_id": 10})
     assert exc_info.value.translation_key == "write_failed"
     assert exc_info.value.translation_placeholders == {
         "error": "ClientResponseError: 500, message='Internal Server Error', "
