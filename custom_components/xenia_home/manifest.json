@@ -2,6 +2,7 @@
   "domain": "xenia_home",
   "name": "Xenia Espresso Machine",
   "after_dependencies": ["recorder"],
+  "categories": ["appliances_cleaning.cooking"],
   "codeowners": ["@knoedelauflauf"],
   "config_flow": true,
   "dependencies": ["websocket_api"],
