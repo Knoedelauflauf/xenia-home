@@ -4,7 +4,6 @@ from homeassistant.components.button import ButtonEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import XENIA_DOMAIN
 from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
 from .entity import XeniaEntity
 from .errors import machine_write
@@ -32,7 +31,7 @@ class XeniaExecuteScriptButton(XeniaEntity, ButtonEntity):
     def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
         """Initialize the button."""
         super().__init__(coordinator)
-        self._attr_unique_id = f"{XENIA_DOMAIN}_execute_script_{self.machine_id}"
+        self._attr_unique_id = f"{self.machine_id}_execute_script"
 
     async def async_press(self) -> None:
         """Run the selected script, if one is selected."""
@@ -50,7 +49,7 @@ class XeniaStopScriptButton(XeniaEntity, ButtonEntity):
     def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
         """Initialize the button."""
         super().__init__(coordinator)
-        self._attr_unique_id = f"{XENIA_DOMAIN}_stop_script_{self.machine_id}"
+        self._attr_unique_id = f"{self.machine_id}_stop_script"
 
     async def async_press(self) -> None:
         """Stop the running script."""

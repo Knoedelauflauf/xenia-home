@@ -24,8 +24,10 @@ async def async_migrate_to_mac(
     @callback
     def migrate_unique_id(entity: er.RegistryEntry) -> dict[str, str] | None:
         unique_id = entity.unique_id
-        if unique_id.startswith(f"{XENIA_DOMAIN}_") and unique_id.endswith(f"_{host}"):
-            return {"new_unique_id": f"{unique_id.removesuffix(host)}{mac}"}
+        prefix, suffix = f"{XENIA_DOMAIN}_", f"_{host}"
+        if unique_id.startswith(prefix) and unique_id.endswith(suffix):
+            key = unique_id.removeprefix(prefix).removesuffix(suffix)
+            return {"new_unique_id": f"{mac}_{key}"}
         if unique_id.startswith(f"{host}_"):
             return {"new_unique_id": f"{mac}{unique_id.removeprefix(host)}"}
         return None

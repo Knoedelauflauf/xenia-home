@@ -56,7 +56,7 @@ async def legacy_install(
     entity_registry.async_get_or_create(
         "event",
         XENIA_DOMAIN,
-        f"{XENIA_DOMAIN}_shot_tracker_xenia.local",
+        f"{mock_config_entry.unique_id}_shot_tracker",
         suggested_object_id="xenia_espresso_machine_shot_tracker",
         config_entry=mock_config_entry,
     )

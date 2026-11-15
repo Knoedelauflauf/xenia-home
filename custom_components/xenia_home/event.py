@@ -10,7 +10,6 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from .const import XENIA_DOMAIN
 from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
 from .entity import XeniaEntity
 from .xenia import MachineStatus
@@ -69,7 +68,7 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
     def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
         """Initialize the shot tracker."""
         super().__init__(coordinator)
-        self._attr_unique_id = f"{XENIA_DOMAIN}_shot_tracker_{self.machine_id}"
+        self._attr_unique_id = f"{self.machine_id}_shot_tracker"
         self._is_brewing = False
         self._shot_start_time: datetime | None = None
         self._brew_group_temps: list[float] = []

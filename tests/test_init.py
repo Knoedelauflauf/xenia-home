@@ -205,7 +205,7 @@ async def test_migration_keys_the_machine_on_its_mac(
     devices, entities = _ids(device_registry, entity_registry, entry)
     assert devices == {device_id: {(XENIA_DOMAIN, MAC)}}
     assert entities["sensor.group_temp"] == f"{MAC}_brew_group_temperature"
-    assert entities["switch.coffee_power"] == f"{XENIA_DOMAIN}_power_{MAC}"
+    assert entities["switch.coffee_power"] == f"{MAC}_power"
     for entity_id in ("sensor.group_temp", "switch.coffee_power"):
         assert hass.states.get(entity_id).state != STATE_UNAVAILABLE
     assert "sensor.xenia_espresso_machine_brewgroup_temperature" not in entities
@@ -243,7 +243,7 @@ async def test_migration_after_a_host_change_keeps_the_live_entities(
     assert entry.unique_id == MAC
     devices, entities = _ids(device_registry, entity_registry, entry)
     assert entities["sensor.group_temp"] == f"{MAC}_brew_group_temperature"
-    assert entities["switch.coffee_power"] == f"{XENIA_DOMAIN}_power_{MAC}"
+    assert entities["switch.coffee_power"] == f"{MAC}_power"
     assert entities["sensor.stale_group_temp"] == "old.host_brew_group_temperature"
     assert hass.states.get("sensor.group_temp").state != STATE_UNAVAILABLE
     assert devices.keys() == devices_before.keys()

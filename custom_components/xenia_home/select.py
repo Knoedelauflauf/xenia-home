@@ -6,7 +6,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import POWER_ON_BEHAVIOR_OPTIONS, XENIA_DOMAIN, PowerOnBehavior
+from .const import POWER_ON_BEHAVIOR_OPTIONS, PowerOnBehavior
 from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
 from .entity import XeniaEntity
 from .errors import machine_write
@@ -66,7 +66,7 @@ class PowerOnBehaviorSelect(XeniaEntity, SelectEntity, RestoreEntity):
     def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
         """Initialize the select."""
         super().__init__(coordinator)
-        self._attr_unique_id = f"{XENIA_DOMAIN}_power_on_behavior_{self.machine_id}"
+        self._attr_unique_id = f"{self.machine_id}_power_on_behavior"
 
     @property
     def available(self) -> bool:
@@ -105,7 +105,7 @@ class ScriptSelect(XeniaEntity, SelectEntity):
     def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
         """Initialize the select."""
         super().__init__(coordinator)
-        self._attr_unique_id = f"{XENIA_DOMAIN}_script_{self.machine_id}"
+        self._attr_unique_id = f"{self.machine_id}_script"
 
     @property
     def options(self) -> list[str]:
@@ -143,7 +143,7 @@ class SwitchConfigSelect(XeniaEntity, SelectEntity):
         """Initialize the select."""
         super().__init__(coordinator)
         self.entity_description = description
-        self._attr_unique_id = f"{XENIA_DOMAIN}_{description.key}_{self.machine_id}"
+        self._attr_unique_id = f"{self.machine_id}_{description.key}"
 
     @property
     def options(self) -> list[str]:

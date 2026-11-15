@@ -6,7 +6,7 @@ from homeassistant.components.switch import SwitchEntity, SwitchEntityDescriptio
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import XENIA_DOMAIN, PowerOnBehavior
+from .const import PowerOnBehavior
 from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
 from .entity import XeniaEntity
 from .errors import machine_write
@@ -37,9 +37,7 @@ class XeniaSwitch(XeniaEntity, SwitchEntity):
     def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
         """Initialize the switch."""
         super().__init__(coordinator)
-        self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_{self.entity_description.key}_{self.machine_id}"
-        )
+        self._attr_unique_id = f"{self.machine_id}_{self.entity_description.key}"
 
     async def _async_turn_machine_on(self) -> None:
         steam_on = self.runtime_data.power_on_behavior is PowerOnBehavior.STEAM_ON
