@@ -29,6 +29,7 @@ DEFAULT_WEIGHT_STEP = 0.5
 DEFAULT_SCRIPT_NAME = "HA Espresso"
 DEFAULT_SCRIPT_INSTRUCTION = "1;13;3 70 5000;12 5000;27 40;17;7;"
 
+COMMAND_REFRESH_DELAY = timedelta(seconds=1)
 # Active: on, brewing, or draining. Idle: eco or off.
 POLL_INTERVAL_ACTIVE = timedelta(seconds=1)
 POLL_INTERVAL_IDLE = timedelta(seconds=5)

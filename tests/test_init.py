@@ -28,7 +28,7 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.xenia_home.const import XENIA_DOMAIN
 
-from tests import setup_integration, setup_second_machine
+from tests import pass_seconds, setup_integration, setup_second_machine
 from tests.conftest import MockXeniaApi
 
 POWER_ON_BEHAVIOR = "select.xenia_espresso_machine_power_on_behavior"
@@ -452,12 +452,17 @@ async def test_execute_script_rejects_ids_below_one(
 
 
 async def test_execute_script_polls_the_machine(
-    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
-    """The action is followed by a poll, so the running script shows right away."""
+    """The action is followed by a poll a second later, also while idle."""
+    mock_xenia_api.set_overview(MA_STATUS=0)
+    await setup_integration(hass, mock_config_entry)
     polls = len(mock_xenia_api.bodies("get", "overview"))
     await _execute_script(hass, {"script_id": 10})
-    await hass.async_block_till_done()
+    await pass_seconds(hass, freezer, 1)
     assert len(mock_xenia_api.bodies("get", "overview")) > polls
 
 

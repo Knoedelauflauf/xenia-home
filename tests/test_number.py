@@ -2,6 +2,7 @@
 
 import json
 
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.number import (
     ATTR_VALUE,
     DOMAIN as NUMBER_DOMAIN,
@@ -15,7 +16,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from syrupy.assertion import SnapshotAssertion
 
-from tests import setup_integration
+from tests import pass_seconds, setup_integration
 from tests.conftest import MockXeniaApi
 
 BREW_GROUP = "number.xenia_espresso_machine_brewgroup_set_temperature"
@@ -77,29 +78,38 @@ async def test_number_entities_snapshot(
 )
 async def test_set_temperature(
     hass: HomeAssistant,
-    init_integration: MockConfigEntry,
+    mock_config_entry: MockConfigEntry,
     mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
     entity_id: str,
     path: str,
     body: str,
 ) -> None:
-    """A setpoint is written to the machine and read back."""
-    mock_xenia_api.set_overview_single(BG_SET_TEMP=93.5, BB_SET_TEMP=93.5)
+    """A setpoint is written to the idle machine and read back a second later."""
+    mock_xenia_api.set_overview(MA_STATUS=0)
+    await setup_integration(hass, mock_config_entry)
     await _set(hass, entity_id, 93.5)
     assert mock_xenia_api.bodies("post", path) == [body]
+    mock_xenia_api.set_overview_single(BG_SET_TEMP=93.5, BB_SET_TEMP=93.5)
+    await pass_seconds(hass, freezer, 1)
     assert hass.states.get(entity_id).state == "93.5"
 
 
 async def test_refused_temperature_raises_and_polls(
-    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
-    """A refused setpoint raises a translated error and still polls the machine."""
+    """A refused setpoint raises a translated error and still polls the idle machine."""
+    mock_xenia_api.set_overview(MA_STATUS=0)
+    await setup_integration(hass, mock_config_entry)
     mock_xenia_api.fail("post", "inc_dec")
     polls = len(mock_xenia_api.bodies("get", "overview"))
     with pytest.raises(HomeAssistantError) as exc_info:
         await _set(hass, BREW_GROUP, 93.5)
     assert exc_info.value.translation_key == "write_failed"
-    await hass.async_block_till_done()
+    await pass_seconds(hass, freezer, 1)
     assert len(mock_xenia_api.bodies("get", "overview")) > polls
 
 
@@ -182,15 +192,19 @@ async def test_weight_target_range_defaults(
 
 
 async def test_set_weight_target_rewrites_the_script(
-    hass: HomeAssistant, init_with_weight: MockConfigEntry, mock_xenia_api: MockXeniaApi
+    hass: HomeAssistant,
+    init_with_weight: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
-    """Setting the target rewrites the current script on the machine and reads it back."""
+    """Setting the target rewrites the current script and reads it back a second later."""
     mock_xenia_api.set_script(17, "1;13;3 70 5000;27 45;7;", "Test Shot")
     await _set(hass, WEIGHT, 38.5)
     assert mock_xenia_api.bodies("post", "scripts/create") == [
         '{"script_id":17,"Edit":"Enabled","switch":null,"script":"none",'
         '"name":"Test Shot","instruction":"1;13;3 70 5000;27 38.5;7;"}'
     ]
+    await pass_seconds(hass, freezer, 1)
     assert len(mock_xenia_api.bodies("get", "scripts/list")) == 2
 
 

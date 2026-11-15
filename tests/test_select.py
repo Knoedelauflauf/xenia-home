@@ -1,5 +1,6 @@
 """Tests for the power on behavior, script and switch selects."""
 
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.select import (
     DOMAIN as SELECT_DOMAIN,
     SERVICE_SELECT_OPTION,
@@ -15,7 +16,7 @@ from pytest_homeassistant_custom_component.common import (
 )
 from syrupy.assertion import SnapshotAssertion
 
-from tests import setup_integration
+from tests import pass_seconds, setup_integration
 from tests.conftest import MockXeniaApi
 
 pytestmark = pytest.mark.usefixtures("entity_registry_enabled_by_default")
@@ -146,14 +147,18 @@ async def test_switch_select_shows_the_assigned_script(
 
 
 async def test_switch_select_assigns_a_script(
-    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
-    """Selecting a script assigns it on the machine and reads the result back."""
+    """Selecting a script assigns it on the machine and reads it back a second later."""
     mock_xenia_api.set_switches({"SWITCH_SET_LEFT_LEFT_0": 10})
     await _select(hass, SWITCH_LEFT_SHORT, "MyShot")
     assert mock_xenia_api.bodies("post", "switches") == [
         '{"SWITCH_SET_LEFT_LEFT_0":"10"}'
     ]
+    await pass_seconds(hass, freezer, 1)
     assert hass.states.get(SWITCH_LEFT_SHORT).state == "MyShot"
 
 
