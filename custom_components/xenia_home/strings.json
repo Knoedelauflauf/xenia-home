@@ -203,8 +203,12 @@
     "event": {
       "shot_tracker": {
         "name": "Shot tracker",
-        "state": {
-          "shot_completed": "Shot completed"
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "shot_completed": "Shot completed"
+            }
+          }
         }
       }
     }

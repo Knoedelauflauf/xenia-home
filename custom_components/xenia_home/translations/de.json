@@ -203,8 +203,12 @@
     "event": {
       "shot_tracker": {
         "name": "Bezugstracker",
-        "state": {
-          "shot_completed": "Bezug abgeschlossen"
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "shot_completed": "Bezug abgeschlossen"
+            }
+          }
         }
       }
     }
