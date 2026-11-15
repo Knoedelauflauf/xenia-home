@@ -8,6 +8,7 @@ from homeassistant.util import dt as dt_util
 import probatio
 
 from .const import XENIA_DOMAIN
+from .coordinator import XeniaConfigEntry
 from .shot_store import XeniaShotStore
 
 # Core has no error code for "several entries but none addressed"; its
@@ -30,7 +31,9 @@ def _resolve_store(
     msg: dict[str, Any],
 ) -> XeniaShotStore | None:
     """Return the addressed entry's store, or send an error and return None."""
-    entries = hass.config_entries.async_loaded_entries(XENIA_DOMAIN)
+    entries: list[XeniaConfigEntry] = hass.config_entries.async_loaded_entries(
+        XENIA_DOMAIN
+    )
     if (entry_id := msg.get("entry_id")) is not None:
         entry = next((e for e in entries if e.entry_id == entry_id), None)
         if entry is None:

@@ -32,6 +32,46 @@ exclude_also = [
 ]
 fail_under = 95
 
+# Mypy configuration from the mypy.ini of home-assistant/core: its global
+# settings, and its strict settings for the integrations in .strict-typing.
+
+[tool.mypy]
+python_version = "3.14"
+platform = "linux"
+show_error_codes = true
+follow_imports = "normal"
+local_partial_types = true
+strict_equality = true
+strict_bytes = true
+no_implicit_optional = true
+warn_incomplete_stub = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+enable_error_code = [
+    "deprecated",
+    "explicit-override",
+    "ignore-without-code",
+    "redundant-self",
+    "truthy-iterable",
+]
+disable_error_code = [
+    "annotation-unchecked",
+    "import-not-found",
+    "import-untyped",
+]
+extra_checks = false
+
+[[tool.mypy.overrides]]
+module = "custom_components.xenia_home.*"
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+disallow_untyped_defs = true
+warn_return_any = true
+warn_unreachable = true
+
 # Ruff configuration copied from home-assistant/core; tests/ruff.toml extends
 # it like the one in core.
 

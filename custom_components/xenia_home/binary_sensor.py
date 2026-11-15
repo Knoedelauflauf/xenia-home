@@ -1,5 +1,7 @@
 """Binary sensor platform for the Xenia espresso machine."""
 
+from typing import override
+
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
@@ -36,6 +38,7 @@ class XeniaWaterTankSensor(XeniaEntity, BinarySensorEntity):
         self._attr_unique_id = f"{self.machine_id}_water_tank_empty"
 
     @property
+    @override
     def is_on(self) -> bool:
         """Return whether the water tank is empty."""
         return (

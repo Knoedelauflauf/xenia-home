@@ -2,7 +2,7 @@
 
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
-from typing import Any, Final
+from typing import Any, Final, override
 
 from homeassistant.components.number import (
     DOMAIN as NUMBER_DOMAIN,
@@ -121,10 +121,12 @@ class XeniaNumber(XeniaEntity, NumberEntity):
         self._attr_unique_id = f"{self.machine_id}_{entity_description.key}"
 
     @property
+    @override
     def native_value(self) -> float:
         """Return the setpoint."""
         return self.entity_description.value_fn(self.coordinator.data)
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         """Write the setpoint, then poll the machine even if the write failed."""
         try:
@@ -153,6 +155,7 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
         self._attr_native_step = options.get(CONF_WEIGHT_STEP, DEFAULT_WEIGHT_STEP)
 
     @property
+    @override
     def native_value(self) -> float | None:
         """Return the weight target parsed from the managed script."""
         instruction = self.coordinator.data.managed_script_instruction
@@ -164,6 +167,7 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
             return None
 
     @property
+    @override
     def available(self) -> bool:
         """Return whether the managed script could be read."""
         return (
@@ -172,12 +176,14 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
         )
 
     @property
+    @override
     def device_info(self) -> DeviceInfo:
         """Return the device info of the machine."""
         return build_device_info(
             self.coordinator.config_entry, self.coordinator.data.machine
         )
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         """Rewrite the weight target in the managed script on the machine."""
         script_id = self.coordinator.config_entry.options[CONF_MANAGED_SCRIPT_ID]

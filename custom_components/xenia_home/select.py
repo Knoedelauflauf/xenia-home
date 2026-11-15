@@ -1,5 +1,7 @@
 """Select platform for the Xenia espresso machine."""
 
+from typing import override
+
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
@@ -69,10 +71,12 @@ class PowerOnBehaviorSelect(XeniaEntity, SelectEntity, RestoreEntity):
         self._attr_unique_id = f"{self.machine_id}_power_on_behavior"
 
     @property
+    @override
     def available(self) -> bool:
         """A local preference; an unavailable state would be restored as such."""
         return True
 
+    @override
     async def async_added_to_hass(self) -> None:
         """Restore the last selected option."""
         await super().async_added_to_hass()
@@ -81,17 +85,20 @@ class PowerOnBehaviorSelect(XeniaEntity, SelectEntity, RestoreEntity):
             self.runtime_data.power_on_behavior = PowerOnBehavior(state.state)
 
     @callback
+    @override
     def async_entity_id_changed(self, old_entity_id: str) -> None:
         """Keep the entity when its entity_id changes; nothing is keyed on it."""
         # Called from Home Assistant 2026.11 on, which only counts the hook of
         # the class that overrides async_added_to_hass, so XeniaEntity's is not enough.
-        super().async_entity_id_changed(old_entity_id)  # type: ignore[misc]
+        super().async_entity_id_changed(old_entity_id)
 
     @property
+    @override
     def current_option(self) -> str:
         """Return the power on behavior."""
         return self.runtime_data.power_on_behavior
 
+    @override
     async def async_select_option(self, option: str) -> None:
         """Set the power on behavior."""
         self.runtime_data.power_on_behavior = PowerOnBehavior(option)
@@ -109,11 +116,13 @@ class ScriptSelect(XeniaEntity, SelectEntity):
         self._attr_unique_id = f"{self.machine_id}_script"
 
     @property
+    @override
     def options(self) -> list[str]:
         """Return the script titles."""
         return list(self.runtime_data.config_coordinator.data.scripts.values())
 
     @property
+    @override
     def current_option(self) -> str | None:
         """Return the selected script."""
         script_id = self.runtime_data.selected_script_id
@@ -121,6 +130,7 @@ class ScriptSelect(XeniaEntity, SelectEntity):
             return None
         return self.runtime_data.config_coordinator.data.scripts.get(script_id)
 
+    @override
     async def async_select_option(self, option: str) -> None:
         """Select a script."""
         self.runtime_data.selected_script_id = _script_id(
@@ -146,16 +156,19 @@ class SwitchConfigSelect(XeniaEntity, SelectEntity):
         self._attr_unique_id = f"{self.machine_id}_{description.key}"
 
     @property
+    @override
     def options(self) -> list[str]:
         """Return the script titles."""
         return list(self.runtime_data.config_coordinator.data.scripts.values())
 
     @property
+    @override
     def current_option(self) -> str | None:
         """Return the assigned script."""
         data = self.runtime_data.config_coordinator.data
         return data.scripts.get(data.switches.get(self.entity_description.key, 0))
 
+    @override
     async def async_select_option(self, option: str) -> None:
         """Assign a script to the switch."""
         config_coordinator = self.runtime_data.config_coordinator

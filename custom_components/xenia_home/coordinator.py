@@ -4,6 +4,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 import logging
+from typing import override
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -98,6 +99,7 @@ class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
         )
         self.xenia = xenia
 
+    @override
     async def _async_update_data(self) -> XeniaCoordinatorData:
         """Fetch data and adjust the polling interval based on machine state."""
         try:
@@ -141,6 +143,7 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
         )
         self.xenia = xenia
 
+    @override
     async def _async_update_data(self) -> XeniaConfigData:
         """Fetch config data: machine info, scripts, switches, and managed script."""
         try:

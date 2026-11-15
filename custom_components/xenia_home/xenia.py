@@ -334,13 +334,17 @@ class Xenia:
 
     async def get_switches(self) -> dict[str, int]:
         """Return the switch settings, including the switch-to-script assignments."""
-        return _json(await self._get("switches"))
+        switches: dict[str, int] = _json(await self._get("switches"))
+        return switches
 
     async def read_script(self, script_id: int) -> dict[str, str]:
         """Return a script as {"Content": instruction, "Title": title}."""
         file_name = f"{script_id:03d}"
         data = f'{{"FILE_NAME":"{file_name}"}}'
-        return _json(await self._post("scripts/read", data, timeout=10))
+        script: dict[str, str] = _json(
+            await self._post("scripts/read", data, timeout=10)
+        )
+        return script
 
     async def create_script(self, name: str, instruction: str) -> None:
         """Create a new script on the machine."""

@@ -1,7 +1,7 @@
 """Config flow for the Xenia espresso machine integration."""
 
 import logging
-from typing import Any
+from typing import Any, override
 
 from homeassistant.config_entries import (
     ConfigEntry,
@@ -71,10 +71,12 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
 
     @staticmethod
     @callback
+    @override
     def async_get_options_flow(config_entry: ConfigEntry) -> XeniaOptionsFlow:
         """Return the options flow."""
         return XeniaOptionsFlow()
 
+    @override
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:

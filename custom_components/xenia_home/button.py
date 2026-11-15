@@ -1,5 +1,7 @@
 """Button platform for the Xenia espresso machine."""
 
+from typing import override
+
 from homeassistant.components.button import ButtonEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
@@ -35,6 +37,7 @@ class XeniaExecuteScriptButton(XeniaEntity, ButtonEntity):
         super().__init__(coordinator)
         self._attr_unique_id = f"{self.machine_id}_execute_script"
 
+    @override
     async def async_press(self) -> None:
         """Run the selected script."""
         script_id = self.runtime_data.selected_script_id
@@ -56,6 +59,7 @@ class XeniaStopScriptButton(XeniaEntity, ButtonEntity):
         super().__init__(coordinator)
         self._attr_unique_id = f"{self.machine_id}_stop_script"
 
+    @override
     async def async_press(self) -> None:
         """Stop the running script."""
         async with machine_write():

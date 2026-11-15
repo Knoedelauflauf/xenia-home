@@ -1,7 +1,7 @@
 """Switch platform for the Xenia espresso machine."""
 
 from collections.abc import Coroutine
-from typing import Any
+from typing import Any, override
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.core import HomeAssistant
@@ -58,14 +58,17 @@ class XeniaPowerSwitch(XeniaSwitch):
     entity_description = SwitchEntityDescription(key="power", translation_key="power")
 
     @property
+    @override
     def is_on(self) -> bool:
         """Return whether the machine is on."""
         return self.coordinator.data.overview.ma_status in ACTIVE_STATUSES
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the machine on."""
         await self._async_turn_machine_on()
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the machine off."""
         await self._async_write(self.coordinator.xenia.machine_turn_off())
@@ -79,6 +82,7 @@ class XeniaEcoSwitch(XeniaSwitch):
     )
 
     @property
+    @override
     def available(self) -> bool:
         """Return whether the machine is on or in eco mode."""
         status = self.coordinator.data.overview.ma_status
@@ -87,14 +91,17 @@ class XeniaEcoSwitch(XeniaSwitch):
         )
 
     @property
+    @override
     def is_on(self) -> bool:
         """Return whether the machine is in eco mode."""
         return self.coordinator.data.overview.ma_status is MachineStatus.ECO
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enter eco mode."""
         await self._async_write(self.coordinator.xenia.machine_set_eco())
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Leave eco mode by turning the machine on."""
         await self._async_turn_machine_on()
@@ -108,6 +115,7 @@ class XeniaSteamBoilerSwitch(XeniaSwitch):
     )
 
     @property
+    @override
     def available(self) -> bool:
         """Return whether the machine is on."""
         return (
@@ -116,14 +124,17 @@ class XeniaSteamBoilerSwitch(XeniaSwitch):
         )
 
     @property
+    @override
     def is_on(self) -> bool:
         """Return whether the steam boiler is on."""
         return self.coordinator.data.overview.sb_status is SteamBoilerStatus.ON
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the steam boiler on."""
         await self._async_write(self.coordinator.xenia.sb_turn_on())
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the steam boiler off."""
         await self._async_write(self.coordinator.xenia.sb_turn_off())

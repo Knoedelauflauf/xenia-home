@@ -1,5 +1,7 @@
 """Base entity for the Xenia espresso machine."""
 
+from typing import override
+
 from homeassistant.core import callback
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -40,6 +42,7 @@ class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
 
     _attr_has_entity_name = True
 
+    @override
     async def async_added_to_hass(self) -> None:
         """Also listen to the config coordinator."""
         await super().async_added_to_hass()
@@ -67,6 +70,7 @@ class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
         return self.coordinator.config_entry.runtime_data
 
     @property
+    @override
     def device_info(self) -> DeviceInfo:
         """Return the device info of the machine."""
         return build_device_info(

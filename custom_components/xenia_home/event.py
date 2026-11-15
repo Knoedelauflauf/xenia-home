@@ -3,7 +3,7 @@
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 import logging
-from typing import Any
+from typing import Any, override
 
 from homeassistant.components.event import EventEntity
 from homeassistant.core import HomeAssistant, callback
@@ -81,6 +81,7 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
         self._brew_end_time: datetime | None = None
 
     @callback
+    @override
     def _handle_coordinator_update(self) -> None:
         """Follow the brewing state of the machine."""
         if not self.coordinator.last_update_success:
@@ -202,6 +203,7 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
         )
 
     @property
+    @override
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return whether a shot is being brewed."""
         return {"is_brewing": self._is_brewing}

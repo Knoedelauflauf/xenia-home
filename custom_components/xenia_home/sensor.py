@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Final
+from typing import Final, override
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -171,6 +171,7 @@ class XeniaSensor(XeniaEntity, SensorEntity):
         self._attr_unique_id = f"{self.machine_id}_{entity_description.key}"
 
     @property
+    @override
     def native_value(self) -> StateType | datetime:
         """Return the sensor value, or None for zeroed cumulative counters."""
         value = self.entity_description.value_fn(self.coordinator.data)
