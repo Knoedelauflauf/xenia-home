@@ -47,6 +47,7 @@
     },
     "abort": {
       "already_configured": "This espresso machine is already configured",
+      "already_in_progress": "The configuration of this espresso machine is already in progress",
       "reconfigure_successful": "Reconfiguration was successful",
       "unique_id_mismatch": "This host belongs to a different espresso machine. Add it as a new machine instead."
     }
@@ -225,7 +226,7 @@
       "message": "Either script_id or script_name is required."
     },
     "script_not_found": {
-      "message": "Script '{script_name}' was not found on the machine."
+      "message": "Script {script_name} was not found on the machine."
     },
     "update_failed": {
       "message": "Fetching data from the Xenia espresso machine failed: {error}"

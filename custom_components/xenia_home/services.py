@@ -20,7 +20,9 @@ SERVICE_EXECUTE_SCRIPT_SCHEMA = probatio.Schema(
         probatio.Optional(ATTR_CONFIG_ENTRY_ID): ConfigEntrySelector(
             {"integration": XENIA_DOMAIN}
         ),
-        probatio.Optional(ATTR_SCRIPT_ID): probatio.Coerce(int),
+        probatio.Optional(ATTR_SCRIPT_ID): probatio.All(
+            probatio.Coerce(int), probatio.Range(min=1)
+        ),
         probatio.Optional(ATTR_SCRIPT_NAME): str,
     }
 )

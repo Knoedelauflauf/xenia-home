@@ -20,6 +20,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+import probatio
 import pytest
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -403,6 +404,19 @@ async def test_execute_script(
     """The action runs a script by id or by name; the id wins."""
     await _execute_script(hass, data)
     assert mock_xenia_api.bodies("post", "scripts/execute") == [f'{{"ID":{script_id}}}']
+
+
+@pytest.mark.parametrize("script_id", [0, -1])
+async def test_execute_script_rejects_ids_below_one(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    script_id: int,
+) -> None:
+    """Script ids start at 1, as the action's selector shows."""
+    with pytest.raises(probatio.Invalid):
+        await _execute_script(hass, {ATTR_SCRIPT_ID: script_id})
+    assert mock_xenia_api.bodies("post", "scripts/execute") == []
 
 
 async def test_execute_script_by_a_shared_name(
