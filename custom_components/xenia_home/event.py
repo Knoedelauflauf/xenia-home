@@ -83,11 +83,16 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Follow the brewing state of the machine."""
+        if not self.coordinator.last_update_success:
+            # The data is the last answer of the machine, not a new sample.
+            self.async_write_ha_state()
+            return
         is_currently_brewing = (
             self.coordinator.data.overview.ma_status is MachineStatus.BREWING
         )
         if is_currently_brewing and not self._is_brewing:
-            self._cancel_afterflow()
+            if self._afterflow_until is not None:
+                self._complete_shot_tracking()
             self._start_shot_tracking()
         elif is_currently_brewing and self._is_brewing:
             self._collect_shot_data()
@@ -123,10 +128,6 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
             seconds=self._afterflow_seconds
         )
 
-    def _cancel_afterflow(self) -> None:
-        """Stop the afterflow window."""
-        self._afterflow_until = None
-
     def _collect_shot_data(self) -> None:
         """Record one sample of the curves."""
         assert self._shot_start_time is not None
@@ -161,7 +162,7 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
         """Fire shot_completed and store the shot, unless it was too short."""
         assert self._shot_start_time is not None
         assert self._brew_end_time is not None
-        self._cancel_afterflow()
+        self._afterflow_until = None
 
         duration = (self._brew_end_time - self._shot_start_time).total_seconds()
         if duration < self._min_shot_seconds:

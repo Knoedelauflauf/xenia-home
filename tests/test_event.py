@@ -8,6 +8,7 @@ from syrupy.assertion import SnapshotAssertion
 
 from custom_components.xenia_home.xenia import MachineStatus
 
+from tests.conftest import MockXeniaApi
 from tests.fixtures.api_responses import OVERVIEW_PAYLOAD
 
 TRACKER = "event.xenia_espresso_machine_shot_tracker"
@@ -86,10 +87,10 @@ async def test_short_shot_is_ignored(
     assert init_integration.runtime_data.shot_store.list_shots() == []
 
 
-async def test_brew_during_afterflow_starts_a_new_shot(
-    hass: HomeAssistant, poll
+async def test_brew_during_afterflow_completes_the_shot_and_starts_a_new_one(
+    hass: HomeAssistant, init_integration: MockConfigEntry, poll
 ) -> None:
-    """Brewing again within the afterflow starts a new shot with empty curves."""
+    """Brewing again within the afterflow keeps the first shot and starts a new one."""
     await brew(poll, 15)
     await poll(MA_STATUS=ON, SCALE_WEIGHT=22.5)
     await brew(poll, 12)
@@ -99,6 +100,29 @@ async def test_brew_during_afterflow_starts_a_new_shot(
     assert shot is not None
     assert shot["duration_seconds"] == 13.0
     assert shot["weights"][0] == 1.5
+    stored = init_integration.runtime_data.shot_store.list_shots()
+    assert [s["duration_seconds"] for s in stored] == [13.0, 16.0]
+
+
+async def test_failed_poll_adds_no_sample(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    poll,
+) -> None:
+    """A poll the machine does not answer is not recorded as a sample."""
+    await brew(poll, 12)
+    mock_xenia_api.override("get", "overview", exc=TimeoutError())
+    await poll()
+    mock_xenia_api.restore("get", "overview")
+    await poll(MA_STATUS=BREWING, SCALE_WEIGHT=19.5)
+    await end_brew(poll, weight=20.0)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert 13.0 not in shot["timestamps"]
+    assert shot["timestamps"][11:13] == [12.0, 14.0]
+    assert len(shot["weights"]) == len(shot["timestamps"])
 
 
 @pytest.mark.parametrize(
