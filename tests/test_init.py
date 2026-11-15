@@ -405,6 +405,19 @@ async def test_execute_script(
     assert mock_xenia_api.bodies("post", "scripts/execute") == [f'{{"ID":{script_id}}}']
 
 
+async def test_execute_script_by_a_shared_name(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+) -> None:
+    """Scripts sharing a name are run by the name with the id the select shows."""
+    mock_xenia_api.set_scripts({12: "Espresso"})
+    await hass.config_entries.async_reload(init_integration.entry_id)
+    await hass.async_block_till_done()
+    await _execute_script(hass, {ATTR_SCRIPT_NAME: "Espresso (12)"})
+    with pytest.raises(ServiceValidationError):
+        await _execute_script(hass, {ATTR_SCRIPT_NAME: "Espresso"})
+    assert mock_xenia_api.bodies("post", "scripts/execute") == ['{"ID":12}']
+
+
 @pytest.mark.parametrize(
     ("data", "translation_key"),
     [

@@ -7,7 +7,7 @@ from homeassistant.components.select import (
 )
 from homeassistant.const import ATTR_ENTITY_ID, ATTR_OPTION
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -64,17 +64,35 @@ async def test_execute_runs_the_selected_script(
 
 
 @pytest.mark.parametrize("title", [None, "None"])
-async def test_execute_without_script_does_nothing(
+async def test_execute_without_script_raises(
     hass: HomeAssistant,
     init_integration: MockConfigEntry,
     mock_xenia_api: MockXeniaApi,
     title: str | None,
 ) -> None:
-    """Without a selected script, or with "None", nothing runs."""
+    """Without a selected script, or with "None", nothing runs and the error says why."""
     if title is not None:
         await _select_script(hass, title)
-    await _press(hass, EXECUTE)
+    with pytest.raises(ServiceValidationError) as exc_info:
+        await _press(hass, EXECUTE)
+    assert exc_info.value.translation_key == "no_script_selected"
     assert mock_xenia_api.bodies("post", "scripts/execute") == []
+
+
+async def test_scripts_sharing_a_name_are_told_apart(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+) -> None:
+    """A user script named like a built-in one is offered with its id and runs."""
+    mock_xenia_api.set_scripts({12: "Espresso"})
+    await hass.config_entries.async_reload(init_integration.entry_id)
+    await hass.async_block_till_done()
+    options = hass.states.get(SCRIPT_SELECT).attributes["options"]
+    assert options == ["None", "Espresso (1)", "Espresso endless", "Espresso (12)"]
+
+    await _select_script(hass, "Espresso (12)")
+    await _press(hass, EXECUTE)
+    assert hass.states.get(SCRIPT_SELECT).state == "Espresso (12)"
+    assert mock_xenia_api.bodies("post", "scripts/execute") == ['{"ID":12}']
 
 
 async def test_stop_stops_the_script(

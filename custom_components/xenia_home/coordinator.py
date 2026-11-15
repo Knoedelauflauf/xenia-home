@@ -1,5 +1,6 @@
 """Data update coordinators for the Xenia espresso machine."""
 
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 import logging
@@ -54,6 +55,7 @@ class XeniaConfigData:
     """Slowly changing data of the machine."""
 
     machine: XeniaMachineData
+    # Script titles, with the id added to titles several scripts share.
     scripts: dict[int, str] = field(default_factory=dict)
     switches: dict[str, int] = field(default_factory=dict)
     managed_script_instruction: str | None = None
@@ -68,6 +70,7 @@ class XeniaRuntimeData:
     config_coordinator: XeniaConfigCoordinator
     shot_store: XeniaShotStore
     power_on_behavior: PowerOnBehavior = PowerOnBehavior.STEAM_OFF
+    selected_script_id: int | None = None
 
 
 type XeniaConfigEntry = ConfigEntry[XeniaRuntimeData]
@@ -120,7 +123,6 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
     """Poll the machine info, scripts, switches and managed script hourly."""
 
     config_entry: XeniaConfigEntry
-    selected_script_id: int | None = None
 
     def __init__(
         self,
@@ -148,7 +150,12 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
             self.update_interval = POLL_INTERVAL_CONFIG_RETRY
             raise update_failed(err) from err
         self.update_interval = POLL_INTERVAL_CONFIG
-        scripts = {**BUILTIN_SCRIPTS, **user_scripts}
+        titles = {**BUILTIN_SCRIPTS, **user_scripts}
+        counts = Counter(titles.values())
+        scripts = {
+            script_id: title if counts[title] == 1 else f"{title} ({script_id})"
+            for script_id, title in titles.items()
+        }
 
         managed_instruction: str | None = None
         managed_name: str | None = None

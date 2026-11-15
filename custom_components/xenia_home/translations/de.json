@@ -14,7 +14,7 @@
         },
         "script_name": {
           "name": "Skriptname",
-          "description": "Der Name des auszuführenden Skripts. Wird ignoriert, wenn eine Skript-ID angegeben ist."
+          "description": "Der Name des auszuführenden Skripts, wie ihn die Skriptauswahl zeigt. Wird ignoriert, wenn eine Skript-ID angegeben ist."
         }
       }
     }
@@ -238,6 +238,9 @@
     },
     "duplicate_machine": {
       "message": "Diese Espressomaschine ist bereits als {title} eingerichtet. Lösche diesen doppelten Eintrag."
+    },
+    "no_script_selected": {
+      "message": "Wähle zuerst ein Skript in der Skriptauswahl."
     }
   },
   "selector": {

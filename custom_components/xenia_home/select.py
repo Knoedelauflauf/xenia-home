@@ -115,17 +115,15 @@ class ScriptSelect(XeniaEntity, SelectEntity):
     @property
     def current_option(self) -> str | None:
         """Return the selected script."""
-        config_coordinator = self.runtime_data.config_coordinator
-        script_id = config_coordinator.selected_script_id
+        script_id = self.runtime_data.selected_script_id
         if script_id is None:
             return None
-        return config_coordinator.data.scripts.get(script_id)
+        return self.runtime_data.config_coordinator.data.scripts.get(script_id)
 
     async def async_select_option(self, option: str) -> None:
         """Select a script."""
-        config_coordinator = self.runtime_data.config_coordinator
-        config_coordinator.selected_script_id = _script_id(
-            config_coordinator.data.scripts, option
+        self.runtime_data.selected_script_id = _script_id(
+            self.runtime_data.config_coordinator.data.scripts, option
         )
         self.async_write_ha_state()
 

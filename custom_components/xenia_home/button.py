@@ -2,8 +2,10 @@
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from .const import XENIA_DOMAIN
 from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
 from .entity import XeniaEntity
 from .errors import machine_write
@@ -34,11 +36,14 @@ class XeniaExecuteScriptButton(XeniaEntity, ButtonEntity):
         self._attr_unique_id = f"{self.machine_id}_execute_script"
 
     async def async_press(self) -> None:
-        """Run the selected script, if one is selected."""
-        script_id = self.runtime_data.config_coordinator.selected_script_id
-        if script_id:
-            async with machine_write():
-                await self.coordinator.xenia.execute_script(script_id)
+        """Run the selected script."""
+        script_id = self.runtime_data.selected_script_id
+        if not script_id:
+            raise ServiceValidationError(
+                translation_domain=XENIA_DOMAIN, translation_key="no_script_selected"
+            )
+        async with machine_write():
+            await self.coordinator.xenia.execute_script(script_id)
 
 
 class XeniaStopScriptButton(XeniaEntity, ButtonEntity):

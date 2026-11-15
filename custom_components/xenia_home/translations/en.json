@@ -14,7 +14,7 @@
         },
         "script_name": {
           "name": "Script name",
-          "description": "The name of the script to execute. Ignored if script ID is provided."
+          "description": "The name of the script to execute, as the script select shows it. Ignored if script ID is provided."
         }
       }
     }
@@ -238,6 +238,9 @@
     },
     "duplicate_machine": {
       "message": "This espresso machine is already set up as {title}. Delete this duplicate entry."
+    },
+    "no_script_selected": {
+      "message": "Select a script in the script select first."
     }
   },
   "selector": {
