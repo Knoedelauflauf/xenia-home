@@ -30,6 +30,7 @@ from .const import (
     XENIA_DOMAIN,
 )
 from .errors import REQUEST_ERRORS
+from .migration import MAC_MINOR_VERSION, async_migrate_to_mac
 from .script_parser import COMMAND_WEIGHT_TARGET, parse_instruction
 from .xenia import Xenia
 
@@ -53,7 +54,7 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
     """Add a Xenia machine by host, or change the host of one."""
 
     VERSION = 1
-    MINOR_VERSION = 2
+    MINOR_VERSION = MAC_MINOR_VERSION
 
     @staticmethod
     @callback
@@ -89,9 +90,14 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
             if machine_id := await _async_get_machine_id(self.hass, host):
-                # An entry not migrated yet is keyed on its host; its reload
-                # migrates it to the machine's MAC address.
-                if entry.minor_version >= 2:
+                if entry.minor_version < MAC_MINOR_VERSION:
+                    # Its ids still hold the old host, which is about to change.
+                    if self.hass.config_entries.async_entry_for_domain_unique_id(
+                        XENIA_DOMAIN, machine_id
+                    ):
+                        return self.async_abort(reason="already_configured")
+                    await async_migrate_to_mac(self.hass, entry, machine_id)
+                else:
                     await self.async_set_unique_id(machine_id)
                     self._abort_if_unique_id_mismatch()
                 return self.async_update_reload_and_abort(

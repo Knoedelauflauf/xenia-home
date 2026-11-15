@@ -212,6 +212,45 @@ async def test_migration_keys_the_machine_on_its_mac(
     assert "switch.xenia_espresso_machine_power" not in entities
 
 
+async def test_migration_after_a_host_change_keeps_the_live_entities(
+    hass: HomeAssistant,
+    device_registry: dr.DeviceRegistry,
+    entity_registry: er.EntityRegistry,
+) -> None:
+    """Up to 0.7.0 a host change created new ids; those are the ones migrated.
+
+    The entities left behind under the earlier host stay as they are.
+    """
+    entry = _add_entry_of_an_earlier_release(hass, device_registry, entity_registry)
+    hass.config_entries.async_update_entry(entry, unique_id="old.host")
+    stale_device = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id, identifiers={(XENIA_DOMAIN, "old.host")}
+    )
+    entity_registry.async_get_or_create(
+        "sensor",
+        XENIA_DOMAIN,
+        "old.host_brew_group_temperature",
+        config_entry=entry,
+        device_id=stale_device.id,
+        suggested_object_id="stale_group_temp",
+    )
+    devices_before = _ids(device_registry, entity_registry, entry)[0]
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.unique_id == MAC
+    devices, entities = _ids(device_registry, entity_registry, entry)
+    assert entities["sensor.group_temp"] == f"{MAC}_brew_group_temperature"
+    assert entities["switch.coffee_power"] == f"{XENIA_DOMAIN}_power_{MAC}"
+    assert entities["sensor.stale_group_temp"] == "old.host_brew_group_temperature"
+    assert hass.states.get("sensor.group_temp").state != STATE_UNAVAILABLE
+    assert devices.keys() == devices_before.keys()
+    assert devices[stale_device.id] == {(XENIA_DOMAIN, "old.host")}
+    assert "sensor.xenia_espresso_machine_brewgroup_temperature" not in entities
+
+
 async def test_migration_waits_for_the_machine(
     hass: HomeAssistant,
     device_registry: dr.DeviceRegistry,
@@ -271,6 +310,36 @@ async def test_reconfigure_moves_an_entry_waiting_for_migration(
     assert _ids(device_registry, entity_registry, entry)[1]["sensor.group_temp"] == (
         f"{MAC}_brew_group_temperature"
     )
+
+
+async def test_reconfigure_to_a_configured_machine_aborts(
+    hass: HomeAssistant,
+    device_registry: dr.DeviceRegistry,
+    entity_registry: er.EntityRegistry,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """An entry waiting for migration cannot be moved onto a machine set up already."""
+    entry = _add_entry_of_an_earlier_release(
+        hass, device_registry, entity_registry, host="192.168.1.20"
+    )
+    mock_xenia_api.for_host("192.168.1.20").override(
+        "get", "overview_single", exc=OSError()
+    )
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    ids_before = _ids(device_registry, entity_registry, entry)
+
+    result = await entry.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_HOST: "xenia.local"}
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert entry.data == {CONF_HOST: "192.168.1.20"}
+    assert entry.unique_id == "192.168.1.20"
+    assert _ids(device_registry, entity_registry, entry) == ids_before
 
 
 async def test_migration_of_a_second_entry_for_the_machine_fails(

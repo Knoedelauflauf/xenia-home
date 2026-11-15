@@ -64,7 +64,7 @@ self.runtime_data.config_coordinator.data  # XeniaConfigData (slow)
 
 Device identifiers and entity unique ids are keyed on `machine_id(entry)`, the config entry's unique id: the formatted `MA_MAC` of `/api/v2/overview_single`. Every firmware reports it, unlike `MA_SN`. The user step updates the host of an entry whose machine is added again; the reconfigure step aborts with `unique_id_mismatch` for another machine. Never build ids from `entry.data[CONF_HOST]`.
 
-Entries before config entry version 1.2 were keyed on their host. `async_migrate_entry` reads the MAC and rewrites the entry's unique id, the device identifier and the entity unique ids in place, so device ids and entity ids stay. It raises `ConfigEntryNotReady` while the machine is offline and `ConfigEntryError` when another entry already has that MAC. Reconfiguring such an entry skips the mismatch check, since its reload migrates it.
+Entries before config entry version 1.2 have ids built from the host in `entry.data[CONF_HOST]` at the time each entity was created; after a host change in those releases, the entities of the earlier host were left behind. `migration.async_migrate_to_mac` rewrites the ids that hold the current host, the matching device identifier and the entry's unique id in place, so device ids and entity ids stay; ids of an earlier host are left untouched. `async_migrate_entry` raises `ConfigEntryNotReady` while the machine is offline and `ConfigEntryError` when another entry already has that MAC. Reconfiguring such an entry runs the migration before it replaces the host, and aborts with `already_configured` when the new host is a machine set up already.
 
 ```python
 self._attr_unique_id = f"{self.machine_id}_{description.key}"
