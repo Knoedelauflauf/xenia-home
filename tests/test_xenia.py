@@ -219,6 +219,12 @@ async def test_get_scripts(
             '{"script_id":5,"Edit":"Enabled","switch":null,"script":"none",'
             '"name":"Name","instruction":"1;7;"}',
         ),
+        (
+            lambda x: x.update_script(5, 'Kaffee "Crème" \\ 1', "1;7;"),
+            "scripts/create",
+            '{"script_id":5,"Edit":"Enabled","switch":null,"script":"none",'
+            '"name":"Kaffee \\"Crème\\" \\\\ 1","instruction":"1;7;"}',
+        ),
     ],
 )
 async def test_writes(

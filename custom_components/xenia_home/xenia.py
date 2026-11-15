@@ -214,6 +214,21 @@ def _json(body: bytes) -> Any:
         raise ClientPayloadError(f"Invalid JSON from the machine: {err}") from err
 
 
+def _script_body(script_id: int | None, name: str, instruction: str) -> str:
+    return json.dumps(
+        {
+            "script_id": script_id,
+            "Edit": "Disabled" if script_id is None else "Enabled",
+            "switch": None,
+            "script": "none",
+            "name": name,
+            "instruction": instruction,
+        },
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+
+
 class Xenia:
     """Async HTTP client for the Xenia espresso machine local API (v2)."""
 
@@ -338,19 +353,11 @@ class Xenia:
 
     async def create_script(self, name: str, instruction: str) -> None:
         """Create a new script on the machine."""
-        data = (
-            '{"script_id":null,"Edit":"Disabled","switch":null,'
-            f'"script":"none","name":"{name}","instruction":"{instruction}"}}'
-        )
-        await self._post("scripts/create", data)
+        await self._post("scripts/create", _script_body(None, name, instruction))
 
     async def update_script(self, script_id: int, name: str, instruction: str) -> None:
         """Update an existing script on the machine."""
-        data = (
-            f'{{"script_id":{script_id},"Edit":"Enabled","switch":null,'
-            f'"script":"none","name":"{name}","instruction":"{instruction}"}}'
-        )
-        await self._post("scripts/create", data)
+        await self._post("scripts/create", _script_body(script_id, name, instruction))
 
     async def set_switch(self, switch_key: str, script_id: int) -> None:
         """Assign a script to a switch."""
