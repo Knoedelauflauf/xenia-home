@@ -9,8 +9,6 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from syrupy.assertion import SnapshotAssertion
 
-from custom_components.xenia_home.xenia import MachineStatus
-
 from tests import setup_integration
 from tests.conftest import MockXeniaApi
 
@@ -142,18 +140,30 @@ async def test_status(
     assert hass.states.get(STATUS).state == expected
 
 
+async def test_shot_running_at_load_is_timed_from_the_load(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """A shot that is already brewing when the integration loads starts at the load."""
+    mock_xenia_api.set_overview(MA_STATUS=3)
+    await setup_integration(hass, mock_config_entry)
+    started = dt_util.parse_datetime(hass.states.get(SHOT_START).state)
+    assert started == dt_util.utcnow().replace(microsecond=0)
+
+
 async def test_shot_start_time_follows_the_shot(
     hass: HomeAssistant, init_integration: MockConfigEntry, poll
 ) -> None:
     """The shot start time is set while brewing and cleared after."""
     assert hass.states.get(SHOT_START).state == STATE_UNKNOWN
 
-    await poll(MA_STATUS=int(MachineStatus.BREWING))
+    await poll(MA_STATUS=3)
     started = hass.states.get(SHOT_START).state
     assert dt_util.parse_datetime(started) == dt_util.utcnow().replace(microsecond=0)
 
-    await poll(MA_STATUS=int(MachineStatus.BREWING))
+    await poll(MA_STATUS=3)
     assert hass.states.get(SHOT_START).state == started
 
-    await poll(MA_STATUS=int(MachineStatus.ON))
+    await poll(MA_STATUS=1)
     assert hass.states.get(SHOT_START).state == STATE_UNKNOWN

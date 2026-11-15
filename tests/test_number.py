@@ -121,6 +121,23 @@ async def test_weight_target(
     assert state.attributes["unit_of_measurement"] == "g"
 
 
+async def test_weight_target_range_defaults(
+    hass: HomeAssistant,
+    mock_xenia_api: MockXeniaApi,
+    mock_config_entry_factory_with_options,
+) -> None:
+    """Without a configured range the weight target goes from 25 to 50 g in 0.5 g steps."""
+    mock_xenia_api.set_script(17, "1;13;27 45;7;", "Test Shot")
+    entry = mock_config_entry_factory_with_options(
+        {"weight_management_enabled": True, "managed_script_id": 17}
+    )
+    await setup_integration(hass, entry)
+    state = hass.states.get(WEIGHT)
+    assert state.attributes["min"] == 25.0
+    assert state.attributes["max"] == 50.0
+    assert state.attributes["step"] == 0.5
+
+
 async def test_set_weight_target_rewrites_the_script(
     hass: HomeAssistant, init_with_weight: MockConfigEntry, mock_xenia_api: MockXeniaApi
 ) -> None:

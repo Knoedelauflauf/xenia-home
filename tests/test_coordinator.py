@@ -4,9 +4,10 @@ from datetime import timedelta
 
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.const import ATTR_ENTITY_ID, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.setup import async_setup_component
 import pytest
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -85,6 +86,38 @@ async def test_poll_interval_changes_with_the_machine(
     for _ in range(3):
         await _pass(hass, freezer, 1)
     assert len(mock_xenia_api.bodies("get", "overview")) == polls + 3
+
+
+async def test_polling_can_be_left_to_automations(
+    hass: HomeAssistant,
+    mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """With polling disabled the machine is only read on homeassistant.update_entity."""
+    await async_setup_component(hass, "homeassistant", {})
+    entry = MockConfigEntry(
+        domain="xenia_home",
+        title="xenia.local",
+        unique_id="aa:bb:cc:dd:ee:ff",
+        minor_version=2,
+        data={"host": "xenia.local"},
+        pref_disable_polling=True,
+    )
+    await setup_integration(hass, entry)
+    polls = len(mock_xenia_api.bodies("get", "overview"))
+    for _ in range(10):
+        await _pass(hass, freezer, 1)
+    assert len(mock_xenia_api.bodies("get", "overview")) == polls
+
+    mock_xenia_api.set_overview(BG_SENS_TEMP_A=94.5)
+    await hass.services.async_call(
+        "homeassistant",
+        "update_entity",
+        {ATTR_ENTITY_ID: TEMPERATURE},
+        blocking=True,
+    )
+    assert len(mock_xenia_api.bodies("get", "overview")) == polls + 1
+    assert hass.states.get(TEMPERATURE).state == "94.5"
 
 
 @pytest.mark.parametrize("path", ["overview", "overview_single"])

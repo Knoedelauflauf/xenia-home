@@ -224,6 +224,11 @@ async def test_options_enable_weight_management(
         result["flow_id"], {CONF_MANAGED_SCRIPT_ID: "10"}
     )
     assert result["step_id"] == "configure_weight"
+    assert {str(key): key.default() for key in result["data_schema"].schema} == {
+        "weight_min": 25.0,
+        "weight_max": 50.0,
+        "weight_step": 0.5,
+    }
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], WEIGHT_SETTINGS
     )
