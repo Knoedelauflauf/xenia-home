@@ -233,6 +233,9 @@
     "managed_script_missing": {
       "message": "Das verwaltete Skript {script_id} existiert auf der Maschine nicht mehr. Wähle in den Optionen der Gewichtssteuerung ein anderes Skript."
     },
+    "managed_script_unreadable": {
+      "message": "Das verwaltete Skript {script_id} enthält Befehle, die Home Assistant nicht lesen kann. Sein Zielgewicht lässt sich deshalb nicht ändern."
+    },
     "duplicate_machine": {
       "message": "Diese Espressomaschine ist bereits als {title} eingerichtet. Lösche diesen doppelten Eintrag."
     }

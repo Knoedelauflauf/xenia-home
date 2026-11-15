@@ -145,6 +145,21 @@ async def test_set_weight_target_of_deleted_script(
     assert mock_xenia_api.bodies("post", "scripts/create") == []
 
 
+async def test_weight_target_of_unreadable_script(
+    hass: HomeAssistant, init_with_weight: MockConfigEntry, mock_xenia_api: MockXeniaApi
+) -> None:
+    """A script with commands the parser does not know shows no target and is kept."""
+    mock_xenia_api.set_script(17, "1;13;x;27 45;7;", "Test Shot")
+    await hass.config_entries.async_reload(init_with_weight.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get(WEIGHT).state == "unknown"
+
+    with pytest.raises(HomeAssistantError) as exc_info:
+        await _set(hass, WEIGHT, 40.0)
+    assert exc_info.value.translation_key == "managed_script_unreadable"
+    assert mock_xenia_api.bodies("post", "scripts/create") == []
+
+
 @pytest.mark.parametrize("path", ["scripts/read", "scripts/create"])
 async def test_refused_weight_target_raises(
     hass: HomeAssistant,

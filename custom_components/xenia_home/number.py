@@ -158,7 +158,10 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
         instruction = self.coordinator.data.managed_script_instruction
         if instruction is None:
             return None
-        return get_weight_target(instruction)
+        try:
+            return get_weight_target(instruction)
+        except ValueError:
+            return None
 
     @property
     def available(self) -> bool:
@@ -186,10 +189,16 @@ class XeniaWeightNumber(CoordinatorEntity[XeniaConfigCoordinator], NumberEntity)
                 translation_key="managed_script_missing",
                 translation_placeholders={"script_id": str(script_id)},
             )
+        try:
+            instruction = set_weight_target(script["Content"], value)
+        except ValueError as err:
+            raise HomeAssistantError(
+                translation_domain=XENIA_DOMAIN,
+                translation_key="managed_script_unreadable",
+                translation_placeholders={"script_id": str(script_id)},
+            ) from err
         async with machine_write():
             await self.coordinator.xenia.update_script(
-                script_id,
-                script.get("Title", ""),
-                set_weight_target(script["Content"], value),
+                script_id, script.get("Title", ""), instruction
             )
         await self.coordinator.async_request_refresh()

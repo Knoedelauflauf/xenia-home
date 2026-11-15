@@ -243,9 +243,12 @@ async def test_options_offer_only_scripts_with_a_weight_target(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
 ) -> None:
     """Scripts without a weight command, or unreadable ones, are not offered."""
-    mock_xenia_api.set_scripts({10: "WithWeight", 20: "NoWeight", 30: "Unreadable"})
+    mock_xenia_api.set_scripts(
+        {10: "WithWeight", 20: "NoWeight", 30: "Unreadable", 40: "Malformed"}
+    )
     mock_xenia_api.set_script(10, "1;13;27 45;7;", "WithWeight")
     mock_xenia_api.set_script(20, "1;13;7;", "NoWeight")
+    mock_xenia_api.set_script(40, "1;x;27 45;7;", "Malformed")
     result = await _start_weight_options(hass, init_integration)
 
     selector = result["data_schema"].schema[CONF_MANAGED_SCRIPT_ID]

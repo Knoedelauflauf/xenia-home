@@ -190,12 +190,11 @@ class XeniaOptionsFlow(OptionsFlowWithReload):
         for script_id, title in scripts.items():
             try:
                 script = await xenia.read_script(script_id)
-            except REQUEST_ERRORS:
-                _LOGGER.debug("Could not read script %s, skipping", script_id)
+                parsed = parse_instruction(script.get("Content", ""))
+            except (*REQUEST_ERRORS, ValueError) as err:
+                _LOGGER.debug("Could not read script %s, skipping: %s", script_id, err)
                 continue
-            if parse_instruction(script.get("Content", "")).has_command(
-                COMMAND_WEIGHT_TARGET
-            ):
+            if parsed.has_command(COMMAND_WEIGHT_TARGET):
                 options.append(SelectOptionDict(value=str(script_id), label=title))
 
         current = str(self.config_entry.options.get(CONF_MANAGED_SCRIPT_ID))
