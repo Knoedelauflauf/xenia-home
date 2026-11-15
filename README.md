@@ -33,9 +33,18 @@ Assistant.
 - A running Home Assistant installation.
 - A Xenia espresso machine with API v2 firmware (for example Xenia DBL), powered on and reachable from your Home Assistant host on the local network.
 - The machine's hostname or IP address (visible in the machine's built-in web UI or in your router's DHCP client list).
-- For the HACS install path: [HACS](https://hacs.xyz/) installed and configured.
+- For Home Assistant 2026.10: [HACS](https://hacs.xyz/) installed and configured. From 2026.11 on, HACS is built into Home Assistant as the Marketplace.
 
-### HACS (recommended)
+### Marketplace (Home Assistant 2026.11 and later, recommended)
+
+1. Go to **Settings → Marketplace** and select **Add from link** in the upper-right corner.
+2. Enter `https://github.com/Knoedelauflauf/xenia-home` and select **Add**. Adding a custom repository needs a GitHub connection; the Marketplace asks you to connect if you have not yet.
+3. Open **Xenia Espresso Machine** and select **Install**.
+4. The setup opens right after the install. Enter the hostname or IP address of the machine.
+
+Updates appear under **Settings → Updates** and need a restart, which a repair under **Settings → System → Repairs** offers to do for you.
+
+### HACS (Home Assistant 2026.10)
 
 1. In Home Assistant, open HACS.
 2. Open the three-dot menu in the top right and choose **Custom repositories**.
@@ -82,33 +91,50 @@ machine).
 
 **Weight target settings.** Set the minimum, maximum, and step size (in
 grams) of the weight target number entity. Defaults: minimum 25 g, maximum
-50 g, step 0.5 g. Pick a range that matches the shots you actually pull.
+50 g, step 0.5 g. The maximum must be above the minimum and the step above
+0. Pick a range that matches the shots you actually pull.
 
-**Polling.** The integration polls the machine once per second while it is
-on or brewing and every five seconds while it is in eco mode or off. The
-brewing interval sets the time resolution of shot tracking. To poll at a
-different rate, disable **Polling for updates** in the entry's system options
-and call `homeassistant.update_entity` from an automation. The script and
-switch names are then refreshed only when the entry is reloaded.
+## Entities
 
-## Features
+All entities belong to one device per machine. Entities marked *disabled*
+start disabled; enable them on the entity's settings page.
 
-- Power, ECO mode, and steam boiler control
-- Brew-group and brew-boiler temperature setpoints
-- Live sensors for temperatures, pressures, electric current, total energy, extractions, and operating hours
-- Scale flow rate sensor (g/s) on firmware that reports it
-- Water tank level monitoring
-- Status sensor (off/on/eco/brewing/draining)
-- Shot start time sensor, set while a shot is brewing (see **Shot timer** below)
-- Trigger any on-device script from Home Assistant (by ID or by name)
-- Stop the script currently running on the machine
-- Map each of the six physical switch positions to a script
-- Shot tracking with per-shot temperature, pressure, flow rate, and final weight
-- Optional weight-target management for a chosen script (see **Options** above)
+**Sensors**
 
-The electric current sensor is the controller's raw reading. It does not
-drop to zero while the machine is off (about 1.3 A on a DBL), and the energy
-counter does not move then.
+| Entity | Description |
+|--------|-------------|
+| Brewgroup temperature, Brewboiler temperature | Current temperatures in °C. |
+| Pump pressure, Steamboiler pressure | Current pressures in bar. |
+| Total energy | Energy counter of the machine in kWh, for the energy dashboard. |
+| Scale flow rate | Flow from the scale in g/s. Only created on firmware that reports it. |
+| Status | Off, On, Eco, Brewing, Draining or Unknown. |
+| Shot start time | Start of the running shot, `unknown` otherwise (see **Shot timer**). |
+| Extractions, Operating hours | Counters of the machine (diagnostic). |
+| Electric current | Raw current reading of the controller in A (diagnostic, *disabled*). |
+
+**Binary sensor:** *Water tank empty* turns on when the tank needs water.
+
+**Numbers:** *Brewgroup set temperature* and *Brewboiler set temperature*
+change the setpoints. *Script weight target* appears when weight management
+is enabled (see **Weight management**).
+
+**Switches:** *Power* turns the machine on, following the power on
+behavior, or off. *ECO mode* puts the running machine into eco mode or back.
+*Steam boiler power* switches the steam boiler while the machine is on.
+
+**Selects**
+
+| Entity | Description |
+|--------|-------------|
+| Power on behavior | Whether the steam boiler turns on with the machine. Kept by Home Assistant, not by the machine. |
+| Script | The script the *Execute script* button runs. |
+| Left switch left short, ... Right switch right long | The script each of the six switch positions runs (*disabled*). |
+
+**Buttons:** *Execute script* runs the script picked in *Script*; *Stop
+script* stops the running script.
+
+**Event:** *Shot tracker* fires `shot_completed` with the curves of every
+shot of ten seconds or more (see **Shot history API**).
 
 ## Shot timer
 
@@ -193,7 +219,7 @@ wins and `script_name` is ignored.
 |-------|------|----------|-------------|
 | `config_entry_id` | string | Only with several machines | The config entry of the machine to use. With a single machine it can be left out. |
 | `script_id` | integer | One of `script_id` / `script_name` is required | Numeric ID (≥ 1) of the script as stored on the machine. Takes precedence over `script_name` when both are supplied. |
-| `script_name` | string | One of `script_id` / `script_name` is required | Name of the script. Ignored when `script_id` is also supplied. |
+| `script_name` | string | One of `script_id` / `script_name` is required | Name of the script as the script select shows it. Scripts that share a name are shown with their ID added, for example `Espresso (12)`. Ignored when `script_id` is also supplied. |
 
 Example automation step:
 
@@ -257,16 +283,68 @@ the commands above for history.
 
 For visualizing shot tracking data, check out [xenia-home-card](https://github.com/Knoedelauflauf/xenia-home-card).
 
+## Data updates
+
+The integration polls the machine over the local network. It reads the live
+values once per second while the machine is on or brewing and every five
+seconds while it is in eco mode or off; the one second interval sets the
+time resolution of shot tracking. Every command is followed by an immediate
+poll, so its effect shows right away. Firmware versions, scripts, switch
+assignments and the managed script are read once per hour, and again after
+a minute when that read fails.
+
+To poll at a different rate, disable **Polling for updates** in the entry's
+system options and call `homeassistant.update_entity` from an automation.
+The script and switch names are then refreshed only when the entry is
+reloaded.
+
+## Known limitations
+
+- Only the Xenia DBL with API v2 is tested. Other Xenia models may work.
+- The electric current reading does not drop to zero while the machine is
+  off (about 1.3 A on a DBL), and the energy counter does not move then.
+- A shot is timed from the moment Home Assistant first sees it brewing, at
+  most one second late. A shot already running when the integration loads
+  is timed from the load.
+- The machine stops the pump after at most 60 seconds, so no shot runs
+  longer.
+- The power on behavior is kept by Home Assistant. Turning the machine on
+  at the machine itself does not follow it.
+- Shots shorter than ten seconds, like flushes, are not tracked.
+
+## Troubleshooting
+
+### Setup fails with "Failed to connect"
+
+The host is wrong or the machine is not reachable. Open the machine's web
+UI in a browser on the same network with the same host. If that fails too,
+check the IP address in your router, and give the machine a fixed address
+so it keeps it.
+
+### All entities are unavailable
+
+Home Assistant cannot reach the machine anymore, usually because it got a
+new IP address or is unplugged. If the address changed, use **Reconfigure**
+on the integration entry and enter the new one; entities, history and
+automations stay.
+
+### The entry fails with "already set up as"
+
+The same machine was added twice in an earlier release, under two
+addresses. Delete the entry that shows the message; the entry it names
+keeps working.
+
+### The script weight target is unavailable
+
+The managed script was deleted on the machine, or could not be read. A
+repair issue under **Settings → System → Repairs** says which one. Open
+**Configure** on the integration entry and pick another script, or turn
+weight management off.
+
 ## Removing the integration
 
-1. In Home Assistant, go to **Settings → Devices & Services**.
-2. Click the Xenia Espresso Machine integration card, open the three-dot
-   menu, and choose **Delete**.
-3. If you installed via HACS, open HACS, find Xenia Espresso Machine, and
-   uninstall it. For manual installs, delete the
-   `custom_components/xenia_home/` folder from your Home Assistant `config/`
-   directory.
-4. Restart Home Assistant.
+- **Marketplace:** open **Xenia Espresso Machine** under **Settings → Marketplace**, select **Uninstall** in the three-dot menu and choose **Delete and uninstall**. This removes the setup with its devices and entities and then the files. If Home Assistant asks for a restart under **Settings → System → Repairs**, restart it.
+- **HACS or manual install:** delete the integration under **Settings → Devices & Services** (three-dot menu on the Xenia Espresso Machine card, **Delete**). Then uninstall it in HACS, or for a manual install delete the `custom_components/xenia_home/` folder from your Home Assistant `config/` directory, and restart Home Assistant.
 
 The Xenia espresso machine itself stores no Home Assistant–specific data,
 so no cleanup on the machine is necessary. If you previously enabled weight

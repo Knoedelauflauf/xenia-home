@@ -35,7 +35,7 @@ Comprehensive overview of all real-time sensor data.
 | ------------------------- | ------ | ------------------------------------ |
 | `MA_STATUS`               | uint8  | Machine status (see enum below)      |
 | `MA_EXTRACTIONS`          | uint32 | Number of extractions                |
-| `MA_OPERATING_HOURS`      | uint32 | Operating hours                      |
+| `MA_OPERATING_HOURS`      | uint32 | Operating time in minutes, despite the name |
 | `MA_CLOCK`                | uint32 | System clock                         |
 | `MA_CUR_PWR`              | float  | Current power consumption (amperes)  |
 | `MA_MAX_PWR`              | uint16 | Maximum amperes                      |
@@ -185,7 +185,7 @@ Returns machine hardware and firmware information.
 | `BLE`                           | int    | Bluetooth state *(4.159+)*                                          |
 | `MA_DELAY`                      | int    | Unknown, observed -1 *(4.159+)*                                     |
 | `MA_EXTRACTIONS`                | uint32 | Number of extractions (mirrors overview) *(4.159+)*                 |
-| `MA_OPERATING_HOURS`            | uint32 | Operating hours (mirrors overview) *(4.159+)*                       |
+| `MA_OPERATING_HOURS`            | uint32 | Operating time in minutes (mirrors overview) *(4.159+)*             |
 | `MA_EXTRACTIONS_START`          | int    | Extraction counter start value (mirrors overview_single) *(4.159+)* |
 | `MA_ENERGY_TOTAL_KWH`           | float  | Total energy consumption in kWh (mirrors overview) *(4.159+)*       |
 | `MA_HEATUP_FLUSH_DURATION`      | int    | Heatup flush duration (s) *(4.159+)*                                |
