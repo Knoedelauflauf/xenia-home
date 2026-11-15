@@ -83,6 +83,19 @@ async def test_zero_counter_is_unknown(
     )
 
 
+async def test_missing_value_is_unknown(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """A value the machine leaves out shows as unknown; the sensor stays available."""
+    mock_xenia_api.set_overview(BG_SENS_TEMP_A=None, MA_OPERATING_HOURS=None)
+    await setup_integration(hass, mock_config_entry)
+    for sensor in ("brewgroup_temperature", "operating_hours"):
+        state = hass.states.get(f"sensor.xenia_espresso_machine_{sensor}")
+        assert state.state == STATE_UNKNOWN
+
+
 async def test_scale_flow_rate_on_new_firmware(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,

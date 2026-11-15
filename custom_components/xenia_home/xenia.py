@@ -51,24 +51,24 @@ class SteamBoilerStatus(IntEnum):
 class XeniaOverviewData:
     """Decoded payload of `/api/v2/overview`."""
 
-    ma_extractions: int
-    ma_operating_hours: int
+    ma_extractions: int | None
+    ma_operating_hours: int | None
     ma_status: MachineStatus
-    ma_clock: int
-    ma_cur_pwr: float
-    ma_max_pwr: int
-    ma_energy_total_kwh: float
-    bg_sens_temp_a: float
-    bg_level_pw_control: int
-    pu_sens_press: float
-    pu_level_pw_control: int
-    pu_set_level_pw_control: int
-    pu_sens_flow_meter_ml: float
-    sb_sens_press: float
-    bb_sens_temp_a: float
-    bb_level_pw_control: int
+    ma_clock: int | None
+    ma_cur_pwr: float | None
+    ma_max_pwr: int | None
+    ma_energy_total_kwh: float | None
+    bg_sens_temp_a: float | None
+    bg_level_pw_control: int | None
+    pu_sens_press: float | None
+    pu_level_pw_control: int | None
+    pu_set_level_pw_control: int | None
+    pu_sens_flow_meter_ml: float | None
+    sb_sens_press: float | None
+    bb_sens_temp_a: float | None
+    bb_level_pw_control: int | None
     sb_status: SteamBoilerStatus
-    scale_weight: float
+    scale_weight: float | None
     pu_sens_scale_rate: float | None
 
     @staticmethod
@@ -83,24 +83,24 @@ class XeniaOverviewData:
         except ValueError:
             sb_status_enum = SteamBoilerStatus.UNKNOWN
         return XeniaOverviewData(
-            ma_extractions=data.get("MA_EXTRACTIONS", 0),
-            ma_operating_hours=data.get("MA_OPERATING_HOURS", 0),
+            ma_extractions=_safe_int(data.get("MA_EXTRACTIONS")),
+            ma_operating_hours=_safe_int(data.get("MA_OPERATING_HOURS")),
             ma_status=machine_status_enum,
-            ma_clock=data.get("MA_CLOCK", 0),
-            ma_cur_pwr=float(data.get("MA_CUR_PWR", 0.0)),
-            ma_max_pwr=data.get("MA_MAX_PWR", 0),
-            ma_energy_total_kwh=float(data.get("MA_ENERGY_TOTAL_KWH", 0.0)),
-            bg_sens_temp_a=float(data.get("BG_SENS_TEMP_A", 0.0)),
-            bg_level_pw_control=data.get("BG_LEVEL_PW_CONTROL", 0),
-            pu_sens_press=float(data.get("PU_SENS_PRESS", 0.0)),
-            pu_level_pw_control=data.get("PU_LEVEL_PW_CONTROL", 0),
-            pu_set_level_pw_control=data.get("PU_SET_LEVEL_PW_CONTROL", 0),
-            pu_sens_flow_meter_ml=float(data.get("PU_SENS_FLOW_METER_ML", 0.0)),
-            sb_sens_press=float(data.get("SB_SENS_PRESS", 0.0)),
-            bb_sens_temp_a=float(data.get("BB_SENS_TEMP_A", 0.0)),
-            bb_level_pw_control=data.get("BB_LEVEL_PW_CONTROL", 0),
+            ma_clock=_safe_int(data.get("MA_CLOCK")),
+            ma_cur_pwr=_safe_float(data.get("MA_CUR_PWR")),
+            ma_max_pwr=_safe_int(data.get("MA_MAX_PWR")),
+            ma_energy_total_kwh=_safe_float(data.get("MA_ENERGY_TOTAL_KWH")),
+            bg_sens_temp_a=_safe_float(data.get("BG_SENS_TEMP_A")),
+            bg_level_pw_control=_safe_int(data.get("BG_LEVEL_PW_CONTROL")),
+            pu_sens_press=_safe_float(data.get("PU_SENS_PRESS")),
+            pu_level_pw_control=_safe_int(data.get("PU_LEVEL_PW_CONTROL")),
+            pu_set_level_pw_control=_safe_int(data.get("PU_SET_LEVEL_PW_CONTROL")),
+            pu_sens_flow_meter_ml=_safe_float(data.get("PU_SENS_FLOW_METER_ML")),
+            sb_sens_press=_safe_float(data.get("SB_SENS_PRESS")),
+            bb_sens_temp_a=_safe_float(data.get("BB_SENS_TEMP_A")),
+            bb_level_pw_control=_safe_int(data.get("BB_LEVEL_PW_CONTROL")),
             sb_status=sb_status_enum,
-            scale_weight=float(data.get("SCALE_WEIGHT", 0.0)),
+            scale_weight=_safe_float(data.get("SCALE_WEIGHT")),
             pu_sens_scale_rate=_safe_float(data.get("PU_SENS_SCALE_RATE")),
         )
 
@@ -109,28 +109,28 @@ class XeniaOverviewData:
 class XeniaOverviewSingleData:
     """Decoded payload of `/api/v2/overview_single`."""
 
-    bg_set_temp: float
-    pu_set_press: float
-    pu_sens_water_tank_level: int
-    sb_set_press: float
-    bb_set_temp: float
-    psp: int
+    bg_set_temp: float | None
+    pu_set_press: float | None
+    pu_sens_water_tank_level: int | None
+    sb_set_press: float | None
+    bb_set_temp: float | None
+    psp: int | None
     ma_mac: str
-    ma_extractions_start: int
+    ma_extractions_start: int | None
     pop_up: int | None
 
     @staticmethod
     def from_dict(data: dict) -> XeniaOverviewSingleData:
         """Build a `XeniaOverviewSingleData` from a raw API dict."""
         return XeniaOverviewSingleData(
-            bg_set_temp=float(data.get("BG_SET_TEMP", 0.0)),
-            pu_set_press=float(data.get("PU_SET_PRESS", 0.0)),
-            pu_sens_water_tank_level=int(data.get("PU_SENS_WATER_TANK_LEVEL", 0)),
-            sb_set_press=float(data.get("SB_SET_PRESS", 0.0)),
-            bb_set_temp=float(data.get("BB_SET_TEMP", 0.0)),
-            psp=int(data.get("PSP", 0)),
+            bg_set_temp=_safe_float(data.get("BG_SET_TEMP")),
+            pu_set_press=_safe_float(data.get("PU_SET_PRESS")),
+            pu_sens_water_tank_level=_safe_int(data.get("PU_SENS_WATER_TANK_LEVEL")),
+            sb_set_press=_safe_float(data.get("SB_SET_PRESS")),
+            bb_set_temp=_safe_float(data.get("BB_SET_TEMP")),
+            psp=_safe_int(data.get("PSP")),
             ma_mac=data.get("MA_MAC", ""),
-            ma_extractions_start=int(data.get("MA_EXTRACTIONS_START", 0)),
+            ma_extractions_start=_safe_int(data.get("MA_EXTRACTIONS_START")),
             pop_up=data.get("POP_UP"),
         )
 

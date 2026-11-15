@@ -49,12 +49,12 @@ def test_overview_from_dict() -> None:
 
 @pytest.mark.parametrize("payload", [{}, {"MA_STATUS": 55, "SB_STATUS": 7}])
 def test_overview_without_known_values(payload: dict) -> None:
-    """Missing keys fall back to zero, unknown state codes to UNKNOWN."""
+    """Missing values read as None, unknown state codes as UNKNOWN."""
     data = XeniaOverviewData.from_dict(payload)
-    assert data.ma_extractions == 0
+    assert data.ma_extractions is None
     assert data.ma_status is MachineStatus.UNKNOWN
     assert data.sb_status is SteamBoilerStatus.UNKNOWN
-    assert data.bg_sens_temp_a == 0.0
+    assert data.bg_sens_temp_a is None
 
 
 @pytest.mark.parametrize(
@@ -96,6 +96,7 @@ def test_overview_single_from_dict() -> None:
     assert data.pop_up == 5
     empty = XeniaOverviewSingleData.from_dict({})
     assert empty.pop_up is None
+    assert empty.bg_set_temp is None
     assert empty.ma_mac == ""
 
 

@@ -133,7 +133,25 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
         """Record one sample of the curves."""
         assert self._shot_start_time is not None
         overview = self.coordinator.data.overview
+        # Firmware with scale support reports no usable flow meter data;
+        # the scale rate replaces it as the flow source.
+        flow = (
+            overview.pu_sens_scale_rate
+            if overview.pu_sens_scale_rate is not None
+            else overview.pu_sens_flow_meter_ml
+        )
+        group_temp = overview.bg_sens_temp_a
+        boiler_temp = overview.bb_sens_temp_a
+        pressure = overview.pu_sens_press
         weight = overview.scale_weight
+        if (
+            group_temp is None
+            or boiler_temp is None
+            or pressure is None
+            or flow is None
+            or weight is None
+        ):
+            return
 
         # The machine auto-tares the scale shortly after brew start and
         # again ~2.5 s after brew end; a big drop is that tare (or the cup
@@ -145,16 +163,9 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
             self._weights = [0.0] * len(self._weights)
 
         elapsed = (dt_util.utcnow() - self._shot_start_time).total_seconds()
-        self._brew_group_temps.append(overview.bg_sens_temp_a)
-        self._brew_boiler_temps.append(overview.bb_sens_temp_a)
-        self._pump_pressures.append(overview.pu_sens_press)
-        # Firmware with scale support reports no usable flow meter data;
-        # the scale rate replaces it as the flow source.
-        flow = (
-            overview.pu_sens_scale_rate
-            if overview.pu_sens_scale_rate is not None
-            else overview.pu_sens_flow_meter_ml
-        )
+        self._brew_group_temps.append(group_temp)
+        self._brew_boiler_temps.append(boiler_temp)
+        self._pump_pressures.append(pressure)
         self._flow_rates.append(flow)
         self._weights.append(weight)
         self._timestamps.append(elapsed)

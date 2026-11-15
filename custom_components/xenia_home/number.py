@@ -47,7 +47,7 @@ PARALLEL_UPDATES = 1
 class XeniaNumberEntityDescription(NumberEntityDescription):
     """Describes a setpoint of the machine."""
 
-    value_fn: Callable[[XeniaCoordinatorData], float]
+    value_fn: Callable[[XeniaCoordinatorData], float | None]
     set_fn: Callable[[Xenia, float], Coroutine[Any, Any, None]]
 
 
@@ -122,7 +122,7 @@ class XeniaNumber(XeniaEntity, NumberEntity):
 
     @property
     @override
-    def native_value(self) -> float:
+    def native_value(self) -> float | None:
         """Return the setpoint."""
         return self.entity_description.value_fn(self.coordinator.data)
 

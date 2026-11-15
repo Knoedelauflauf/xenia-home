@@ -125,6 +125,21 @@ async def test_failed_poll_adds_no_sample(
     assert len(shot["weights"]) == len(shot["timestamps"])
 
 
+async def test_sample_with_a_missing_value_is_skipped(
+    hass: HomeAssistant, init_integration: MockConfigEntry, poll
+) -> None:
+    """A poll that lacks a curve value adds no sample, so the curves stay aligned."""
+    await brew(poll, 12)
+    await poll(MA_STATUS=BREWING, SCALE_WEIGHT=19.5, PU_SENS_PRESS=None)
+    await end_brew(poll, weight=20.0)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert 13.0 not in shot["timestamps"]
+    for curve in ("brew_group_temps", "pump_pressures", "weights", "flow_rates"):
+        assert len(shot[curve]) == len(shot["timestamps"])
+
+
 @pytest.mark.parametrize(
     ("fields", "flow"),
     [

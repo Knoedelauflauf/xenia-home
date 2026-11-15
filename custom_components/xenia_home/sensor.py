@@ -107,7 +107,11 @@ SENSOR_TYPES: Final[tuple[XeniaSensorEntityDescription, ...]] = (
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.TOTAL_INCREASING,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.overview.ma_operating_hours / 60,
+        value_fn=lambda data: (
+            None
+            if (minutes := data.overview.ma_operating_hours) is None
+            else minutes / 60
+        ),
     ),
     XeniaSensorEntityDescription(
         key="scale_flow_rate",

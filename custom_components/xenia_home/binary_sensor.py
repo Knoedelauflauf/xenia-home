@@ -39,9 +39,7 @@ class XeniaWaterTankSensor(XeniaEntity, BinarySensorEntity):
 
     @property
     @override
-    def is_on(self) -> bool:
+    def is_on(self) -> bool | None:
         """Return whether the water tank is empty."""
-        return (
-            self.coordinator.data.overview_single.pu_sens_water_tank_level
-            == WATER_TANK_EMPTY
-        )
+        level = self.coordinator.data.overview_single.pu_sens_water_tank_level
+        return None if level is None else level == WATER_TANK_EMPTY
