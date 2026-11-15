@@ -6,6 +6,7 @@ from unittest.mock import patch
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.storage import Store
+import pytest
 
 from custom_components.xenia_home.const import XENIA_DOMAIN
 from custom_components.xenia_home.shot_store import XeniaShotStore
@@ -138,15 +139,22 @@ async def test_migrated_flag_persists(hass: HomeAssistant) -> None:
     assert reloaded.migrated is True
 
 
-async def test_corrupt_index_is_tolerated(hass: HomeAssistant) -> None:
-    """An unreadable index starts an empty, usable history."""
-    with patch.object(Store, "async_load", side_effect=HomeAssistantError("corrupt")):
-        store = await _loaded_store(hass)
-    assert store.list_shots() == []
+async def test_unreadable_index_is_left_untouched(hass: HomeAssistant) -> None:
+    """An unreadable index shows no history and is never overwritten."""
+    store = await _loaded_store(hass)
+    stored = shot_payload("2026-07-01T10:00:00.000+00:00")
+    await store.async_add_shot(stored)
 
-    payload = shot_payload()
-    await store.async_add_shot(payload)
-    assert [s["shot_id"] for s in store.list_shots()] == [payload["start_time"]]
+    with patch.object(Store, "async_load", side_effect=HomeAssistantError("corrupt")):
+        unreadable = await _loaded_store(hass)
+    assert unreadable.list_shots() == []
+    assert unreadable.migrated is True
+    await unreadable.async_add_shot(shot_payload("2026-07-02T10:00:00.000+00:00"))
+    await unreadable.async_set_migrated()
+
+    reloaded = await _loaded_store(hass)
+    assert [s["shot_id"] for s in reloaded.list_shots()] == [stored["start_time"]]
+    assert reloaded.migrated is False
 
 
 async def test_malformed_index_starts_empty(
@@ -166,24 +174,29 @@ async def test_malformed_index_starts_empty(
     assert [s["shot_id"] for s in store.list_shots()] == [payload["start_time"]]
 
 
-async def test_corrupt_chunk_is_tolerated(hass: HomeAssistant) -> None:
-    """An unreadable month file loses only its shots."""
+async def test_unreadable_chunk_is_never_overwritten(hass: HomeAssistant) -> None:
+    """An unreadable month file hides its shots but is never replaced."""
     store = await _loaded_store(hass)
-    payload = shot_payload()
-    await store.async_add_shot(payload)
+    stored = shot_payload("2026-07-01T10:00:00.000+00:00")
+    await store.async_add_shot(stored)
 
     reloaded = await _loaded_store(hass)
-    with patch.object(Store, "async_load", side_effect=HomeAssistantError("corrupt")):
-        assert await reloaded.async_get_shots([payload["start_time"]]) == []
+    corrupt = patch.object(
+        Store, "async_load", side_effect=HomeAssistantError("corrupt")
+    )
+    with corrupt:
+        assert await reloaded.async_get_shots([stored["start_time"]]) == []
+        await reloaded.async_add_shot(shot_payload("2026-07-02T10:00:00.000+00:00"))
+        with pytest.raises(HomeAssistantError):
+            await reloaded.async_delete_shot(stored["start_time"])
+    assert [s["shot_id"] for s in reloaded.list_shots()] == [stored["start_time"]]
 
-    # store remains usable after the corrupt read
-    assert [s["shot_id"] for s in reloaded.list_shots()] == [payload["start_time"]]
-    other = shot_payload("2026-08-01T10:00:00.000+00:00")
-    await reloaded.async_add_shot(other)
-    assert {s["shot_id"] for s in reloaded.list_shots()} == {
-        payload["start_time"],
-        other["start_time"],
-    }
+    # once the file is readable again, the month is used as before
+    later = shot_payload("2026-07-03T10:00:00.000+00:00")
+    await reloaded.async_add_shot(later)
+    fresh = await _loaded_store(hass)
+    shots = await fresh.async_get_shots([stored["start_time"], later["start_time"]])
+    assert [s["shot_id"] for s in shots] == [stored["start_time"], later["start_time"]]
 
 
 async def test_add_shot_with_unparseable_start_time_is_ignored(
