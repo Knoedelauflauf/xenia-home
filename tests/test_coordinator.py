@@ -140,6 +140,21 @@ async def test_script_changes_arrive_within_an_hour(
     assert "MyShot" not in options
 
 
+async def test_failed_config_poll_is_retried_within_a_minute(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """After a failed hourly poll the scripts are read again a minute later."""
+    mock_xenia_api.fail("get", "switches")
+    mock_xenia_api.set_scripts({10: "MyShot renamed"})
+    await _pass(hass, freezer, 3601)
+    mock_xenia_api.restore("get", "switches")
+    await _pass(hass, freezer, 61)
+    assert "MyShot renamed" in hass.states.get(SCRIPT_SELECT).attributes["options"]
+
+
 @pytest.fixture
 def weight_entry(mock_config_entry_factory_with_options) -> MockConfigEntry:
     """Return an entry that manages the weight of script 17."""
@@ -158,14 +173,22 @@ async def test_managed_script_is_read(
 
 
 async def test_unreadable_managed_script_only_affects_the_weight(
-    hass: HomeAssistant, weight_entry: MockConfigEntry, mock_xenia_api: MockXeniaApi
+    hass: HomeAssistant,
+    weight_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
-    """A failed script read leaves only the weight target unavailable."""
+    """A failed script read leaves only the weight target unavailable, for a minute."""
     mock_xenia_api.fail("post", "scripts/read")
     await setup_integration(hass, weight_entry)
     assert weight_entry.state is ConfigEntryState.LOADED
     assert hass.states.get(WEIGHT).state == STATE_UNAVAILABLE
     assert hass.states.get(TEMPERATURE).state != STATE_UNAVAILABLE
+
+    mock_xenia_api.restore("post", "scripts/read")
+    mock_xenia_api.set_script(17, "1;13;27 45;7;", "My Shot")
+    await _pass(hass, freezer, 61)
+    assert hass.states.get(WEIGHT).state == "45.0"
 
 
 async def test_deleted_managed_script_is_reported(

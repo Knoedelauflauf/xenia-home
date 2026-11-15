@@ -32,6 +32,8 @@ DEFAULT_SCRIPT_INSTRUCTION = "1;13;3 70 5000;12 5000;27 40;17;7;"
 # Active: on, brewing, or draining. Idle: eco or off.
 POLL_INTERVAL_ACTIVE = timedelta(seconds=1)
 POLL_INTERVAL_IDLE = timedelta(seconds=5)
+POLL_INTERVAL_CONFIG = timedelta(hours=1)
+POLL_INTERVAL_CONFIG_RETRY = timedelta(minutes=1)
 
 # Options of earlier releases, stripped at setup.
 REMOVED_OPTION_KEYS = (

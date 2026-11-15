@@ -1,7 +1,7 @@
 """Data update coordinators for the Xenia espresso machine."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -13,6 +13,8 @@ from .const import (
     CONF_MANAGED_SCRIPT_ID,
     CONF_WEIGHT_MANAGEMENT_ENABLED,
     POLL_INTERVAL_ACTIVE,
+    POLL_INTERVAL_CONFIG,
+    POLL_INTERVAL_CONFIG_RETRY,
     POLL_INTERVAL_IDLE,
     PowerOnBehavior,
 )
@@ -131,7 +133,7 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
             hass,
             _LOGGER,
             name=f"{config_entry.entry_id}_config",
-            update_interval=timedelta(hours=1),
+            update_interval=POLL_INTERVAL_CONFIG,
             config_entry=config_entry,
         )
         self.xenia = xenia
@@ -143,7 +145,9 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
             user_scripts = await self.xenia.get_scripts()
             switches = await self.xenia.get_switches()
         except REQUEST_ERRORS as err:
+            self.update_interval = POLL_INTERVAL_CONFIG_RETRY
             raise update_failed(err) from err
+        self.update_interval = POLL_INTERVAL_CONFIG
         scripts = {**BUILTIN_SCRIPTS, **user_scripts}
 
         managed_instruction: str | None = None
@@ -158,6 +162,7 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
                     _LOGGER.warning(
                         "Failed to read managed script %s: %s", script_id, err
                     )
+                    self.update_interval = POLL_INTERVAL_CONFIG_RETRY
                 else:
                     content = script_data.get("Content") or None
                     title = script_data.get("Title") or None
