@@ -23,6 +23,8 @@ uv run ruff check .                                         # tests/ruff.toml re
 uv run mypy custom_components/xenia_home/
 ```
 
+CI runs these checks with `uv sync --locked` and `pytest --cov`, so coverage below `fail_under` fails the build (`.github/workflows/test.yml`). `.github/workflows/validate.yml` runs hassfest and the HACS action on every push, pull request and weekly.
+
 To run the integration against a real machine for manual testing:
 
 ```bash
