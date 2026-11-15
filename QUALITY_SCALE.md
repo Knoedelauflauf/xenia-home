@@ -22,7 +22,7 @@ Tracks compliance with the [Home Assistant integration quality scale](https://de
 - [x] `runtime-data` - Use ConfigEntry.runtime_data to store runtime data
 - [x] `test-before-configure` - Test a connection in the config flow
 - [x] `test-before-setup` - Check during integration initialization if we are able to set it up correctly
-- [ ] `unique-config-entry` - Don't allow the same device or service to be able to be set up twice
+- [x] `unique-config-entry` - Don't allow the same device or service to be able to be set up twice
 
 ## Silver
 - [ ] `action-exceptions` - Service actions raise exceptions when encountering failures
@@ -55,7 +55,7 @@ Tracks compliance with the [Home Assistant integration quality scale](https://de
 - [ ] `entity-translations` - Entities have translated names
 - [ ] `exception-translations` - Exception messages are translatable
 - [x] `icon-translations` - Entities implement icon translations
-- [ ] `reconfiguration-flow` - Integrations should have a reconfigure flow
+- [x] `reconfiguration-flow` - Integrations should have a reconfigure flow
 - [ ] `repair-issues` - Repair issues and repair flows are used when user intervention is needed
 - [ ] `stale-devices` - Stale devices are removed
 

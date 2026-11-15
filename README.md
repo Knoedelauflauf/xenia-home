@@ -63,6 +63,9 @@ your router's DHCP client list.
 The integration verifies that it can reach the machine before the entry is
 created, so an invalid host fails fast during setup. The host can be
 changed later from the integration's **…** menu under **Reconfigure**.
+The machine is recognized by its MAC address: adding it again under a new
+host updates the host of the existing entry, and **Reconfigure** only
+accepts a host that answers as the same machine.
 
 ### Options
 
