@@ -1,5 +1,6 @@
 """Tests for the sensors."""
 
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.const import STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
@@ -144,6 +145,7 @@ async def test_shot_running_at_load_is_timed_from_the_load(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
     """A shot that is already brewing when the integration loads starts at the load."""
     mock_xenia_api.set_overview(MA_STATUS=3)
