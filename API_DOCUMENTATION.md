@@ -58,7 +58,7 @@ Comprehensive overview of all real-time sensor data.
 | `PU_SENS_FLOW_METER_VOLUME` | float | Flow meter volume (ml) *(4.159+)* |
 | `PU_SENS_FLOW_METER_FLOWRATE` | float | Flow meter rate (ml/s) *(4.159+)* |
 
-Fields marked *(4.159+)* were first observed with firmware 4.159/3.63 and are absent on older firmware (verified on 4.22/3.22). On a Xenia DBL running 4.159, all three flow-meter fields stayed 0 through a real 9.4 bar shot. The DBL presumably has no flow-meter hardware installed; other variants (e.g. the Mahlkönig edition) may report real values here. The scale auto-tares shortly after brew start and again ~2.5 s after brew end.
+Fields marked *(4.159+)* were first observed with firmware 4.159/3.63 and are absent on older firmware (verified on 4.22/3.22). On a Xenia DBL running 4.159, all three flow-meter fields stayed 0 through a real 9.4 bar shot. The DBL presumably has no flow-meter hardware installed; other variants (e.g. the Mahlkönig edition) may report real values here. With 4.159 the machine tared the scale shortly after every brew start; with 4.255 it tares only right before a script started through `scripts/execute` and when it returns to ready after a shot (see `scale/write`).
 
 ---
 
@@ -323,6 +323,22 @@ http.get('http://'+sipAdresse+'/api/v2/scripts/stop');
 
 `B` is `false` regardless of machine state; its meaning is unknown. Rely
 on the HTTP status, not this field.
+
+---
+
+### `/api/v2/scale/write`
+
+Tares the Bluetooth scale connected to the machine and resets its timer.
+Not listed on https://www.xenia-espresso.de/api.html; observed with
+firmware 4.255/3.95.
+
+**Method:** POST
+**Content-Type:** `application/x-www-form-urlencoded`
+
+**Body:** ignored; the integration sends `{}`.
+
+The machine answers 200 with an empty body, also when no scale is
+connected.
 
 ---
 
