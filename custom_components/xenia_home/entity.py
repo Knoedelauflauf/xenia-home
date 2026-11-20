@@ -54,10 +54,11 @@ class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
         )
 
     @callback
-    def async_entity_id_changed(self, old_entity_id: str) -> None:
+    @override
+    def async_entity_id_changed(self, old_entity_id: str) -> None:  # type: ignore[misc,unused-ignore]
         """Keep the entity when its entity_id changes; nothing is keyed on it."""
         # Called from Home Assistant 2026.11 on, which added the hook.
-        super().async_entity_id_changed(old_entity_id)  # type: ignore[misc]
+        super().async_entity_id_changed(old_entity_id)  # type: ignore[misc,unused-ignore]
 
     @property
     def machine_id(self) -> str:

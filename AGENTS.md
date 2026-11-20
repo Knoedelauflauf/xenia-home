@@ -23,7 +23,7 @@ uv run ruff check .                                         # tests/ruff.toml re
 uv run mypy custom_components/xenia_home/
 ```
 
-mypy uses the global and the strict per-integration settings of Home Assistant Core (`pyproject.toml`). `XeniaEntity.async_entity_id_changed` in `entity.py` carries a `type: ignore[misc]` because the hook only exists from Home Assistant 2026.11 on; once the locked version has it, replace the ignore with `@override`.
+mypy uses the global and the strict per-integration settings of Home Assistant Core (`pyproject.toml`). `XeniaEntity.async_entity_id_changed` in `entity.py` carries `type: ignore[misc,unused-ignore]` because the hook only exists from Home Assistant 2026.11 on; the ignores let mypy pass on both versions. Drop them once the minimum is 2026.11.
 
 CI runs these checks with `uv sync --locked` and `pytest --cov`, so coverage below `fail_under` fails the build (`.github/workflows/test.yml`). `.github/workflows/validate.yml` runs hassfest and the HACS action on every push, pull request and weekly.
 
