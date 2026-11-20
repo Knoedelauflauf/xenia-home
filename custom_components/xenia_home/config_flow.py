@@ -111,6 +111,9 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
         host = entry.data[CONF_HOST]
         # A host name resolves to the new address on its own.
         if is_ip_address(host) and host != discovery_info.ip:
+            if entry.minor_version < MAC_MINOR_VERSION:
+                # Its ids still hold the old host, which is about to change.
+                await async_migrate_to_mac(self.hass, entry, machine_id)
             self.hass.config_entries.async_update_entry(
                 entry, data={**entry.data, CONF_HOST: discovery_info.ip}
             )

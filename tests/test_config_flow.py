@@ -156,9 +156,10 @@ async def test_dhcp_keeps_a_host_name(
 async def test_dhcp_moves_an_entry_of_an_earlier_release(
     hass: HomeAssistant,
     device_registry: dr.DeviceRegistry,
+    entity_registry: er.EntityRegistry,
     mock_xenia_api: MockXeniaApi,
 ) -> None:
-    """An entry still keyed on its old IP address follows the machine and moves to its MAC."""
+    """An entry still keyed on its old IP address follows the machine and keeps its entities."""
     mock_xenia_api.for_host("192.168.1.20")
     entry = MockConfigEntry(
         domain=XENIA_DOMAIN,
@@ -168,10 +169,18 @@ async def test_dhcp_moves_an_entry_of_an_earlier_release(
         data={CONF_HOST: "192.168.1.10"},
     )
     entry.add_to_hass(hass)
-    device_registry.async_get_or_create(
+    device = device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(XENIA_DOMAIN, "192.168.1.10")},
         connections={(dr.CONNECTION_NETWORK_MAC, "AA:BB:CC:DD:EE:FF")},
+    )
+    entity_registry.async_get_or_create(
+        "sensor",
+        XENIA_DOMAIN,
+        "192.168.1.10_brew_group_temperature",
+        config_entry=entry,
+        device_id=device.id,
+        suggested_object_id="group_temp",
     )
 
     result = await hass.config_entries.flow.async_init(
@@ -184,6 +193,12 @@ async def test_dhcp_moves_an_entry_of_an_earlier_release(
     assert entry.data == {CONF_HOST: "192.168.1.20"}
     assert entry.unique_id == "aa:bb:cc:dd:ee:ff"
     assert entry.state is ConfigEntryState.LOADED
+    assert (
+        entity_registry.async_get_entity_id(
+            "sensor", XENIA_DOMAIN, "aa:bb:cc:dd:ee:ff_brew_group_temperature"
+        )
+        == "sensor.group_temp"
+    )
 
 
 async def test_dhcp_of_an_unknown_machine_aborts(
