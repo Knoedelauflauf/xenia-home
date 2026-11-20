@@ -101,7 +101,8 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
             self._start_afterflow()
             self._collect_shot_data()
         elif self._afterflow_until is not None:
-            self._collect_shot_data()
+            if dt_util.utcnow() <= self._afterflow_until:
+                self._collect_shot_data()
             if (
                 self._afterflow_until is not None
                 and dt_util.utcnow() >= self._afterflow_until
@@ -171,17 +172,17 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
         self._timestamps.append(elapsed)
 
     def _complete_shot_tracking(self) -> None:
-        """Fire shot_completed and store the shot, unless it was too short."""
+        """Fire shot_completed and store the shot, unless it was too short or empty."""
         assert self._shot_start_time is not None
         assert self._brew_end_time is not None
         self._afterflow_until = None
 
         duration = (self._brew_end_time - self._shot_start_time).total_seconds()
-        if duration < self._min_shot_seconds:
+        if not self._timestamps or duration < self._min_shot_seconds:
             _LOGGER.debug(
-                "Ignoring short shot: duration=%.2fs (< %ss)",
+                "Ignoring shot: duration=%.2fs, %d samples",
                 duration,
-                self._min_shot_seconds,
+                len(self._timestamps),
             )
             return
 

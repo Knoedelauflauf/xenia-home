@@ -196,6 +196,41 @@ async def test_sample_with_a_missing_value_is_skipped(
         assert len(shot[curve]) == len(shot["timestamps"])
 
 
+async def test_shot_without_a_complete_sample_is_dropped(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    poll,
+) -> None:
+    """A shot without a single complete sample, like one without a scale, is not stored."""
+    for _ in range(14):
+        await poll(MA_STATUS=BREWING, SCALE_WEIGHT=None)
+    await end_brew(poll, weight=None)
+
+    assert _shot(hass) is None
+    assert await listed_shots(hass, hass_ws_client) == []
+
+
+async def test_overdue_afterflow_adds_no_sample(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    poll,
+) -> None:
+    """A poll answered only after the afterflow ends the shot without a sample."""
+    await brew(poll, 12)
+    await poll(MA_STATUS=ON, SCALE_WEIGHT=20.0)
+    mock_xenia_api.override("get", "overview", exc=TimeoutError())
+    await poll()
+    await poll()
+    mock_xenia_api.restore("get", "overview")
+    await poll(MA_STATUS=ON, SCALE_WEIGHT=20.5)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert shot["weights"][-1] == 20.0
+
+
 @pytest.mark.parametrize(
     ("old_firmware", "fields", "flow"),
     [
