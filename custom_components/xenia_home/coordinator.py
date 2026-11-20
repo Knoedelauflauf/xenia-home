@@ -95,7 +95,7 @@ class XeniaCoordinator[DataT](DataUpdateCoordinator[DataT]):
 
     async def _async_command_refresh(self, _now: datetime) -> None:
         self._unsub_command_refresh = None
-        await self.async_request_refresh()
+        await self.async_refresh()
 
     def _cancel_command_refresh(self) -> None:
         if self._unsub_command_refresh is not None:
