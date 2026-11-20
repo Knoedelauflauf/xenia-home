@@ -203,6 +203,9 @@
       },
       "stop_script": {
         "name": "Skript stoppen"
+      },
+      "tare_scale": {
+        "name": "Waage tarieren"
       }
     },
     "event": {

@@ -156,9 +156,7 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
         ):
             return
 
-        # The machine auto-tares the scale shortly after brew start and
-        # again ~2.5 s after brew end; a big drop is that tare (or the cup
-        # being moved), never real outflow.
+        # A big drop is a tare (or the cup being moved), never real outflow.
         if self._weights and weight < self._weights[-1] - self._tare_drop_g:
             if self._afterflow_until is not None:
                 self._complete_shot_tracking()
