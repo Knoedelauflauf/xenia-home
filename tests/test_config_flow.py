@@ -4,7 +4,7 @@ from homeassistant.config_entries import SOURCE_DHCP, SOURCE_USER, ConfigEntrySt
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -151,6 +151,39 @@ async def test_dhcp_keeps_a_host_name(
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert mock_config_entry.data == {CONF_HOST: "xenia.local"}
+
+
+async def test_dhcp_moves_an_entry_of_an_earlier_release(
+    hass: HomeAssistant,
+    device_registry: dr.DeviceRegistry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """An entry still keyed on its old IP address follows the machine and moves to its MAC."""
+    mock_xenia_api.for_host("192.168.1.20")
+    entry = MockConfigEntry(
+        domain=XENIA_DOMAIN,
+        title="192.168.1.10",
+        unique_id="192.168.1.10",
+        minor_version=1,
+        data={CONF_HOST: "192.168.1.10"},
+    )
+    entry.add_to_hass(hass)
+    device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(XENIA_DOMAIN, "192.168.1.10")},
+        connections={(dr.CONNECTION_NETWORK_MAC, "AA:BB:CC:DD:EE:FF")},
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        XENIA_DOMAIN, context={"source": SOURCE_DHCP}, data=_dhcp()
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert entry.data == {CONF_HOST: "192.168.1.20"}
+    assert entry.unique_id == "aa:bb:cc:dd:ee:ff"
+    assert entry.state is ConfigEntryState.LOADED
 
 
 async def test_dhcp_of_an_unknown_machine_aborts(
