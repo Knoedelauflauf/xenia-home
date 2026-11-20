@@ -363,9 +363,10 @@ keeps working.
 ### The script weight target is unavailable
 
 The managed script was deleted on the machine, or could not be read. A
-repair issue under **Settings → System → Repairs** says which one. Open
-**Configure** on the integration entry and pick another script, or turn
-weight management off.
+deleted script raises a repair issue under **Settings → System → Repairs**;
+open **Configure** on the integration entry and pick another script, or
+turn weight management off. A script that could not be read is read again
+every minute, and the failure is logged once.
 
 ## Removing the integration
 
