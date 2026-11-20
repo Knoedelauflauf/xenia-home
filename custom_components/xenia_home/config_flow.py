@@ -21,6 +21,8 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
 )
+from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
+from homeassistant.util.network import is_ip_address
 import probatio
 
 from .const import (
@@ -94,6 +96,22 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
             data_schema=self.add_suggested_values_to_schema(HOST_SCHEMA, user_input),
             errors=errors,
         )
+
+    @override
+    async def async_step_dhcp(
+        self, discovery_info: DhcpServiceInfo
+    ) -> ConfigFlowResult:
+        """Follow a machine set up by IP address to its new address."""
+        machine_id = format_mac(discovery_info.macaddress)
+        await self.async_set_unique_id(machine_id)
+        entry = self.hass.config_entries.async_entry_for_domain_unique_id(
+            XENIA_DOMAIN, machine_id
+        )
+        # A host name resolves to the new address on its own.
+        if entry is not None and is_ip_address(entry.data[CONF_HOST]):
+            self._abort_if_unique_id_configured(updates={CONF_HOST: discovery_info.ip})
+        self._abort_if_unique_id_configured()
+        return self.async_abort(reason="unknown")
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
