@@ -54,14 +54,8 @@
       "brew_boiler_temperature": {
         "default": "mdi:thermometer-water"
       },
-      "steam_boiler_pressure": {
-        "default": "mdi:gauge-full"
-      },
       "extractions": {
         "default": "mdi:coffee-to-go"
-      },
-      "operating_hours": {
-        "default": "mdi:clock-outline"
       },
       "scale_flow_rate": {
         "default": "mdi:scale"
