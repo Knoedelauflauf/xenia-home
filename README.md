@@ -321,8 +321,8 @@ per hour, and again after a minute when that read fails.
 
 To poll at a different rate, disable **Polling for updates** in the entry's
 system options and call `homeassistant.update_entity` from an automation.
-The script and switch names are then refreshed only when the entry is
-reloaded.
+The script and switch names are then refreshed only after a command that
+changes them, or when the entry is reloaded.
 
 ## Known limitations
 
