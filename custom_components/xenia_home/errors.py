@@ -2,13 +2,16 @@
 
 from collections.abc import AsyncIterator, Coroutine
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aiohttp import ClientError
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .const import XENIA_DOMAIN
+
+if TYPE_CHECKING:
+    from .coordinator import XeniaCoordinator
 
 REQUEST_ERRORS = (ClientError, OSError, TimeoutError)
 
@@ -42,11 +45,11 @@ async def machine_write() -> AsyncIterator[None]:
 
 
 async def async_write(
-    coordinator: DataUpdateCoordinator[Any], command: Coroutine[Any, Any, None]
+    coordinator: XeniaCoordinator[Any], command: Coroutine[Any, Any, None]
 ) -> None:
-    """Send a command to the machine, then poll it, even when the command failed."""
+    """Send a command, then poll the machine a second later, even after a failure."""
     try:
         async with machine_write():
             await command
     finally:
-        await coordinator.async_request_refresh()
+        coordinator.async_refresh_after_command()

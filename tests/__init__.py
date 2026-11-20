@@ -1,9 +1,14 @@
 """Tests for the Xenia espresso machine integration."""
 
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
 from custom_components.xenia_home.const import XENIA_DOMAIN
@@ -16,6 +21,15 @@ async def setup_integration(hass: HomeAssistant, entry: MockConfigEntry) -> None
     """Set up the integration for `entry`."""
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+
+async def pass_seconds(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, seconds: float
+) -> None:
+    """Let `seconds` pass and run what became due."""
+    freezer.tick(timedelta(seconds=seconds))
+    async_fire_time_changed(hass)
     await hass.async_block_till_done()
 
 

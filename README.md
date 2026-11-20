@@ -288,10 +288,10 @@ For visualizing shot tracking data, check out [xenia-home-card](https://github.c
 The integration polls the machine over the local network. It reads the live
 values once per second while the machine is on or brewing and every five
 seconds while it is in eco mode or off; the one second interval sets the
-time resolution of shot tracking. Every command is followed by an immediate
-poll, so its effect shows right away. Firmware versions, scripts, switch
-assignments and the managed script are read once per hour, and again after
-a minute when that read fails.
+time resolution of shot tracking. Every command is followed by a poll one
+second later, since the machine reports its effect only then. Firmware
+versions, scripts, switch assignments and the managed script are read once
+per hour, and again after a minute when that read fails.
 
 To poll at a different rate, disable **Polling for updates** in the entry's
 system options and call `homeassistant.update_entity` from an automation.

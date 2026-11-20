@@ -1,5 +1,6 @@
 """Tests for the power, eco and steam boiler switches."""
 
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.select import (
     DOMAIN as SELECT_DOMAIN,
     SERVICE_SELECT_OPTION,
@@ -21,7 +22,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from syrupy.assertion import SnapshotAssertion
 
-from tests import setup_integration
+from tests import pass_seconds, setup_integration
 from tests.conftest import MockXeniaApi
 
 POWER = "switch.xenia_espresso_machine_power"
@@ -139,13 +140,17 @@ async def test_turning_on_honours_the_power_on_behavior(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
     status: int,
     entity_id: str,
     service: str,
     behavior: str | None,
     body: str,
 ) -> None:
-    """Powering on and leaving eco mode start the steam boiler only if chosen."""
+    """Powering on and leaving eco mode start the steam boiler only if chosen.
+
+    The machine reports the new state only shortly after the command.
+    """
     await _setup_with_status(hass, mock_config_entry, mock_xenia_api, status)
     if behavior is not None:
         await hass.services.async_call(
@@ -154,9 +159,10 @@ async def test_turning_on_honours_the_power_on_behavior(
             {ATTR_ENTITY_ID: POWER_ON_BEHAVIOR, ATTR_OPTION: behavior},
             blocking=True,
         )
-    mock_xenia_api.set_overview(MA_STATUS=1)
     await _switch(hass, service, entity_id)
     assert mock_xenia_api.bodies("post", "machine/control") == [body]
+    mock_xenia_api.set_overview(MA_STATUS=1)
+    await pass_seconds(hass, freezer, 1)
     assert hass.states.get(POWER).state == STATE_ON
 
 
@@ -196,18 +202,22 @@ async def test_commands(
 )
 async def test_refused_command_raises(
     hass: HomeAssistant,
-    init_integration: MockConfigEntry,
+    mock_config_entry: MockConfigEntry,
     mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
     entity_id: str,
     service: str,
     path: str,
 ) -> None:
     """A refused command raises a translated error and still polls the machine."""
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(mock_config_entry, pref_disable_polling=True)
+    await setup_integration(hass, mock_config_entry)
     mock_xenia_api.fail("post", path)
     polls = len(mock_xenia_api.bodies("get", "overview"))
     with pytest.raises(HomeAssistantError) as exc_info:
         await _switch(hass, service, entity_id)
     assert exc_info.value.translation_key == "write_failed"
     assert "Internal Server Error" in exc_info.value.translation_placeholders["error"]
-    await hass.async_block_till_done()
+    await pass_seconds(hass, freezer, 1)
     assert len(mock_xenia_api.bodies("get", "overview")) > polls

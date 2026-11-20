@@ -52,7 +52,7 @@ Optional only; ruff and mypy are the canonical local checks.
 
 Two `DataUpdateCoordinator` instances are stored in `entry.runtime_data` as `XeniaRuntimeData`:
 
-- **`XeniaDataUpdateCoordinator`**: polls `/api/v2/overview` and `/api/v2/overview_single` every second while the machine is on, brewing or draining, and every five seconds otherwise (`POLL_INTERVAL_*` in `const.py`).
+- **`XeniaDataUpdateCoordinator`**: polls `/api/v2/overview` and `/api/v2/overview_single` every second while the machine is on, brewing or draining, and every five seconds otherwise (`POLL_INTERVAL_*` in `const.py`). After a command, `async_write` has the coordinator that holds the written value poll again one second later (`COMMAND_REFRESH_DELAY`), since the machine reports the new state only then.
 - **`XeniaConfigCoordinator`**: polls `/api/v2/machine`, `/api/v2/scripts/list`, `/api/v2/switches` and the optionally configured managed weight script every hour.
 
 `XeniaEntity` listens to both. An update of the config coordinator only rewrites the entity state; logic that runs per live sample, like the shot tracker in `event.py`, must stay in `_handle_coordinator_update`, which only the live coordinator calls.
@@ -88,7 +88,7 @@ self._attr_unique_id = f"{self.machine_id}_{description.key}"
 | `init_integration` | Sets up `mock_config_entry` and returns it. |
 | `poll` | Serves an overview and lets one second pass, so the live coordinator polls once while the machine is on. |
 
-`tests/__init__.py` holds `setup_integration`, `setup_second_machine`, `ws_command`, `listed_shots` and `stored_shots` (shot history files in the format 0.7.0 wrote). Tests drive the machine through `mock_xenia_api` and time through `poll` or `freezer`, and assert on states, registries, actions, events and the websocket API; they do not reach into coordinators, entities or `runtime_data`. Documented names (action fields, option keys, select options, API status values) are written out in tests rather than imported, so renaming one fails a test.
+`tests/__init__.py` holds `setup_integration`, `setup_second_machine`, `pass_seconds`, `ws_command`, `listed_shots` and `stored_shots` (shot history files in the format 0.7.0 wrote). Tests drive the machine through `mock_xenia_api` and time through `poll`, `pass_seconds` or `freezer`, and assert on states, registries, actions, events and the websocket API; they do not reach into coordinators, entities or `runtime_data`. Documented names (action fields, option keys, select options, API status values) are written out in tests rather than imported, so renaming one fails a test.
 
 ## References
 

@@ -1,7 +1,6 @@
 """Fixtures for the Xenia integration tests."""
 
 from collections.abc import Awaitable, Callable, Generator
-from datetime import timedelta
 from http import HTTPStatus
 import json
 import re
@@ -11,10 +10,7 @@ from unittest.mock import Mock, patch
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 import pytest
-from pytest_homeassistant_custom_component.common import (
-    MockConfigEntry,
-    async_fire_time_changed,
-)
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.syrupy import HomeAssistantSnapshotExtension
 from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
@@ -25,7 +21,7 @@ from yarl import URL
 
 from custom_components.xenia_home.const import XENIA_DOMAIN
 
-from tests import setup_integration
+from tests import pass_seconds, setup_integration
 from tests.fixtures.api_responses import (
     MACHINE_PAYLOAD,
     OLD_FW_MACHINE_PAYLOAD,
@@ -277,8 +273,6 @@ def poll(
 
     async def _poll(**fields: Any) -> None:
         mock_xenia_api.set_overview(**fields)
-        freezer.tick(timedelta(seconds=1))
-        async_fire_time_changed(hass)
-        await hass.async_block_till_done()
+        await pass_seconds(hass, freezer, 1)
 
     return _poll

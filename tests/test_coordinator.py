@@ -1,7 +1,5 @@
 """Tests for polling the machine."""
 
-from datetime import timedelta
-
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_ENTITY_ID, STATE_UNAVAILABLE
@@ -9,27 +7,16 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.setup import async_setup_component
 import pytest
-from pytest_homeassistant_custom_component.common import (
-    MockConfigEntry,
-    async_fire_time_changed,
-)
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.xenia_home.const import XENIA_DOMAIN
 
-from tests import setup_integration
+from tests import pass_seconds, setup_integration
 from tests.conftest import MockXeniaApi
 
 TEMPERATURE = "sensor.xenia_espresso_machine_brewgroup_temperature"
 SCRIPT_SELECT = "select.xenia_espresso_machine_script"
 WEIGHT = "number.xenia_espresso_machine_script_weight_target"
-
-
-async def _pass(
-    hass: HomeAssistant, freezer: FrozenDateTimeFactory, seconds: float
-) -> None:
-    freezer.tick(timedelta(seconds=seconds))
-    async_fire_time_changed(hass)
-    await hass.async_block_till_done()
 
 
 @pytest.mark.parametrize(
@@ -56,7 +43,7 @@ async def test_poll_interval_follows_the_machine(
     await setup_integration(hass, mock_config_entry)
     polls = len(mock_xenia_api.bodies("get", "overview"))
     for _ in range(10):
-        await _pass(hass, freezer, 1)
+        await pass_seconds(hass, freezer, 1)
     assert len(mock_xenia_api.bodies("get", "overview")) == polls + 10 // interval
 
 
@@ -68,18 +55,18 @@ async def test_poll_interval_changes_with_the_machine(
 ) -> None:
     """Turning the machine to eco slows polling down, turning it on speeds it up."""
     mock_xenia_api.set_overview(MA_STATUS=2)
-    await _pass(hass, freezer, 1)
+    await pass_seconds(hass, freezer, 1)
     polls = len(mock_xenia_api.bodies("get", "overview"))
     for _ in range(10):
-        await _pass(hass, freezer, 1)
+        await pass_seconds(hass, freezer, 1)
     assert len(mock_xenia_api.bodies("get", "overview")) == polls + 2
 
     mock_xenia_api.set_overview(MA_STATUS=1)
     for _ in range(5):
-        await _pass(hass, freezer, 1)
+        await pass_seconds(hass, freezer, 1)
     polls = len(mock_xenia_api.bodies("get", "overview"))
     for _ in range(3):
-        await _pass(hass, freezer, 1)
+        await pass_seconds(hass, freezer, 1)
     assert len(mock_xenia_api.bodies("get", "overview")) == polls + 3
 
 
@@ -101,7 +88,7 @@ async def test_polling_can_be_left_to_automations(
     await setup_integration(hass, entry)
     polls = len(mock_xenia_api.bodies("get", "overview"))
     for _ in range(10):
-        await _pass(hass, freezer, 1)
+        await pass_seconds(hass, freezer, 1)
     assert len(mock_xenia_api.bodies("get", "overview")) == polls
 
     mock_xenia_api.set_overview(BG_SENS_TEMP_A=94.5)
@@ -125,12 +112,12 @@ async def test_entities_are_unavailable_while_machine_does_not_answer(
 ) -> None:
     """A failed poll makes the entities unavailable until the next good one."""
     mock_xenia_api.override("get", path, exc=TimeoutError())
-    await _pass(hass, freezer, 1)
+    await pass_seconds(hass, freezer, 1)
     assert hass.states.get(TEMPERATURE).state == STATE_UNAVAILABLE
 
     mock_xenia_api.restore("get", path)
     mock_xenia_api.set_overview(BG_SENS_TEMP_A=91.0)
-    await _pass(hass, freezer, 1)
+    await pass_seconds(hass, freezer, 1)
     assert hass.states.get(TEMPERATURE).state == "91.0"
 
 
@@ -173,7 +160,7 @@ async def test_script_changes_arrive_within_an_hour(
 ) -> None:
     """Scripts are polled hourly, without a reload."""
     mock_xenia_api.set_scripts({10: "MyShot renamed"})
-    await _pass(hass, freezer, 3601)
+    await pass_seconds(hass, freezer, 3601)
     options = hass.states.get(SCRIPT_SELECT).attributes["options"]
     assert "MyShot renamed" in options
     assert "MyShot" not in options
@@ -188,9 +175,9 @@ async def test_failed_config_poll_is_retried_within_a_minute(
     """After a failed hourly poll the scripts are read again a minute later."""
     mock_xenia_api.fail("get", "switches")
     mock_xenia_api.set_scripts({10: "MyShot renamed"})
-    await _pass(hass, freezer, 3601)
+    await pass_seconds(hass, freezer, 3601)
     mock_xenia_api.restore("get", "switches")
-    await _pass(hass, freezer, 61)
+    await pass_seconds(hass, freezer, 61)
     assert "MyShot renamed" in hass.states.get(SCRIPT_SELECT).attributes["options"]
 
 
@@ -226,7 +213,7 @@ async def test_unreadable_managed_script_only_affects_the_weight(
 
     mock_xenia_api.restore("post", "scripts/read")
     mock_xenia_api.set_script(17, "1;13;27 45;7;", "My Shot")
-    await _pass(hass, freezer, 61)
+    await pass_seconds(hass, freezer, 61)
     assert hass.states.get(WEIGHT).state == "45.0"
 
 
@@ -250,7 +237,7 @@ async def test_deleted_managed_script_raises_a_repair_issue(
     }
 
     mock_xenia_api.set_script(17, "1;13;27 45;7;", "My Shot")
-    await _pass(hass, freezer, 3601)
+    await pass_seconds(hass, freezer, 3601)
     assert hass.states.get(WEIGHT).state == "45.0"
     assert issue_registry.async_get_issue(XENIA_DOMAIN, issue_id) is None
 

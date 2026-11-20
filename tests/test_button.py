@@ -1,5 +1,6 @@
 """Tests for the script buttons."""
 
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.button import DOMAIN as BUTTON_DOMAIN, SERVICE_PRESS
 from homeassistant.components.select import (
     DOMAIN as SELECT_DOMAIN,
@@ -13,6 +14,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from syrupy.assertion import SnapshotAssertion
 
+from tests import pass_seconds, setup_integration
 from tests.conftest import MockXeniaApi
 
 EXECUTE = "button.xenia_espresso_machine_execute_script"
@@ -98,15 +100,35 @@ async def test_scripts_sharing_a_name_are_told_apart(
 @pytest.mark.parametrize("entity_id", [EXECUTE, STOP])
 async def test_press_polls_the_machine(
     hass: HomeAssistant,
-    init_integration: MockConfigEntry,
+    mock_config_entry: MockConfigEntry,
     mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
     entity_id: str,
 ) -> None:
-    """A pressed button is followed by a poll, so its effect shows right away."""
+    """A pressed button is followed by a poll a second later, also while idle."""
+    mock_xenia_api.set_overview(MA_STATUS=0)
+    await setup_integration(hass, mock_config_entry)
     await _select_script(hass, "MyShot")
     polls = len(mock_xenia_api.bodies("get", "overview"))
     await _press(hass, entity_id)
-    await hass.async_block_till_done()
+    await pass_seconds(hass, freezer, 1)
+    assert len(mock_xenia_api.bodies("get", "overview")) > polls
+
+
+async def test_second_press_polls_a_second_later(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A press shortly after another one is still followed by a poll a second later."""
+    mock_xenia_api.set_overview(MA_STATUS=0)
+    await setup_integration(hass, mock_config_entry)
+    await _press(hass, STOP)
+    await pass_seconds(hass, freezer, 3)
+    polls = len(mock_xenia_api.bodies("get", "overview"))
+    await _press(hass, STOP)
+    await pass_seconds(hass, freezer, 1)
     assert len(mock_xenia_api.bodies("get", "overview")) > polls
 
 

@@ -7,12 +7,14 @@ import logging
 from typing import override
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    COMMAND_REFRESH_DELAY,
     CONF_MANAGED_SCRIPT_ID,
     CONF_WEIGHT_MANAGEMENT_ENABLED,
     POLL_INTERVAL_ACTIVE,
@@ -78,7 +80,36 @@ class XeniaRuntimeData:
 type XeniaConfigEntry = ConfigEntry[XeniaRuntimeData]
 
 
-class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
+class XeniaCoordinator[DataT](DataUpdateCoordinator[DataT]):
+    """Coordinator that polls again once the machine shows a command's effect."""
+
+    _unsub_command_refresh: CALLBACK_TYPE | None = None
+
+    @callback
+    def async_refresh_after_command(self) -> None:
+        """Poll the machine shortly after a command; it reports the new state late."""
+        self._cancel_command_refresh()
+        self._unsub_command_refresh = async_call_later(
+            self.hass, COMMAND_REFRESH_DELAY, self._async_command_refresh
+        )
+
+    async def _async_command_refresh(self, _now: datetime) -> None:
+        self._unsub_command_refresh = None
+        await self.async_refresh()
+
+    def _cancel_command_refresh(self) -> None:
+        if self._unsub_command_refresh is not None:
+            self._unsub_command_refresh()
+            self._unsub_command_refresh = None
+
+    @override
+    async def async_shutdown(self) -> None:
+        """Cancel a pending poll after a command, then shut down."""
+        self._cancel_command_refresh()
+        await super().async_shutdown()
+
+
+class XeniaDataUpdateCoordinator(XeniaCoordinator[XeniaCoordinatorData]):
     """Poll the live data, faster while the machine is on."""
 
     config_entry: XeniaConfigEntry
@@ -122,7 +153,7 @@ class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
         return XeniaCoordinatorData(overview, overview_single, shot_start_time)
 
 
-class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
+class XeniaConfigCoordinator(XeniaCoordinator[XeniaConfigData]):
     """Poll the machine info, scripts, switches and managed script hourly."""
 
     config_entry: XeniaConfigEntry
