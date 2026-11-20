@@ -22,17 +22,19 @@ def machine_id(entry: XeniaConfigEntry) -> str:
 
 def build_device_info(entry: XeniaConfigEntry, machine: XeniaMachineData) -> DeviceInfo:
     """Build the device info of the machine."""
-    fw_version = machine.fw_version()
-    esp_fw_version = machine.esp_fw_version()
+    versions = (
+        machine.fw_version_major,
+        machine.fw_version_minor,
+        machine.esp_fw_major,
+        machine.esp_fw_minor,
+    )
     return DeviceInfo(
         identifiers={(XENIA_DOMAIN, machine_id(entry))},
         connections={(CONNECTION_NETWORK_MAC, machine_id(entry))},
         name="Xenia Espresso Machine",
         manufacturer="Xenia Espresso GmbH",
         model="DBL",
-        sw_version=(
-            f"{fw_version}/{esp_fw_version}" if fw_version and esp_fw_version else None
-        ),
+        sw_version=None if None in versions else "{}.{}/{}.{}".format(*versions),
         serial_number=machine.ma_sn,
     )
 

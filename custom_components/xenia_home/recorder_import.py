@@ -8,12 +8,12 @@ import logging
 from typing import Any
 
 from homeassistant.components.recorder import get_instance, history
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
 
+from .coordinator import XeniaConfigEntry
 from .event import ShotData
 from .shot_store import XeniaShotStore
 
@@ -23,7 +23,7 @@ _PAYLOAD_KEYS = tuple(f.name for f in fields(ShotData))
 
 
 async def async_import_recorder_shots(
-    hass: HomeAssistant, entry: ConfigEntry, store: XeniaShotStore
+    hass: HomeAssistant, entry: XeniaConfigEntry, store: XeniaShotStore
 ) -> None:
     """Copy completed shots from recorder history into the store, then never again."""
     # The recorder may still be starting up during HA boot; only after HA has
@@ -51,7 +51,7 @@ async def async_import_recorder_shots(
 
 
 @callback
-def _tracker_entity_id(hass: HomeAssistant, entry: ConfigEntry) -> str | None:
+def _tracker_entity_id(hass: HomeAssistant, entry: XeniaConfigEntry) -> str | None:
     registry = er.async_get(hass)
     for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
         if reg_entry.domain == "event":

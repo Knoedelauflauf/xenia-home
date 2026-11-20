@@ -158,18 +158,6 @@ class XeniaMachineData:
             ma_sn=data.get("MA_SN") or None,
         )
 
-    def fw_version(self) -> str | None:
-        """Return the main firmware version as `major.minor`, or None if unknown."""
-        if self.fw_version_major is None or self.fw_version_minor is None:
-            return None
-        return f"{self.fw_version_major}.{self.fw_version_minor}"
-
-    def esp_fw_version(self) -> str | None:
-        """Return the ESP firmware version as `major.minor`, or None if unknown."""
-        if self.esp_fw_major is None or self.esp_fw_minor is None:
-            return None
-        return f"{self.esp_fw_major}.{self.esp_fw_minor}"
-
 
 def _safe_int(value: Any) -> int | None:
     try:
@@ -240,10 +228,9 @@ class Xenia:
 
     async def machine_turn_on(self, sb_on: bool) -> None:
         """Turn the machine on, optionally suppressing the steam boiler."""
-        if sb_on:
-            await self._control_machine(MachineControl.ON)
-        else:
-            await self._control_machine(MachineControl.ON_SB_OFF)
+        await self._control_machine(
+            MachineControl.ON if sb_on else MachineControl.ON_SB_OFF
+        )
 
     async def machine_turn_off(self) -> None:
         """Turn the machine off."""
