@@ -45,7 +45,8 @@ class XeniaExecuteScriptButton(XeniaEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Run the selected script."""
         script_id = self.runtime_data.selected_script_id
-        if not script_id:
+        scripts = self.runtime_data.config_coordinator.data.scripts
+        if not script_id or script_id not in scripts:
             raise ServiceValidationError(
                 translation_domain=XENIA_DOMAIN, translation_key="no_script_selected"
             )
