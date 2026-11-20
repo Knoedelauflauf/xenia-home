@@ -1,4 +1,4 @@
-"""Tests for the script buttons."""
+"""Tests for the script and scale buttons."""
 
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.button import DOMAIN as BUTTON_DOMAIN, SERVICE_PRESS
@@ -19,6 +19,7 @@ from tests.conftest import MockXeniaApi
 
 EXECUTE = "button.xenia_espresso_machine_execute_script"
 STOP = "button.xenia_espresso_machine_stop_script"
+TARE = "button.xenia_espresso_machine_tare_scale"
 SCRIPT_SELECT = "select.xenia_espresso_machine_script"
 
 
@@ -44,7 +45,7 @@ async def test_button_entities_snapshot(
     entity_registry: er.EntityRegistry,
 ) -> None:
     """The button states and registry entries match the snapshot."""
-    for entity_id in (EXECUTE, STOP):
+    for entity_id in (EXECUTE, STOP, TARE):
         assert hass.states.get(entity_id) == snapshot(name=f"{entity_id}-state")
         assert entity_registry.async_get(entity_id) == snapshot(
             name=f"{entity_id}-registry"
@@ -97,7 +98,7 @@ async def test_scripts_sharing_a_name_are_told_apart(
     assert mock_xenia_api.bodies("post", "scripts/execute") == ['{"ID":12}']
 
 
-@pytest.mark.parametrize("entity_id", [EXECUTE, STOP])
+@pytest.mark.parametrize("entity_id", [EXECUTE, STOP, TARE])
 async def test_press_polls_the_machine(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
@@ -140,9 +141,21 @@ async def test_stop_stops_the_script(
     assert len(mock_xenia_api.bodies("get", "scripts/stop")) == 1
 
 
+async def test_tare_tares_the_scale(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+) -> None:
+    """The tare button has the machine tare the connected scale."""
+    await _press(hass, TARE)
+    assert mock_xenia_api.bodies("post", "scale/write") == ["{}"]
+
+
 @pytest.mark.parametrize(
     ("entity_id", "method", "path"),
-    [(EXECUTE, "post", "scripts/execute"), (STOP, "get", "scripts/stop")],
+    [
+        (EXECUTE, "post", "scripts/execute"),
+        (STOP, "get", "scripts/stop"),
+        (TARE, "post", "scale/write"),
+    ],
 )
 async def test_refused_press_raises_translated_error(
     hass: HomeAssistant,

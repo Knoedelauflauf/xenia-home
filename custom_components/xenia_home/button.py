@@ -20,10 +20,14 @@ async def async_setup_entry(
     entry: XeniaConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the script buttons."""
+    """Set up the script and scale buttons."""
     coordinator = entry.runtime_data.coordinator
     async_add_entities(
-        [XeniaExecuteScriptButton(coordinator), XeniaStopScriptButton(coordinator)]
+        [
+            XeniaExecuteScriptButton(coordinator),
+            XeniaStopScriptButton(coordinator),
+            XeniaTareScaleButton(coordinator),
+        ]
     )
 
 
@@ -64,3 +68,19 @@ class XeniaStopScriptButton(XeniaEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Stop the running script."""
         await async_write(self.coordinator, self.coordinator.xenia.stop_script())
+
+
+class XeniaTareScaleButton(XeniaEntity, ButtonEntity):
+    """Tare the scale connected to the machine."""
+
+    _attr_translation_key = "tare_scale"
+
+    def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
+        """Initialize the button."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{self.machine_id}_tare_scale"
+
+    @override
+    async def async_press(self) -> None:
+        """Tare the scale."""
+        await async_write(self.coordinator, self.coordinator.xenia.tare_scale())

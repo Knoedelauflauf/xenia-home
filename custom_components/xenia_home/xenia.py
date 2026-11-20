@@ -332,6 +332,10 @@ class Xenia:
         """Stop the currently running script."""
         await self._get("scripts/stop")
 
+    async def tare_scale(self) -> None:
+        """Tare the Bluetooth scale connected to the machine."""
+        await self._post("scale/write", "{}")
+
     async def get_switches(self) -> dict[str, int]:
         """Return the switch settings, including the switch-to-script assignments."""
         switches: dict[str, int] = _json(await self._get("switches"))

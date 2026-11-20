@@ -40,6 +40,7 @@ WRITE_ENDPOINTS = {
     ("post", "inc_dec"),
     ("post", "inc_dec_bb"),
     ("post", "machine/control"),
+    ("post", "scale/write"),
     ("post", "scripts/create"),
     ("post", "scripts/execute"),
     ("post", "switches"),

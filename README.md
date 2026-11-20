@@ -131,7 +131,8 @@ behavior, or off. *ECO mode* puts the running machine into eco mode or back.
 | Left switch left short, ... Right switch right long | The script each of the six switch positions runs (*disabled*). |
 
 **Buttons:** *Execute script* runs the script picked in *Script*; *Stop
-script* stops the running script.
+script* stops the running script; *Tare scale* tares the Bluetooth scale
+connected to the machine (see **Scale tare**).
 
 **Event:** *Shot tracker* fires `shot_completed` with the curves of every
 shot of ten seconds or more (see **Shot history API**).
@@ -241,6 +242,29 @@ on the machine, so the next shot pulled with that script stops at the new
 weight. You can also bind the number entity into automations, for
 example, to step the target down by 0.5 g across a tasting flight, or to
 expose a slider on a dashboard.
+
+## Scale tare
+
+With firmware 4.255 the machine tares its Bluetooth scale only before a
+script started over the API, as the *Execute script* button and the
+`xenia_home.execute_script` action do, and when it returns to ready after a
+shot. A shot started with the switches on the machine is not tared at its
+start, so with a cup already on the scale a weight target counts as reached
+right away.
+
+To tare at every shot start, press the *Tare scale* button from an
+automation. Home Assistant sees the start within about a second:
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: sensor.xenia_espresso_machine_status
+    to: brewing
+actions:
+  - action: button.press
+    target:
+      entity_id: button.xenia_espresso_machine_tare_scale
+```
 
 ## Shot history API
 

@@ -203,6 +203,9 @@
       },
       "stop_script": {
         "name": "Stop script"
+      },
+      "tare_scale": {
+        "name": "Tare scale"
       }
     },
     "event": {
