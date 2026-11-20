@@ -254,7 +254,7 @@
   "issues": {
     "managed_script_missing": {
       "title": "Managed script of {title} was deleted",
-      "description": "Script {script_id}, whose weight target {title} manages, no longer exists on the machine. Open the options of the integration and pick another script, or turn weight management off."
+      "description": "Script {script_id}, whose weight target {title} manages, no longer exists on the machine, so its weight target is unavailable. Open the options of the integration and pick another script, or turn weight management off; this issue then goes away."
     }
   }
 }

@@ -32,8 +32,9 @@ exclude_also = [
 ]
 fail_under = 95
 
-# Mypy configuration from the mypy.ini of home-assistant/core: its global
-# settings, and its strict settings for the integrations in .strict-typing.
+# Mypy configuration from the mypy.ini of home-assistant/core: the global
+# settings that apply to integrations, and the strict settings for the
+# integrations in .strict-typing.
 
 [tool.mypy]
 python_version = "3.14"

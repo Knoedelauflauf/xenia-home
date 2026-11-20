@@ -256,9 +256,7 @@ def mock_config_entry(
 
 @pytest.fixture
 async def init_integration(
-    hass: HomeAssistant,
-    mock_config_entry: MockConfigEntry,
-    mock_xenia_api: MockXeniaApi,
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry
 ) -> MockConfigEntry:
     """Set up the integration and return its config entry."""
     await setup_integration(hass, mock_config_entry)

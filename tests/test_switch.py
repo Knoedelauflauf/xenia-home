@@ -45,7 +45,7 @@ async def _setup_with_status(
     status: int,
     **fields,
 ) -> None:
-    machine.set_overview(MA_STATUS=int(status), **fields)
+    machine.set_overview(MA_STATUS=status, **fields)
     await setup_integration(hass, entry)
 
 

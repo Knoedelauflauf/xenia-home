@@ -66,11 +66,10 @@ def stored_shots(entry_id: str, *payloads: dict[str, Any]) -> dict[str, Any]:
     for payload in payloads:
         shot_id = payload["start_time"]
         month = shot_id[:7]
+        key = f"xenia_home/{entry_id}.shots_{month}"
         chunk = files.setdefault(
-            f"xenia_home/{entry_id}.shots_{month}",
-            {"version": 1, "minor_version": 1, "key": "", "data": {}},
+            key, {"version": 1, "minor_version": 1, "key": key, "data": {}}
         )
-        chunk["key"] = f"xenia_home/{entry_id}.shots_{month}"
         chunk["data"][shot_id] = payload
         summaries.append(
             {

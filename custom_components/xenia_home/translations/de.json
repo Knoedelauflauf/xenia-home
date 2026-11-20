@@ -254,7 +254,7 @@
   "issues": {
     "managed_script_missing": {
       "title": "Verwaltetes Skript von {title} wurde gelöscht",
-      "description": "Das Skript {script_id}, dessen Zielgewicht {title} verwaltet, existiert auf der Maschine nicht mehr. Öffne die Optionen der Integration und wähle ein anderes Skript oder schalte die Gewichtssteuerung aus."
+      "description": "Das Skript {script_id}, dessen Zielgewicht {title} verwaltet, existiert auf der Maschine nicht mehr, daher ist sein Zielgewicht nicht verfügbar. Öffne die Optionen der Integration und wähle ein anderes Skript oder schalte die Gewichtssteuerung aus; danach verschwindet dieser Hinweis."
     }
   }
 }
