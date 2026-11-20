@@ -1,383 +1,337 @@
-"""Tests for event.py — XeniaShotTracker and ShotData."""
+"""Tests for the shot tracker event entity."""
 
-from datetime import timedelta
-from unittest.mock import patch
+import re
 
-from homeassistant.helpers.entity_component import DATA_INSTANCES
-from homeassistant.util import dt as dt_util
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.typing import WebSocketGenerator
+from syrupy.assertion import SnapshotAssertion
 
-from custom_components.xenia_home.event import ShotData
-from custom_components.xenia_home.xenia import MachineStatus, XeniaOverviewData
-from tests.fixtures.api_responses import OVERVIEW_PAYLOAD
+from tests import listed_shots, ws_command
+from tests.conftest import MockXeniaApi
 
 TRACKER = "event.xenia_espresso_machine_shot_tracker"
+# MA_STATUS values from the API documentation
+ON = 1
+BREWING = 3
+DRAINING = 4
+ISO_MILLISECONDS = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}\+00:00$")
+
+
+def _shot(hass: HomeAssistant) -> dict | None:
+    """Return the payload of the last shot_completed event, if any."""
+    state = hass.states.get(TRACKER)
+    assert state is not None
+    if state.attributes.get("event_type") != "shot_completed":
+        return None
+    return dict(state.attributes)
+
+
+async def brew(poll, seconds: int, **fields) -> None:
+    """Brew for `seconds`, the cup weight rising by 1.5 g per second."""
+    await poll(MA_STATUS=BREWING, SCALE_WEIGHT=0.0, **fields)
+    for second in range(1, seconds + 1):
+        await poll(MA_STATUS=BREWING, SCALE_WEIGHT=1.5 * second, **fields)
+
+
+async def end_brew(poll, weight: float) -> None:
+    """Stop brewing and let the afterflow pass."""
+    for _ in range(3):
+        await poll(MA_STATUS=ON, SCALE_WEIGHT=weight)
 
 
 async def test_event_entities_snapshot(
-    hass, init_integration, snapshot, entity_registry
-):
-    entity_ids = sorted(
-        e.entity_id
-        for e in entity_registry.entities.values()
-        if e.platform == "xenia_home" and e.domain == "event"
-    )
-    assert entity_ids
-    for entity_id in entity_ids:
-        registry_entry = entity_registry.async_get(entity_id)
-        # State of an event entity is volatile (last event timestamp).
-        # Snapshot the registry entry only.
-        assert registry_entry == snapshot(name=f"{entity_id}-registry")
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    snapshot: SnapshotAssertion,
+    entity_registry: er.EntityRegistry,
+) -> None:
+    """The shot tracker registry entry matches the snapshot."""
+    registry_entry = entity_registry.async_get(TRACKER)
+    assert registry_entry == snapshot(name=f"{TRACKER}-registry")
 
 
-# ===========================================================================
-# ShotData
-# ===========================================================================
+async def test_shot_is_fired_and_stored(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    poll,
+) -> None:
+    """A shot fires shot_completed with its curves after the afterflow and is stored."""
+    await brew(poll, 25)
+    assert hass.states.get(TRACKER).attributes["is_brewing"] is True
 
+    await end_brew(poll, weight=38.0)
 
-def test_shot_data_to_dict_has_all_fields() -> None:
-    shot = ShotData(
-        start_time="2026-01-01T10:00:00.000+00:00",
-        brew_end_time="2026-01-01T10:00:30.000+00:00",
-        afterflow_seconds=2,
-        duration_seconds=30.0,
-        timestamps=[0.0, 1.0],
-        brew_group_temps=[93.0, 93.5],
-        brew_boiler_temps=[130.0, 130.0],
-        pump_pressures=[9.0, 9.1],
-        flow_rates=[5.0, 5.5],
-        weights=[0.0, 10.0],
-    )
-    d = shot.to_dict()
-    assert d["start_time"] == "2026-01-01T10:00:00.000+00:00"
-    assert d["duration_seconds"] == 30.0
-    assert d["timestamps"] == [0.0, 1.0]
-    assert d["brew_end_time"] == "2026-01-01T10:00:30.000+00:00"
+    shot = _shot(hass)
+    assert shot is not None
+    assert shot["is_brewing"] is False
+    assert shot["duration_seconds"] == 26.0
+    assert shot["afterflow_seconds"] == 2
+    assert shot["timestamps"] == [float(second) for second in range(1, 29)]
+    assert shot["weights"][:3] == [1.5, 3.0, 4.5]
+    assert shot["weights"][-3:] == [38.0, 38.0, 38.0]
+    assert shot["brew_end_time"] > shot["start_time"]
+    assert ISO_MILLISECONDS.match(shot["start_time"])
+    assert ISO_MILLISECONDS.match(shot["brew_end_time"])
+    for curve in ("brew_group_temps", "brew_boiler_temps", "pump_pressures"):
+        assert len(shot[curve]) == 28
 
-
-def test_shot_data_brew_end_time_optional() -> None:
-    shot = ShotData(
-        start_time="2026-01-01T10:00:00.000+00:00",
-        brew_end_time=None,
-        afterflow_seconds=2,
-        duration_seconds=25.0,
-        timestamps=[],
-        brew_group_temps=[],
-        brew_boiler_temps=[],
-        pump_pressures=[],
-        flow_rates=[],
-        weights=[],
-    )
-    assert shot.to_dict()["brew_end_time"] is None
-
-
-# ===========================================================================
-# Helpers to grab the live entity object and prime the state machine
-# ===========================================================================
-
-
-def _get_tracker(hass, init_integration):
-    """Return the XeniaShotTracker entity instance from runtime data."""
-    component = hass.data[DATA_INSTANCES].get("event")
-    if component is not None:
-        for entity in component.entities:
-            if entity.entity_id == TRACKER:
-                return entity
-    raise AssertionError(f"tracker entity {TRACKER} not found")
-
-
-async def _drive_overview(hass, mock_xenia_api, init_integration, **fields):
-    """Let the coordinator poll an overview with the given field overrides."""
-    coordinator = init_integration.runtime_data.coordinator
-    overview = XeniaOverviewData.from_dict({**mock_xenia_api._overview, **fields})
-    with patch.object(coordinator.xenia, "get_overview", return_value=overview):
-        await coordinator.async_refresh()
-    await hass.async_block_till_done()
-
-
-async def _drive_status(hass, mock_xenia_api, init_integration, status: MachineStatus):
-    """Push a new MA_STATUS through the coordinator and let listeners run."""
-    await _drive_overview(hass, mock_xenia_api, init_integration, MA_STATUS=int(status))
-
-
-# ===========================================================================
-# State-machine transitions driven through the real coordinator
-# ===========================================================================
-
-
-async def test_tracker_starts_shot_when_brewing_begins(
-    hass, init_integration, mock_xenia_api
-):
-    tracker = _get_tracker(hass, init_integration)
-    coordinator = init_integration.runtime_data.coordinator
-    assert tracker._is_brewing is False
-    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.BREWING)
-    assert tracker._is_brewing is True
-    assert tracker._shot_start_time == coordinator.data.shot_start_time
-
-
-async def test_new_shot_starts_with_empty_curves(
-    hass, init_integration, mock_xenia_api
-):
-    tracker = _get_tracker(hass, init_integration)
-    tracker._brew_group_temps = [1.0, 2.0]
-    tracker._timestamps = [0.5, 1.5]
-    tracker._brew_end_time = dt_util.utcnow()
-    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.BREWING)
-    assert tracker._brew_group_temps == []
-    assert tracker._timestamps == []
-    assert tracker._brew_end_time is None
-
-
-async def test_tracker_starts_afterflow_when_brewing_stops(
-    hass, init_integration, mock_xenia_api
-):
-    tracker = _get_tracker(hass, init_integration)
-    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.BREWING)
-    assert tracker._is_brewing is True
-    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.ON)
-    assert tracker._is_brewing is False
-    assert tracker._afterflow_until is not None
-
-
-async def test_tracker_cancels_afterflow_on_new_brew(
-    hass, init_integration, mock_xenia_api
-):
-    tracker = _get_tracker(hass, init_integration)
-    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.BREWING)
-    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.ON)
-    assert tracker._afterflow_until is not None
-    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.BREWING)
-    assert tracker._afterflow_until is None
-
-
-# ===========================================================================
-# Direct entity-instance tests for the internal helpers
-# ===========================================================================
-
-
-async def test_start_afterflow_does_not_reset_if_already_active(hass, init_integration):
-    tracker = _get_tracker(hass, init_integration)
-    first = dt_util.utcnow() + timedelta(seconds=10)
-    tracker._afterflow_until = first
-    tracker._start_afterflow()
-    assert tracker._afterflow_until == first
-
-
-async def test_cancel_afterflow_clears_state(hass, init_integration):
-    tracker = _get_tracker(hass, init_integration)
-    tracker._afterflow_until = dt_util.utcnow() + timedelta(seconds=5)
-    tracker._afterflow_samples = 3
-    tracker._cancel_afterflow()
-    assert tracker._afterflow_until is None
-    assert tracker._afterflow_samples == 0
-
-
-async def test_complete_shot_ignores_short_shots(hass, init_integration):
-    tracker = _get_tracker(hass, init_integration)
-    fired: list = []
-    tracker._trigger_event = lambda name, data: fired.append((name, data))
-    tracker._shot_start_time = dt_util.utcnow() - timedelta(seconds=5)
-    tracker._timestamps = [0.0, 1.0]
-    tracker._brew_group_temps = [93.0, 93.0]
-    tracker._brew_boiler_temps = [130.0, 130.0]
-    tracker._pump_pressures = [9.0, 9.0]
-    tracker._flow_rates = [5.0, 5.0]
-    tracker._weights = [0.0, 5.0]
-    tracker._complete_shot_tracking()
-    assert fired == []
-
-
-async def test_complete_shot_fires_for_long_enough_shot(hass, init_integration):
-    tracker = _get_tracker(hass, init_integration)
-    fired: list = []
-    tracker._trigger_event = lambda name, data: fired.append((name, data))
-    tracker._shot_start_time = dt_util.utcnow() - timedelta(seconds=25)
-    tracker._timestamps = [0.0, 5.0, 10.0, 15.0, 20.0]
-    tracker._brew_group_temps = [93.0] * 5
-    tracker._brew_boiler_temps = [130.0] * 5
-    tracker._pump_pressures = [9.0] * 5
-    tracker._flow_rates = [5.0] * 5
-    tracker._weights = [0.0, 5.0, 10.0, 15.0, 18.0]
-    tracker._complete_shot_tracking()
-    assert len(fired) == 1
-    name, data = fired[0]
-    assert name == "shot_completed"
-    assert "duration_seconds" in data
-
-
-async def test_complete_shot_uses_brew_end_time_for_duration(hass, init_integration):
-    tracker = _get_tracker(hass, init_integration)
-    fired: list = []
-    tracker._trigger_event = lambda name, data: fired.append((name, data))
-    start = dt_util.utcnow() - timedelta(seconds=30)
-    brew_end = start + timedelta(seconds=25)
-    tracker._shot_start_time = start
-    tracker._brew_end_time = brew_end
-    tracker._timestamps = list(range(25))
-    tracker._brew_group_temps = [93.0] * 25
-    tracker._brew_boiler_temps = [130.0] * 25
-    tracker._pump_pressures = [9.0] * 25
-    tracker._flow_rates = [5.0] * 25
-    tracker._weights = [float(i) for i in range(25)]
-    tracker._complete_shot_tracking()
-    assert pytest.approx(fired[0][1]["duration_seconds"], abs=1.0) == 25.0
-
-
-async def test_complete_shot_cancels_afterflow(hass, init_integration):
-    tracker = _get_tracker(hass, init_integration)
-    tracker._trigger_event = lambda *a, **k: None
-    tracker._afterflow_until = dt_util.utcnow() + timedelta(seconds=5)
-    tracker._shot_start_time = dt_util.utcnow() - timedelta(seconds=25)
-    tracker._timestamps = list(range(25))
-    tracker._brew_group_temps = [93.0] * 25
-    tracker._brew_boiler_temps = [130.0] * 25
-    tracker._pump_pressures = [9.0] * 25
-    tracker._flow_rates = [5.0] * 25
-    tracker._weights = [float(i) for i in range(25)]
-    tracker._complete_shot_tracking()
-    assert tracker._afterflow_until is None
-
-
-async def test_collect_uses_scale_rate_when_present(
-    hass, init_integration, mock_xenia_api
-):
-    tracker = _get_tracker(hass, init_integration)
-    fields = {
-        "MA_STATUS": int(MachineStatus.BREWING),
-        "PU_SENS_SCALE_RATE": 1.27,
-        "PU_SENS_FLOW_METER_ML": 99.0,
-    }
-    for _ in range(2):
-        await _drive_overview(hass, mock_xenia_api, init_integration, **fields)
-    assert tracker._flow_rates == [1.27]
-
-
-async def test_collect_falls_back_to_ml_key_on_old_firmware(
-    hass, init_integration, mock_xenia_api
-):
-    tracker = _get_tracker(hass, init_integration)
-    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.BREWING)
-    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.BREWING)
-    assert tracker._flow_rates == [OVERVIEW_PAYLOAD["PU_SENS_FLOW_METER_ML"]]
-
-
-async def test_collect_scale_rate_hiccup_falls_back_to_ml_for_sample(
-    hass, init_integration, mock_xenia_api
-):
-    tracker = _get_tracker(hass, init_integration)
-    fields = {"MA_STATUS": int(MachineStatus.BREWING), "PU_SENS_SCALE_RATE": 1.27}
-    await _drive_overview(hass, mock_xenia_api, init_integration, **fields)
-    await _drive_overview(hass, mock_xenia_api, init_integration, **fields)
-    await _drive_overview(
+    assert await listed_shots(hass, hass_ws_client) == [
+        {
+            "shot_id": shot["start_time"],
+            "start_time": shot["start_time"],
+            "brew_end_time": shot["brew_end_time"],
+            "duration_seconds": 26.0,
+            "final_weight_g": 38.0,
+        }
+    ]
+    answer = await ws_command(
         hass,
-        mock_xenia_api,
-        init_integration,
-        MA_STATUS=int(MachineStatus.BREWING),
-        PU_SENS_SCALE_RATE="",
+        hass_ws_client,
+        {"type": "xenia_home/shots/get", "shot_ids": [shot["start_time"]]},
     )
-    assert tracker._flow_rates == [1.27, OVERVIEW_PAYLOAD["PU_SENS_FLOW_METER_ML"]]
+    [stored] = answer["result"]["shots"]
+    assert stored["weights"] == shot["weights"]
 
 
-# ===========================================================================
-# Auto-tare guard
-# ===========================================================================
+@pytest.mark.parametrize(("seconds", "tracked"), [(8, False), (9, True)])
+async def test_shots_last_ten_seconds_or_more(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    poll,
+    seconds: int,
+    tracked: bool,
+) -> None:
+    """A brew of ten seconds is a shot; a shorter one, like a flush, is not."""
+    await brew(poll, seconds)
+    await end_brew(poll, weight=15.0)
+    shots = await listed_shots(hass, hass_ws_client)
+    assert [s["duration_seconds"] for s in shots] == ([10.0] if tracked else [])
+    assert (_shot(hass) is not None) is tracked
 
 
-def _prime_running_shot(tracker, fired):
-    tracker._trigger_event = lambda name, data: fired.append((name, data))
-    tracker._shot_start_time = dt_util.utcnow() - timedelta(seconds=25)
-    tracker._timestamps = [0.0, 5.0, 10.0, 15.0, 20.0]
-    tracker._brew_group_temps = [93.0] * 5
-    tracker._brew_boiler_temps = [130.0] * 5
-    tracker._pump_pressures = [9.0] * 5
-    tracker._flow_rates = [0.0] * 5
-    tracker._weights = [10.0, 20.0, 30.0, 40.0, 42.7]
+async def test_draining_counts_as_afterflow(hass: HomeAssistant, poll) -> None:
+    """The machine drains after the brew; the shot ends when brewing stops."""
+    await brew(poll, 12)
+    await poll(MA_STATUS=DRAINING, SCALE_WEIGHT=19.0)
+    await poll(MA_STATUS=DRAINING, SCALE_WEIGHT=19.5)
+    await poll(MA_STATUS=ON, SCALE_WEIGHT=19.5)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert shot["duration_seconds"] == 13.0
+    assert shot["weights"][-3:] == [19.0, 19.5, 19.5]
 
 
-async def test_afterflow_tare_completes_and_discards_drop_sample(
-    hass, init_integration, mock_xenia_api
-):
-    tracker = _get_tracker(hass, init_integration)
-    fired: list = []
-    _prime_running_shot(tracker, fired)
-    tracker._is_brewing = True
-    await _drive_overview(
-        hass,
-        mock_xenia_api,
-        init_integration,
-        MA_STATUS=int(MachineStatus.ON),
-        SCALE_WEIGHT=0.1,
-    )
-    assert len(fired) == 1
-    assert fired[0][1]["weights"][-1] == 42.7
+async def test_final_weight_is_the_last_weight(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    poll,
+) -> None:
+    """The final weight is the cup weight at the end, not the highest one."""
+    await brew(poll, 12)
+    await end_brew(poll, weight=17.0)
+    [summary] = await listed_shots(hass, hass_ws_client)
+    assert summary["final_weight_g"] == 17.0
 
 
-async def test_afterflow_small_decrease_does_not_complete(
-    hass, init_integration, mock_xenia_api
-):
-    tracker = _get_tracker(hass, init_integration)
-    fired: list = []
-    _prime_running_shot(tracker, fired)
-    tracker._is_brewing = True
-    await _drive_overview(
-        hass,
-        mock_xenia_api,
-        init_integration,
-        MA_STATUS=int(MachineStatus.ON),
-        SCALE_WEIGHT=42.6,
-    )
-    assert fired == []
-    assert tracker._weights[-1] == 42.6
+async def test_brew_during_afterflow_completes_the_shot_and_starts_a_new_one(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    poll,
+) -> None:
+    """Brewing again within the afterflow keeps the first shot and starts a new one."""
+    await brew(poll, 15)
+    await poll(MA_STATUS=ON, SCALE_WEIGHT=22.5)
+    await brew(poll, 12)
+    await end_brew(poll, weight=18.0)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert shot["duration_seconds"] == 13.0
+    assert shot["weights"][0] == 1.5
+    stored = await listed_shots(hass, hass_ws_client)
+    assert [s["duration_seconds"] for s in stored] == [13.0, 16.0]
 
 
-async def test_brewing_start_tare_zeroes_prior_weights(
-    hass, init_integration, mock_xenia_api
-):
-    tracker = _get_tracker(hass, init_integration)
-    await _drive_overview(
-        hass,
-        mock_xenia_api,
-        init_integration,
-        MA_STATUS=int(MachineStatus.BREWING),
-        SCALE_WEIGHT=238.6,
-    )
-    await _drive_overview(
-        hass,
-        mock_xenia_api,
-        init_integration,
-        MA_STATUS=int(MachineStatus.BREWING),
-        SCALE_WEIGHT=238.6,
-    )
-    await _drive_overview(
-        hass,
-        mock_xenia_api,
-        init_integration,
-        MA_STATUS=int(MachineStatus.BREWING),
-        SCALE_WEIGHT=0.0,
-    )
-    assert tracker._weights == [0.0, 0.0]
+async def test_failed_poll_adds_no_sample(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    poll,
+) -> None:
+    """A poll the machine does not answer is not recorded as a sample."""
+    await brew(poll, 12)
+    mock_xenia_api.override("get", "overview", exc=TimeoutError())
+    await poll()
+    mock_xenia_api.restore("get", "overview")
+    await poll(MA_STATUS=BREWING, SCALE_WEIGHT=19.5)
+    await end_brew(poll, weight=20.0)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert 13.0 not in shot["timestamps"]
+    assert shot["timestamps"][11:13] == [12.0, 14.0]
+    assert len(shot["weights"]) == len(shot["timestamps"])
 
 
-async def test_completed_shot_is_persisted_in_store(
-    hass, init_integration, mock_xenia_api
-):
-    tracker = _get_tracker(hass, init_integration)
-    fired: list = []
-    original_trigger = tracker._trigger_event
-    tracker._trigger_event = lambda name, data: (
-        fired.append((name, data)),
-        original_trigger(name, data),
-    )
-    tracker._is_brewing = True
-    tracker._shot_start_time = dt_util.utcnow() - timedelta(seconds=25)
-    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.ON)
-    tracker._afterflow_until = dt_util.utcnow() - timedelta(seconds=1)
-    await _drive_status(hass, mock_xenia_api, init_integration, MachineStatus.ON)
-    await hass.async_block_till_done()
+async def test_sample_with_a_missing_value_is_skipped(
+    hass: HomeAssistant, init_integration: MockConfigEntry, poll
+) -> None:
+    """A poll that lacks a curve value adds no sample, so the curves stay aligned."""
+    await brew(poll, 12)
+    await poll(MA_STATUS=BREWING, SCALE_WEIGHT=19.5, PU_SENS_PRESS=None)
+    await end_brew(poll, weight=20.0)
 
-    store = init_integration.runtime_data.shot_store
-    summaries = store.list_shots()
-    assert len(summaries) == 1
-    shots = await store.async_get_shots([summaries[0]["shot_id"]])
-    assert shots == [{**fired[0][1], "shot_id": summaries[0]["shot_id"]}]
+    shot = _shot(hass)
+    assert shot is not None
+    assert 13.0 not in shot["timestamps"]
+    for curve in ("brew_group_temps", "pump_pressures", "weights", "flow_rates"):
+        assert len(shot[curve]) == len(shot["timestamps"])
+
+
+async def test_missing_weight_keeps_the_last_weight(
+    hass: HomeAssistant, init_integration: MockConfigEntry, poll
+) -> None:
+    """A poll without a weight repeats the last one instead of looking like a tare."""
+    await brew(poll, 12)
+    await poll(MA_STATUS=BREWING, SCALE_WEIGHT=None)
+    await poll(MA_STATUS=BREWING, SCALE_WEIGHT=19.5)
+    await end_brew(poll, weight=20.0)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert shot["weights"][0] == 1.5
+    assert shot["weights"][11:14] == [18.0, 18.0, 19.5]
+
+
+async def test_shot_without_a_complete_sample_is_dropped(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    poll,
+) -> None:
+    """A shot in which every poll lacks a curve value is not stored."""
+    for _ in range(14):
+        await poll(MA_STATUS=BREWING, PU_SENS_PRESS=None)
+    for _ in range(3):
+        await poll(MA_STATUS=ON, PU_SENS_PRESS=None)
+
+    assert _shot(hass) is None
+    assert await listed_shots(hass, hass_ws_client) == []
+
+
+async def test_shot_without_scale_weight_is_stored(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    poll,
+) -> None:
+    """A machine that reports no scale weight still records its shots, at 0 g."""
+    for _ in range(14):
+        await poll(MA_STATUS=BREWING, SCALE_WEIGHT=None)
+    for _ in range(3):
+        await poll(MA_STATUS=ON, SCALE_WEIGHT=None)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert set(shot["weights"]) == {0.0}
+    assert len(await listed_shots(hass, hass_ws_client)) == 1
+
+
+async def test_overdue_afterflow_adds_no_sample(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    poll,
+) -> None:
+    """A poll answered only after the afterflow ends the shot without a sample."""
+    await brew(poll, 12)
+    await poll(MA_STATUS=ON, SCALE_WEIGHT=20.0)
+    mock_xenia_api.override("get", "overview", exc=TimeoutError())
+    await poll()
+    await poll()
+    mock_xenia_api.restore("get", "overview")
+    await poll(MA_STATUS=ON, SCALE_WEIGHT=20.5)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert shot["weights"][-1] == 20.0
+
+
+@pytest.mark.parametrize(
+    ("old_firmware", "fields", "flow"),
+    [
+        (False, {"PU_SENS_SCALE_RATE": 1.35}, 1.35),
+        (False, {"PU_SENS_SCALE_RATE": ""}, 0.0),
+        (True, {}, 12.3),
+    ],
+)
+async def test_flow_comes_from_scale_rate_or_flow_meter(
+    hass: HomeAssistant,
+    mock_xenia_api: MockXeniaApi,
+    poll,
+    old_firmware: bool,
+    fields: dict,
+    flow: float,
+) -> None:
+    """The scale rate is the flow; without a usable one the flow meter is."""
+    if old_firmware:
+        mock_xenia_api.use_old_firmware()
+    await brew(poll, 12, **fields)
+    await end_brew(poll, weight=18.0)
+    shot = _shot(hass)
+    assert shot is not None
+    assert shot["flow_rates"][:12] == [flow] * 12
+
+
+async def test_tare_at_brew_start_zeroes_earlier_weights(
+    hass: HomeAssistant, poll
+) -> None:
+    """The auto tare after the brew starts resets the cup weight recorded so far."""
+    await poll(MA_STATUS=BREWING, SCALE_WEIGHT=238.6)
+    await poll(MA_STATUS=BREWING, SCALE_WEIGHT=238.6)
+    await poll(MA_STATUS=BREWING, SCALE_WEIGHT=238.6)
+    for second in range(1, 11):
+        await poll(MA_STATUS=BREWING, SCALE_WEIGHT=2.0 * second)
+    await end_brew(poll, weight=20.0)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert shot["weights"][:3] == [0.0, 0.0, 2.0]
+
+
+@pytest.mark.parametrize("tared", [0.1, 28.0])
+async def test_tare_in_afterflow_ends_the_shot(
+    hass: HomeAssistant, poll, tared: float
+) -> None:
+    """A drop of more than 2 g after the brew is the tare; it ends the shot at once."""
+    await brew(poll, 20)
+    await poll(MA_STATUS=ON, SCALE_WEIGHT=30.5)
+    await poll(MA_STATUS=ON, SCALE_WEIGHT=tared)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert shot["weights"][-1] == 30.5
+
+
+@pytest.mark.parametrize("weight", [30.0, 28.5])
+async def test_small_drop_in_afterflow_is_recorded(
+    hass: HomeAssistant, poll, weight: float
+) -> None:
+    """A drop of up to 2 g is a real sample, not a tare."""
+    await brew(poll, 20)
+    await poll(MA_STATUS=ON, SCALE_WEIGHT=30.5)
+    await poll(MA_STATUS=ON, SCALE_WEIGHT=weight)
+    assert _shot(hass) is None
+
+    await poll(MA_STATUS=ON, SCALE_WEIGHT=weight)
+    shot = _shot(hass)
+    assert shot is not None
+    assert shot["weights"][-3:] == [30.5, weight, weight]

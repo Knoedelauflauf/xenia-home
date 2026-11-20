@@ -1,65 +1,80 @@
-"""Base entity for Xenia Espresso Machine integration."""
+"""Base entity for the Xenia espresso machine."""
 
-from homeassistant.const import CONF_HOST
+from typing import override
+
+from homeassistant.core import callback
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import XENIA_DOMAIN
-from .coordinator import XeniaDataUpdateCoordinator, XeniaRuntimeData
+from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator, XeniaRuntimeData
 from .xenia import XeniaMachineData
 
 
-def build_device_info(
-    host: str, machine: XeniaMachineData, mac: str | None = None
-) -> DeviceInfo:
-    """Build device info for a Xenia espresso machine."""
+def machine_id(entry: XeniaConfigEntry) -> str:
+    """Return the key of the machine's device and entity unique ids.
+
+    This is the config entry's unique id, the MAC address of the machine.
+    """
+    assert entry.unique_id is not None
+    return entry.unique_id
+
+
+def build_device_info(entry: XeniaConfigEntry, machine: XeniaMachineData) -> DeviceInfo:
+    """Build the device info of the machine."""
     fw_version = machine.fw_version()
     esp_fw_version = machine.esp_fw_version()
-    sw_version = (
-        f"{fw_version}/{esp_fw_version}" if fw_version and esp_fw_version else None
-    )
-    info = DeviceInfo(
-        identifiers={(XENIA_DOMAIN, host)},
+    return DeviceInfo(
+        identifiers={(XENIA_DOMAIN, machine_id(entry))},
+        connections={(CONNECTION_NETWORK_MAC, machine_id(entry))},
         name="Xenia Espresso Machine",
         manufacturer="Xenia Espresso GmbH",
         model="DBL",
-        sw_version=sw_version,
+        sw_version=(
+            f"{fw_version}/{esp_fw_version}" if fw_version and esp_fw_version else None
+        ),
         serial_number=machine.ma_sn,
     )
-    if mac:
-        info["connections"] = {(CONNECTION_NETWORK_MAC, mac)}
-    return info
 
 
 class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
-    """Base entity for Xenia Espresso Machine."""
+    """Entity of the machine, updated by both coordinators."""
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
-        """Initialize the entity."""
-        super().__init__(coordinator)
-
+    @override
     async def async_added_to_hass(self) -> None:
-        """Subscribe to the config coordinator as well."""
+        """Also listen to the config coordinator."""
         await super().async_added_to_hass()
         # A coordinator only polls while it has listeners.
         self.async_on_remove(
             self.runtime_data.config_coordinator.async_add_listener(
-                self._handle_coordinator_update
+                self.async_write_ha_state
             )
         )
 
+    @callback
+    @override
+    def async_entity_id_changed(self, old_entity_id: str) -> None:  # type: ignore[misc,unused-ignore]
+        """Keep the entity when its entity_id changes; nothing is keyed on it."""
+        # Called from Home Assistant 2026.11 on, which added the hook.
+        super().async_entity_id_changed(old_entity_id)  # type: ignore[misc,unused-ignore]
+
+    @property
+    def machine_id(self) -> str:
+        """Return the key of the machine's unique ids."""
+        return machine_id(self.coordinator.config_entry)
+
     @property
     def runtime_data(self) -> XeniaRuntimeData:
-        """Return the runtime data."""
+        """Return the runtime data of the config entry."""
         return self.coordinator.config_entry.runtime_data
 
     @property
+    @override
     def device_info(self) -> DeviceInfo:
-        """Return device information about this Xenia espresso machine."""
-        host = self.coordinator.config_entry.data[CONF_HOST]
-        machine = self.runtime_data.config_coordinator.data.machine
+        """Return the device info of the machine."""
         return build_device_info(
-            host, machine, self.coordinator.data.overview_single.ma_mac
+            self.coordinator.config_entry,
+            self.runtime_data.config_coordinator.data.machine,
         )

@@ -32,15 +32,15 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'water_tank_empty',
-    'unique_id': 'xenia.local_water_tank_empty',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_water_tank_empty',
     'unit_of_measurement': None,
   })
 # ---
 # name: test_binary_sensor_entities_snapshot[binary_sensor.xenia_espresso_machine_water_tank_empty-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'device_class': 'problem',
-      'friendly_name': 'Xenia Espresso Machine Water tank empty',
+      <EntityStateAttribute.DEVICE_CLASS: 'device_class'>: 'problem',
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Water tank empty',
     }),
     'context': <ANY>,
     'entity_id': 'binary_sensor.xenia_espresso_machine_water_tank_empty',

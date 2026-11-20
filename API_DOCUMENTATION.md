@@ -35,7 +35,7 @@ Comprehensive overview of all real-time sensor data.
 | ------------------------- | ------ | ------------------------------------ |
 | `MA_STATUS`               | uint8  | Machine status (see enum below)      |
 | `MA_EXTRACTIONS`          | uint32 | Number of extractions                |
-| `MA_OPERATING_HOURS`      | uint32 | Operating hours                      |
+| `MA_OPERATING_HOURS`      | uint32 | Operating time in minutes, despite the name |
 | `MA_CLOCK`                | uint32 | System clock                         |
 | `MA_CUR_PWR`              | float  | Current power consumption (amperes)  |
 | `MA_MAX_PWR`              | uint16 | Maximum amperes                      |
@@ -48,7 +48,7 @@ Comprehensive overview of all real-time sensor data.
 | `PU_SENS_PRESS`           | float  | Pump pressure (bar)                  |
 | `PU_LEVEL_PW_CONTROL`     | uint16 | Pump PWM control                     |
 | `PU_SET_LEVEL_PW_CONTROL` | uint16 | Pump target PWM                      |
-| `PU_SENS_FLOW_METER_ML`   | float  | Flow meter reading (ml/s); on 4.159 it mirrors `PU_SENS_FLOW_METER_FLOWRATE` — on a tank machine both read 0 throughout brewing, with a stale nonzero value while idle |
+| `PU_SENS_FLOW_METER_ML`   | float  | Flow meter reading (ml/s); on 4.159 it mirrors `PU_SENS_FLOW_METER_FLOWRATE`; on a tank machine both read 0 throughout brewing, with a stale nonzero value while idle |
 | `SB_SENS_PRESS`           | float  | Steam boiler pressure (bar)          |
 | `SB_STATUS`               | uint8  | Steam boiler status (see enum below) |
 | `SCALE_WEIGHT`            | float  | Scale weight (grams)                 |
@@ -58,7 +58,7 @@ Comprehensive overview of all real-time sensor data.
 | `PU_SENS_FLOW_METER_VOLUME` | float | Flow meter volume (ml) *(4.159+)* |
 | `PU_SENS_FLOW_METER_FLOWRATE` | float | Flow meter rate (ml/s) *(4.159+)* |
 
-Fields marked *(4.159+)* were first observed with firmware 4.159/3.63 and are absent on older firmware (verified on 4.22/3.22). On a Xenia DBL running 4.159, all three flow-meter fields stayed 0 through a real 9.4 bar shot — the DBL presumably has no flow-meter hardware installed; other variants (e.g. the Mahlkönig edition) may report real values here. The scale auto-tares shortly after brew start and again ~2.5 s after brew end.
+Fields marked *(4.159+)* were first observed with firmware 4.159/3.63 and are absent on older firmware (verified on 4.22/3.22). On a Xenia DBL running 4.159, all three flow-meter fields stayed 0 through a real 9.4 bar shot. The DBL presumably has no flow-meter hardware installed; other variants (e.g. the Mahlkönig edition) may report real values here. The scale auto-tares shortly after brew start and again ~2.5 s after brew end.
 
 ---
 
@@ -185,7 +185,7 @@ Returns machine hardware and firmware information.
 | `BLE`                           | int    | Bluetooth state *(4.159+)*                                          |
 | `MA_DELAY`                      | int    | Unknown, observed -1 *(4.159+)*                                     |
 | `MA_EXTRACTIONS`                | uint32 | Number of extractions (mirrors overview) *(4.159+)*                 |
-| `MA_OPERATING_HOURS`            | uint32 | Operating hours (mirrors overview) *(4.159+)*                       |
+| `MA_OPERATING_HOURS`            | uint32 | Operating time in minutes (mirrors overview) *(4.159+)*             |
 | `MA_EXTRACTIONS_START`          | int    | Extraction counter start value (mirrors overview_single) *(4.159+)* |
 | `MA_ENERGY_TOTAL_KWH`           | float  | Total energy consumption in kWh (mirrors overview) *(4.159+)*       |
 | `MA_HEATUP_FLUSH_DURATION`      | int    | Heatup flush duration (s) *(4.159+)*                                |
@@ -233,6 +233,12 @@ The file name is the script ID zero-padded to 3 digits.
 
 The `Content` field contains semicolon-separated script commands (see script instruction format below).
 
+A script ID that was never used or has been deleted is answered with status 200 and empty fields (verified on firmware 4.255):
+
+```json
+{"Content": "", "Title": ""}
+```
+
 ---
 
 ### `/api/v2/scripts/create`
@@ -265,6 +271,22 @@ Creates or updates a script.
   "instruction": "1;13;27 45;7;"
 }
 ```
+
+---
+
+### `/api/v2/scripts/delete`
+
+Deletes a user script. The integration does not use it; the machine's web UI does.
+
+**Method:** POST
+**Content-Type:** `application/x-www-form-urlencoded`
+
+**Body:**
+```json
+{"scr_file_name": "017.S", "title_file_name": "017.T"}
+```
+
+The file names are the script ID zero-padded to 3 digits with the suffixes `.S` (instruction) and `.T` (title). The response is `{}`. The web UI only deletes IDs above 9; `GET /api/v2/scripts/alldelete` deletes every user script.
 
 ---
 
@@ -306,7 +328,7 @@ on the HTTP status, not this field.
 
 ### `/api/v2/switches`
 
-**GET** — Returns switch-to-script mappings.
+**GET**: returns switch-to-script mappings.
 
 **Response:**
 ```json
@@ -316,7 +338,7 @@ on the HTTP status, not this field.
 }
 ```
 
-**POST** — Updates all switch mappings. Send the full set of switch assignments.
+**POST**: updates all switch mappings. Send the full set of switch assignments.
 
 **Content-Type:** `application/x-www-form-urlencoded`
 
@@ -407,6 +429,7 @@ The following remain undocumented and device-only, with no known API for reading
 
 ```python
 import aiohttp
+
 
 async def turn_on_machine(host: str):
     url = f"http://{host}/api/v2/machine/control"

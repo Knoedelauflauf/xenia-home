@@ -1,6 +1,7 @@
 """One-time best-effort import of shots the recorder still holds."""
 
 import asyncio
+from dataclasses import fields
 from datetime import timedelta
 from functools import partial
 import logging
@@ -13,22 +14,12 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
 
+from .event import ShotData
 from .shot_store import XeniaShotStore
 
 _LOGGER = logging.getLogger(__name__)
 
-_PAYLOAD_KEYS = (
-    "start_time",
-    "brew_end_time",
-    "afterflow_seconds",
-    "duration_seconds",
-    "timestamps",
-    "brew_group_temps",
-    "brew_boiler_temps",
-    "pump_pressures",
-    "flow_rates",
-    "weights",
-)
+_PAYLOAD_KEYS = tuple(f.name for f in fields(ShotData))
 
 
 async def async_import_recorder_shots(

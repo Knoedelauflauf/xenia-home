@@ -1,10 +1,13 @@
 """Xenia Espresso Machine integration."""
 
-import logging
-
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import config_validation as cv
+from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    issue_registry as ir,
+)
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
@@ -22,13 +25,13 @@ from .coordinator import (
     XeniaDataUpdateCoordinator,
     XeniaRuntimeData,
 )
+from .errors import REQUEST_ERRORS, describe_error
+from .migration import MAC_MINOR_VERSION, async_migrate_to_mac
 from .recorder_import import async_import_recorder_shots
 from .services import async_setup_services
 from .shot_store import XeniaShotStore
 from .websocket import async_register_commands
 from .xenia import Xenia
-
-_LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(XENIA_DOMAIN)
 
@@ -40,16 +43,34 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
-async def _async_update_listener(hass: HomeAssistant, entry: XeniaConfigEntry) -> None:
-    """Reload on an options or host change."""
-    await hass.config_entries.async_reload(entry.entry_id)
+async def async_migrate_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> bool:
+    """Key the entry, its device and its entities on the machine's MAC address."""
+    if entry.minor_version < MAC_MINOR_VERSION:
+        xenia = Xenia(entry.data[CONF_HOST], async_get_clientsession(hass))
+        try:
+            mac = await xenia.get_mac()
+        except REQUEST_ERRORS as err:
+            raise ConfigEntryNotReady(
+                translation_domain=XENIA_DOMAIN,
+                translation_key="update_failed",
+                translation_placeholders={"error": describe_error(err)},
+            ) from err
+        mac = dr.format_mac(mac)
+        if other := hass.config_entries.async_entry_for_domain_unique_id(
+            XENIA_DOMAIN, mac
+        ):
+            raise ConfigEntryError(
+                translation_domain=XENIA_DOMAIN,
+                translation_key="duplicate_machine",
+                translation_placeholders={"title": other.title},
+            )
+        await async_migrate_to_mac(hass, entry, mac)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> bool:
     """Set up Xenia from a config entry."""
-    host = entry.data[CONF_HOST]
-    session = async_get_clientsession(hass)
-    xenia = Xenia(host, session)
+    xenia = Xenia(entry.data[CONF_HOST], async_get_clientsession(hass))
 
     coordinator = XeniaDataUpdateCoordinator(hass, entry, xenia)
     config_coordinator = XeniaConfigCoordinator(hass, entry, xenia)
@@ -65,7 +86,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> boo
         config_coordinator=config_coordinator,
         shot_store=shot_store,
     )
-    # Strip before the update listener is added, or this reloads the entry.
     options = {k: v for k, v in entry.options.items() if k not in REMOVED_OPTION_KEYS}
     if (
         value := options.pop(CONF_POWER_ON_BEHAVIOR, None)
@@ -73,8 +93,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> boo
         entry.runtime_data.power_on_behavior = PowerOnBehavior(value)
     if options != entry.options:
         hass.config_entries.async_update_entry(entry, options=options)
-
-    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -93,7 +111,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> bo
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> None:
-    """Delete the entry's shot history files."""
+    """Delete the entry's shot history files and repair issue."""
+    ir.async_delete_issue(
+        hass, XENIA_DOMAIN, f"managed_script_missing_{entry.entry_id}"
+    )
     store = XeniaShotStore(hass, entry.entry_id)
     await store.async_load()
     await store.async_remove()

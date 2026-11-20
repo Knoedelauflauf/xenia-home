@@ -1,159 +1,171 @@
-"""Tests for sensor.py — sensor entities."""
+"""Tests for the sensors."""
 
-from unittest.mock import AsyncMock, patch
-
+from freezegun.api import FrozenDateTimeFactory
+from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
+from homeassistant.const import STATE_UNKNOWN
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+from syrupy.assertion import SnapshotAssertion
 
-from custom_components.xenia_home.xenia import MachineStatus, XeniaOverviewData
-from tests.fixtures.api_responses import OVERVIEW_NEW_FW_FIELDS, OVERVIEW_PAYLOAD
+from tests import setup_integration
+from tests.conftest import MockXeniaApi
+
+STATUS = "sensor.xenia_espresso_machine_status"
+SHOT_START = "sensor.xenia_espresso_machine_shot_start_time"
+SCALE_FLOW = "sensor.xenia_espresso_machine_scale_flow_rate"
 
 
+@pytest.mark.usefixtures("entity_registry_enabled_by_default")
 async def test_sensor_entities_snapshot(
-    hass, init_integration, snapshot, entity_registry
-):
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    snapshot: SnapshotAssertion,
+    entity_registry: er.EntityRegistry,
+) -> None:
+    """The sensors match the snapshot."""
     entity_ids = sorted(
         e.entity_id
-        for e in entity_registry.entities.values()
-        if e.platform == "xenia_home" and e.domain == "sensor"
+        for e in er.async_entries_for_config_entry(
+            entity_registry, init_integration.entry_id
+        )
+        if e.domain == SENSOR_DOMAIN
     )
-    assert len(entity_ids) == 10, f"expected 10 sensors, got {entity_ids}"
+    assert len(entity_ids) == 11
     for entity_id in entity_ids:
-        state = hass.states.get(entity_id)
-        registry_entry = entity_registry.async_get(entity_id)
-        assert state == snapshot(name=f"{entity_id}-state")
-        assert registry_entry == snapshot(name=f"{entity_id}-registry")
+        assert hass.states.get(entity_id) == snapshot(name=f"{entity_id}-state")
+        assert entity_registry.async_get(entity_id) == snapshot(
+            name=f"{entity_id}-registry"
+        )
 
 
-# ===========================================================================
-# value_fn behaviors — only the non-trivial ones get explicit tests.
-# Direct passthrough sensors (brew_group_temperature, pump_pressure, ...)
-# are fully covered by the snapshot above.
-# ===========================================================================
-
-
-@pytest.mark.parametrize(
-    ("minutes", "expected_hours"),
-    [
-        (120, 2.0),
-        (60, 1.0),
-        (90, 1.5),
-    ],
-)
-async def test_operating_hours_divides_minutes_by_60(
-    hass,
-    enable_custom_integrations,
-    mock_xenia_api,
-    mock_config_entry,
-    minutes,
-    expected_hours,
-):
+@pytest.mark.parametrize(("minutes", "hours"), [(120, "2.0"), (90, "1.5")])
+async def test_operating_hours(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    minutes: int,
+    hours: str,
+) -> None:
+    """The machine counts operating minutes; the sensor shows hours."""
     mock_xenia_api.set_overview(MA_OPERATING_HOURS=minutes)
-    mock_xenia_api.register()
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    state = hass.states.get("sensor.xenia_espresso_machine_operating_hours")
-    assert state is not None
-    assert float(state.state) == pytest.approx(expected_hours)
+    await setup_integration(hass, mock_config_entry)
+    assert (
+        hass.states.get("sensor.xenia_espresso_machine_operating_hours").state == hours
+    )
 
 
 @pytest.mark.parametrize(
-    ("sensor_key", "payload_key"),
+    ("sensor", "field"),
     [
         ("operating_hours", "MA_OPERATING_HOURS"),
         ("total_energy", "MA_ENERGY_TOTAL_KWH"),
         ("extractions", "MA_EXTRACTIONS"),
     ],
 )
-async def test_total_increasing_sensor_zero_value_becomes_unknown(
-    hass,
-    enable_custom_integrations,
-    mock_xenia_api,
-    mock_config_entry,
-    sensor_key,
-    payload_key,
-):
-    """Zero on a TOTAL_INCREASING counter is implausible and reported as unknown."""
-    mock_xenia_api.set_overview(**{payload_key: 0})
-    mock_xenia_api.register()
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    state = hass.states.get(f"sensor.xenia_espresso_machine_{sensor_key}")
-    assert state is not None
-    assert state.state in ("unknown", "unavailable")
+async def test_zero_counter_is_unknown(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    sensor: str,
+    field: str,
+) -> None:
+    """A counter reading zero is a failed read, not a reset; it shows as unknown."""
+    mock_xenia_api.set_overview(**{field: 0})
+    await setup_integration(hass, mock_config_entry)
+    assert (
+        hass.states.get(f"sensor.xenia_espresso_machine_{sensor}").state
+        == STATE_UNKNOWN
+    )
 
 
-async def test_passthrough_sensor_reads_from_overview(
-    hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
-):
-    mock_xenia_api.set_overview(BG_SENS_TEMP_A=88.7)
-    mock_xenia_api.register()
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    state = hass.states.get("sensor.xenia_espresso_machine_brewgroup_temperature")
-    assert float(state.state) == pytest.approx(88.7)
+async def test_missing_value_is_unknown(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """A value the machine leaves out shows as unknown; the sensor stays available."""
+    mock_xenia_api.set_overview(BG_SENS_TEMP_A=None, MA_OPERATING_HOURS=None)
+    await setup_integration(hass, mock_config_entry)
+    for sensor in ("brewgroup_temperature", "operating_hours"):
+        state = hass.states.get(f"sensor.xenia_espresso_machine_{sensor}")
+        assert state.state == STATE_UNKNOWN
 
 
-async def test_scale_flow_rate_sensor_created_on_new_firmware(
-    hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
-):
-    mock_xenia_api.set_overview(**OVERVIEW_NEW_FW_FIELDS)
-    mock_xenia_api.register()
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    state = hass.states.get("sensor.xenia_espresso_machine_scale_flow_rate")
-    assert state is not None
-    assert float(state.state) == pytest.approx(1.27)
+async def test_scale_flow_rate_on_new_firmware(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """Firmware with a scale adds the scale flow rate sensor."""
+    await setup_integration(hass, mock_config_entry)
+    state = hass.states.get(SCALE_FLOW)
+    assert state.state == "1.27"
     assert state.attributes["unit_of_measurement"] == "g/s"
 
 
-async def test_scale_flow_rate_sensor_absent_on_old_firmware(hass, init_integration):
-    assert hass.states.get("sensor.xenia_espresso_machine_scale_flow_rate") is None
+async def test_no_scale_flow_rate_on_old_firmware(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """Firmware without a scale has no scale flow rate sensor."""
+    mock_xenia_api.use_old_firmware()
+    await setup_integration(hass, mock_config_entry)
+    assert hass.states.get(SCALE_FLOW) is None
 
 
-async def test_status_and_shot_start_time_while_brewing(
-    hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
-):
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (0, "off"),
+        (1, "on"),
+        (2, "eco"),
+        (3, "brewing"),
+        (4, "draining"),
+        (42, STATE_UNKNOWN),
+    ],
+)
+async def test_status(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    status: int,
+    expected: str,
+) -> None:
+    """The status sensor names the machine state; an unknown code is unknown."""
+    mock_xenia_api.set_overview(MA_STATUS=status)
+    await setup_integration(hass, mock_config_entry)
+    assert hass.states.get(STATUS).state == expected
+
+
+async def test_shot_running_at_load_is_timed_from_the_load(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A shot that is already brewing when the integration loads starts at the load."""
     mock_xenia_api.set_overview(MA_STATUS=3)
-    mock_xenia_api.register()
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    assert hass.states.get("sensor.xenia_espresso_machine_status").state == "brewing"
-    start = hass.states.get("sensor.xenia_espresso_machine_shot_start_time").state
-    assert dt_util.parse_datetime(start) is not None
+    await setup_integration(hass, mock_config_entry)
+    started = dt_util.parse_datetime(hass.states.get(SHOT_START).state)
+    assert started == dt_util.utcnow().replace(microsecond=0)
 
 
-async def test_status_sensor_unknown_for_unrecognised_status(
-    hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
-):
-    mock_xenia_api.set_overview(MA_STATUS=42)
-    mock_xenia_api.register()
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    assert hass.states.get("sensor.xenia_espresso_machine_status").state == "unknown"
+async def test_shot_start_time_follows_the_shot(
+    hass: HomeAssistant, init_integration: MockConfigEntry, poll
+) -> None:
+    """The shot start time is set while brewing and cleared after."""
+    assert hass.states.get(SHOT_START).state == STATE_UNKNOWN
 
+    await poll(MA_STATUS=3)
+    started = hass.states.get(SHOT_START).state
+    assert dt_util.parse_datetime(started) == dt_util.utcnow().replace(microsecond=0)
 
-async def test_shot_start_time_follows_the_shot(hass, init_integration):
-    coordinator = init_integration.runtime_data.coordinator
+    await poll(MA_STATUS=3)
+    assert hass.states.get(SHOT_START).state == started
 
-    async def poll(status: MachineStatus) -> str:
-        overview = XeniaOverviewData.from_dict(
-            {**OVERVIEW_PAYLOAD, "MA_STATUS": int(status)}
-        )
-        with patch.object(
-            coordinator.xenia, "get_overview", AsyncMock(return_value=overview)
-        ):
-            await coordinator.async_refresh()
-        await hass.async_block_till_done()
-        return hass.states.get("sensor.xenia_espresso_machine_shot_start_time").state
-
-    started = await poll(MachineStatus.BREWING)
-    assert dt_util.parse_datetime(started) is not None
-    assert await poll(MachineStatus.BREWING) == started
-    assert await poll(MachineStatus.ON) == "unknown"
+    await poll(MA_STATUS=1)
+    assert hass.states.get(SHOT_START).state == STATE_UNKNOWN

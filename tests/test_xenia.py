@@ -1,511 +1,144 @@
-"""Tests for xenia.py — the HTTP API client."""
+"""Tests for the HTTP API client of the machine."""
 
+import asyncio
+from collections.abc import AsyncIterator
 import json
-from typing import Any
 
-from aiohttp import ClientError, ClientResponseError, ClientSession
-from aioresponses import aioresponses as AioResponses
+from aiohttp import ClientError, ClientResponseError
 import pytest
-from yarl import URL
+from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.xenia_home.xenia import (
-    MachineControl,
-    MachineStatus,
-    SteamBoilerStatus,
-    Xenia,
-    XeniaMachineData,
-    XeniaOverviewData,
-    XeniaOverviewSingleData,
-    _safe_int,
-)
-from tests.fixtures.api_responses import (
-    MACHINE_NEW_FW_FIELDS,
-    MACHINE_PAYLOAD,
-    OVERVIEW_NEW_FW_FIELDS,
-    OVERVIEW_PAYLOAD,
-)
+from custom_components.xenia_home.xenia import Xenia
 
-HOST = "xenia.local"
-BASE = f"http://{HOST}/api/v2"
+from tests.conftest import MockXeniaApi
 
 
 @pytest.fixture
-def mock_api():
-    """Yield an aioresponses mock for use in xenia client tests."""
-    with AioResponses() as m:
-        yield m
+async def xenia(
+    aioclient_mock: AiohttpClientMocker, mock_xenia_api: MockXeniaApi
+) -> AsyncIterator[Xenia]:
+    """Return a client for the fake machine."""
+    session = aioclient_mock.create_session(asyncio.get_running_loop())
+    yield Xenia(mock_xenia_api.host, session)
+    await session.close()
 
 
-@pytest.fixture
-async def xenia(mock_api):
-    """Yield a fresh Xenia client backed by a real ClientSession."""
-    async with ClientSession() as session:
-        yield Xenia(HOST, session)
-
-
-# ===========================================================================
-# _safe_int
-# ===========================================================================
+async def test_get_mac(xenia: Xenia) -> None:
+    """The MAC address comes from overview_single."""
+    assert await xenia.get_mac() == "AA:BB:CC:DD:EE:FF"
 
 
 @pytest.mark.parametrize(
-    ("value", "expected"),
+    "fault",
     [
-        (42, 42),
-        ("7", 7),
-        ("0", 0),
-        (0, 0),
-        (3.9, 3),
-        ("3.0", None),
-        (None, None),
-        ("", None),
-        ("abc", None),
-        ([], None),
-        ({}, None),
+        {"json": {"OTHER_KEY": 1}},
+        {"json": {"MA_MAC": ""}},
+        {"json": ["MA_MAC"]},
+        {"status": 404},
+        {"exc": OSError("connection refused")},
     ],
 )
-def test_safe_int(value: Any, expected: int | None) -> None:
-    assert _safe_int(value) == expected
-
-
-# ===========================================================================
-# Enums
-# ===========================================================================
+async def test_get_mac_fails_without_a_mac(
+    xenia: Xenia, mock_xenia_api: MockXeniaApi, fault: dict
+) -> None:
+    """A payload without a MAC address or a failed request raises a ClientError."""
+    mock_xenia_api.override("get", "overview_single", **fault)
+    with pytest.raises((ClientError, OSError)):
+        await xenia.get_mac()
 
 
 @pytest.mark.parametrize(
-    ("value", "expected"),
+    ("payload", "expected"),
     [
-        (0, MachineStatus.OFF),
-        (1, MachineStatus.ON),
-        (2, MachineStatus.ECO),
-        (3, MachineStatus.BREWING),
-        (4, MachineStatus.DRAINING),
-        (99, MachineStatus.UNKNOWN),
+        (
+            {"index_list": [10, 20], "title_list": ["MyShot", "Lungo"]},
+            {10: "MyShot", 20: "Lungo"},
+        ),
+        ({"index_list": [1, 2, 3], "title_list": ["A", "B"]}, {1: "A", 2: "B"}),
+        ({}, {}),
     ],
 )
-def test_machine_status_values(value: int, expected: MachineStatus) -> None:
-    assert MachineStatus(value) == expected
-    assert str(expected) == expected.name
-
-
-def test_machine_status_unknown_int_raises() -> None:
-    with pytest.raises(ValueError):
-        MachineStatus(55)
+async def test_get_scripts(
+    xenia: Xenia, mock_xenia_api: MockXeniaApi, payload: dict, expected: dict
+) -> None:
+    """The script list pairs ids with titles."""
+    mock_xenia_api.override("get", "scripts/list", json=payload)
+    assert await xenia.get_scripts() == expected
 
 
 @pytest.mark.parametrize(
-    ("value", "expected"),
+    ("call", "path", "body"),
     [
-        (1, SteamBoilerStatus.OFF),
-        (2, SteamBoilerStatus.ON),
-        (99, SteamBoilerStatus.UNKNOWN),
+        (lambda x: x.machine_turn_on(sb_on=True), "machine/control", '{"action":"1"}'),
+        (lambda x: x.machine_turn_on(sb_on=False), "machine/control", '{"action":"5"}'),
+        (lambda x: x.machine_turn_off(), "machine/control", '{"action":"0"}'),
+        (lambda x: x.machine_set_eco(), "machine/control", '{"action":"2"}'),
+        (lambda x: x.sb_turn_on(), "toggle/sb", '{"TOGGLE":true,"SAVE":true}'),
+        (lambda x: x.sb_turn_off(), "toggle/sb", '{"TOGGLE":false,"SAVE":true}'),
+        (
+            lambda x: x.set_bg_set_temp(93.5),
+            "inc_dec",
+            '{"BG_SET_TEMP":"93.5", "BB_SET_TEMP":"93.5"}',
+        ),
+        (lambda x: x.set_bb_set_temp(130.0), "inc_dec_bb", '{"BB_SET_TEMP":"130.0"}'),
+        (lambda x: x.execute_script(42), "scripts/execute", '{"ID":42}'),
+        (
+            lambda x: x.create_script("My Espresso", "1;13;27 40;7;"),
+            "scripts/create",
+            '{"script_id":null,"Edit":"Disabled","switch":null,"script":"none",'
+            '"name":"My Espresso","instruction":"1;13;27 40;7;"}',
+        ),
+        (
+            lambda x: x.update_script(5, "Name", "1;7;"),
+            "scripts/create",
+            '{"script_id":5,"Edit":"Enabled","switch":null,"script":"none",'
+            '"name":"Name","instruction":"1;7;"}',
+        ),
+        (
+            lambda x: x.update_script(5, 'Kaffee "Crème" \\ 1', "1;7;"),
+            "scripts/create",
+            '{"script_id":5,"Edit":"Enabled","switch":null,"script":"none",'
+            '"name":"Kaffee \\"Crème\\" \\\\ 1","instruction":"1;7;"}',
+        ),
     ],
 )
-def test_steam_boiler_status_values(value: int, expected: SteamBoilerStatus) -> None:
-    assert SteamBoilerStatus(value) == expected
+async def test_writes(
+    xenia: Xenia, mock_xenia_api: MockXeniaApi, call, path: str, body: str
+) -> None:
+    """Every write posts the body format the firmware expects."""
+    await call(xenia)
+    assert mock_xenia_api.bodies("post", path) == [body]
 
 
-def test_steam_boiler_status_unknown_int_raises() -> None:
-    with pytest.raises(ValueError):
-        SteamBoilerStatus(0)
+async def test_stop_script(xenia: Xenia, mock_xenia_api: MockXeniaApi) -> None:
+    """Stopping a script is a GET."""
+    await xenia.stop_script()
+    assert len(mock_xenia_api.bodies("get", "scripts/stop")) == 1
 
 
-@pytest.mark.parametrize(
-    ("control", "expected_int"),
-    [
-        (MachineControl.OFF, 0),
-        (MachineControl.ON, 1),
-        (MachineControl.ECO, 2),
-        (MachineControl.SB_OFF, 3),
-        (MachineControl.SB_ON, 4),
-        (MachineControl.ON_SB_OFF, 5),
-    ],
-)
-def test_machine_control_values(control: MachineControl, expected_int: int) -> None:
-    assert int(control) == expected_int
-
-
-# ===========================================================================
-# Data classes (from_dict)
-# ===========================================================================
-
-
-def test_overview_data_from_full_dict() -> None:
-    payload = {
-        "MA_EXTRACTIONS": 100,
-        "MA_STATUS": 1,
-        "MA_CUR_PWR": 3.5,
-        "BG_SENS_TEMP_A": 93.0,
-        "SB_STATUS": 2,
-        "SCALE_WEIGHT": 18.0,
+@pytest.mark.parametrize(("script_id", "file_name"), [(5, "005"), (123, "123")])
+async def test_read_script(
+    xenia: Xenia, mock_xenia_api: MockXeniaApi, script_id: int, file_name: str
+) -> None:
+    """A script is read by its zero padded file name."""
+    mock_xenia_api.set_script(script_id, "1;13;27 45;7;", "My Shot")
+    assert await xenia.read_script(script_id) == {
+        "Content": "1;13;27 45;7;",
+        "Title": "My Shot",
     }
-    data = XeniaOverviewData.from_dict(payload)
-    assert data.ma_extractions == 100
-    assert data.ma_status == MachineStatus.ON
-    assert data.sb_status == SteamBoilerStatus.ON
-    assert data.bg_sens_temp_a == 93.0
-    assert data.scale_weight == 18.0
-
-
-def test_overview_data_from_empty_dict_uses_defaults() -> None:
-    data = XeniaOverviewData.from_dict({})
-    assert data.ma_extractions == 0
-    assert data.ma_status == MachineStatus.UNKNOWN
-    assert data.sb_status == SteamBoilerStatus.UNKNOWN
-    assert data.bg_sens_temp_a == 0.0
-
-
-@pytest.mark.parametrize(
-    ("status_value", "expected"),
-    [
-        (0, MachineStatus.OFF),
-        (2, MachineStatus.ECO),
-        (3, MachineStatus.BREWING),
-        (4, MachineStatus.DRAINING),
-        (55, MachineStatus.UNKNOWN),
-    ],
-)
-def test_overview_data_status_mapping(status_value, expected) -> None:
-    data = XeniaOverviewData.from_dict({"MA_STATUS": status_value})
-    assert data.ma_status == expected
-
-
-def test_overview_data_casts_strings_to_float() -> None:
-    data = XeniaOverviewData.from_dict({"MA_CUR_PWR": "3", "BG_SENS_TEMP_A": "90"})
-    assert isinstance(data.ma_cur_pwr, float)
-    assert isinstance(data.bg_sens_temp_a, float)
-
-
-def test_overview_single_data_from_full_dict() -> None:
-    payload = {
-        "BG_SET_TEMP": 93.5,
-        "PU_SENS_WATER_TANK_LEVEL": 1,
-        "MA_MAC": "AA:BB:CC:DD:EE:FF",
-        "POP_UP": 5,
-    }
-    data = XeniaOverviewSingleData.from_dict(payload)
-    assert data.bg_set_temp == 93.5
-    assert data.ma_mac == "AA:BB:CC:DD:EE:FF"
-    assert data.pop_up == 5
-    assert data.pu_sens_water_tank_level == 1
-
-
-def test_overview_single_data_pop_up_defaults_to_none() -> None:
-    data = XeniaOverviewSingleData.from_dict({})
-    assert data.pop_up is None
-    assert data.ma_mac == ""
-
-
-def test_machine_data_from_full_dict() -> None:
-    payload = {
-        "MA_TYPE": 1,
-        "FW_VERSION_MAJOR": 2,
-        "FW_VERSION_MINOR": 3,
-        "ESP_FW_MAJOR": 1,
-        "ESP_FW_MINOR": 5,
-    }
-    data = XeniaMachineData.from_dict(payload)
-    assert data.ma_type == 1
-    assert data.fw_version() == "2.3"
-    assert data.esp_fw_version() == "1.5"
-
-
-def test_machine_data_fw_version_missing_part_returns_none() -> None:
-    assert XeniaMachineData.from_dict({"FW_VERSION_MAJOR": 2}).fw_version() is None
-    assert XeniaMachineData.from_dict({"FW_VERSION_MINOR": 3}).fw_version() is None
-    assert XeniaMachineData.from_dict({}).fw_version() is None
-
-
-def test_machine_data_fw_version_zero_values_are_valid() -> None:
-    data = XeniaMachineData.from_dict({"FW_VERSION_MAJOR": 0, "FW_VERSION_MINOR": 0})
-    assert data.fw_version() == "0.0"
-
-
-def test_machine_data_bad_type_defaults_to_none() -> None:
-    assert XeniaMachineData.from_dict({"MA_TYPE": "bad"}).ma_type is None
-
-
-def test_overview_new_firmware_fields_parsed() -> None:
-    data = XeniaOverviewData.from_dict({**OVERVIEW_PAYLOAD, **OVERVIEW_NEW_FW_FIELDS})
-    assert data.pu_sens_scale_rate == 1.27
-
-
-def test_overview_old_firmware_fields_are_none() -> None:
-    data = XeniaOverviewData.from_dict(OVERVIEW_PAYLOAD)
-    assert data.pu_sens_scale_rate is None
-
-
-def test_overview_unparseable_new_field_is_none() -> None:
-    data = XeniaOverviewData.from_dict({**OVERVIEW_PAYLOAD, "PU_SENS_SCALE_RATE": ""})
-    assert data.pu_sens_scale_rate is None
-
-
-def test_machine_serial_number_parsed() -> None:
-    data = XeniaMachineData.from_dict({**MACHINE_PAYLOAD, **MACHINE_NEW_FW_FIELDS})
-    assert data.ma_sn == "300200000000"
-
-
-def test_machine_serial_number_absent_or_empty_is_none() -> None:
-    assert XeniaMachineData.from_dict(MACHINE_PAYLOAD).ma_sn is None
-    assert XeniaMachineData.from_dict({**MACHINE_PAYLOAD, "MA_SN": ""}).ma_sn is None
-
-
-# ===========================================================================
-# Xenia HTTP methods — happy paths
-# ===========================================================================
-
-
-async def test_device_connected_true_when_ma_status_present(mock_api, xenia) -> None:
-    mock_api.get(f"{BASE}/overview", payload={"MA_STATUS": 1})
-    assert await xenia.device_connected() is True
-
-
-async def test_device_connected_false_when_ma_status_absent(mock_api, xenia) -> None:
-    mock_api.get(f"{BASE}/overview", payload={"OTHER_KEY": 1})
-    assert await xenia.device_connected() is False
-
-
-async def test_device_connected_false_on_empty_response(mock_api, xenia) -> None:
-    mock_api.get(f"{BASE}/overview", payload={})
-    assert await xenia.device_connected() is False
-
-
-async def test_device_connected_false_on_http_error(mock_api, xenia) -> None:
-    mock_api.get(f"{BASE}/overview", status=404)
-    assert await xenia.device_connected() is False
-
-
-async def test_device_connected_false_on_network_error(mock_api, xenia) -> None:
-    mock_api.get(f"{BASE}/overview", exception=OSError("connection refused"))
-    assert await xenia.device_connected() is False
-
-
-async def test_get_overview_parses_response(mock_api, xenia) -> None:
-    mock_api.get(
-        f"{BASE}/overview",
-        payload={"MA_STATUS": 1, "MA_EXTRACTIONS": 99, "SB_STATUS": 2},
-    )
-    data = await xenia.get_overview()
-    assert data.ma_status == MachineStatus.ON
-    assert data.ma_extractions == 99
-    assert data.sb_status == SteamBoilerStatus.ON
-
-
-async def test_get_overview_raises_on_http_error(mock_api, xenia) -> None:
-    mock_api.get(f"{BASE}/overview", status=503)
-    with pytest.raises(ClientResponseError):
-        await xenia.get_overview()
-
-
-async def test_get_overview_single_parses_response(mock_api, xenia) -> None:
-    mock_api.get(
-        f"{BASE}/overview_single",
-        payload={"BG_SET_TEMP": 95.0, "MA_MAC": "DE:AD:BE:EF:00:01"},
-    )
-    data = await xenia.get_overview_single()
-    assert data.bg_set_temp == 95.0
-    assert data.ma_mac == "DE:AD:BE:EF:00:01"
-
-
-async def test_get_machine_parses_response(mock_api, xenia) -> None:
-    mock_api.get(
-        f"{BASE}/machine",
-        payload={"MA_TYPE": 1, "FW_VERSION_MAJOR": 2, "FW_VERSION_MINOR": 3},
-    )
-    data = await xenia.get_machine()
-    assert data.ma_type == 1
-    assert data.fw_version() == "2.3"
-
-
-# ===========================================================================
-# Control endpoints — verify the sent payload
-# ===========================================================================
-
-
-async def test_machine_turn_on_with_steam_sends_on(mock_api, xenia) -> None:
-    mock_api.post(f"{BASE}/machine/control", status=200)
-    await xenia.machine_turn_on(sb_on=True)
-    body = str(_last_post_body(mock_api, f"{BASE}/machine/control"))
-    assert '"1"' in body  # MachineControl.ON
-
-
-async def test_machine_turn_on_without_steam_sends_on_sb_off(mock_api, xenia) -> None:
-    mock_api.post(f"{BASE}/machine/control", status=200)
-    await xenia.machine_turn_on(sb_on=False)
-    body = str(_last_post_body(mock_api, f"{BASE}/machine/control"))
-    assert '"5"' in body  # MachineControl.ON_SB_OFF
-
-
-async def test_machine_turn_off_sends_off(mock_api, xenia) -> None:
-    mock_api.post(f"{BASE}/machine/control", status=200)
-    await xenia.machine_turn_off()
-    body = str(_last_post_body(mock_api, f"{BASE}/machine/control"))
-    assert '"0"' in body
-
-
-async def test_machine_set_eco_sends_eco(mock_api, xenia) -> None:
-    mock_api.post(f"{BASE}/machine/control", status=200)
-    await xenia.machine_set_eco()
-    body = str(_last_post_body(mock_api, f"{BASE}/machine/control"))
-    assert '"2"' in body
-
-
-async def test_sb_turn_on_sends_true(mock_api, xenia) -> None:
-    mock_api.post(f"{BASE}/toggle/sb", status=200)
-    await xenia.sb_turn_on()
-    body = str(_last_post_body(mock_api, f"{BASE}/toggle/sb"))
-    assert '"TOGGLE":true' in body
-    assert '"SAVE":true' in body
-
-
-async def test_sb_turn_off_sends_false(mock_api, xenia) -> None:
-    mock_api.post(f"{BASE}/toggle/sb", status=200)
-    await xenia.sb_turn_off()
-    body = str(_last_post_body(mock_api, f"{BASE}/toggle/sb"))
-    assert '"TOGGLE":false' in body
-
-
-async def test_redirected_post_raises(mock_api, xenia) -> None:
-    mock_api.post(f"{BASE}/toggle/sb", status=301, headers={"Location": "/index.html"})
-    with pytest.raises(ClientResponseError):
-        await xenia.sb_turn_on()
-
-
-async def test_redirected_get_raises(mock_api, xenia) -> None:
-    mock_api.get(f"{BASE}/overview", status=301, headers={"Location": "/index.html"})
-    with pytest.raises(ClientResponseError):
-        await xenia.get_overview()
-
-
-# ===========================================================================
-# Temperature setters
-# ===========================================================================
-
-
-async def test_set_bg_set_temp_posts_value(mock_api, xenia) -> None:
-    mock_api.post(f"{BASE}/inc_dec", payload={})
-    await xenia.set_bg_set_temp(93.5)
-    body = str(_last_post_body(mock_api, f"{BASE}/inc_dec"))
-    assert "93.5" in body
-
-
-async def test_set_bb_set_temp_posts_value(mock_api, xenia) -> None:
-    mock_api.post(f"{BASE}/inc_dec_bb", payload={})
-    await xenia.set_bb_set_temp(130.0)
-    body = str(_last_post_body(mock_api, f"{BASE}/inc_dec_bb"))
-    assert "130.0" in body
-
-
-# ===========================================================================
-# Scripts
-# ===========================================================================
-
-
-async def test_get_scripts_returns_id_title_dict(mock_api, xenia) -> None:
-    mock_api.get(
-        f"{BASE}/scripts/list",
-        payload={"index_list": [10, 20], "title_list": ["MyShot", "Lungo"]},
-    )
-    assert await xenia.get_scripts() == {10: "MyShot", 20: "Lungo"}
-
-
-async def test_get_scripts_empty_returns_empty(mock_api, xenia) -> None:
-    mock_api.get(
-        f"{BASE}/scripts/list",
-        payload={"index_list": [], "title_list": []},
-    )
-    assert await xenia.get_scripts() == {}
-
-
-async def test_get_scripts_missing_keys_returns_empty(mock_api, xenia) -> None:
-    mock_api.get(f"{BASE}/scripts/list", payload={})
-    assert await xenia.get_scripts() == {}
-
-
-async def test_get_scripts_mismatched_lengths_zips_to_shortest(mock_api, xenia) -> None:
-    mock_api.get(
-        f"{BASE}/scripts/list",
-        payload={"index_list": [1, 2, 3], "title_list": ["A", "B"]},
-    )
-    assert await xenia.get_scripts() == {1: "A", 2: "B"}
-
-
-async def test_execute_script_sends_id(mock_api, xenia) -> None:
-    mock_api.post(f"{BASE}/scripts/execute", status=200)
-    await xenia.execute_script(42)
-    body = str(_last_post_body(mock_api, f"{BASE}/scripts/execute"))
-    assert "42" in body
-
-
-async def test_execute_script_id_zero_sends_zero(mock_api, xenia) -> None:
-    mock_api.post(f"{BASE}/scripts/execute", status=200)
-    await xenia.execute_script(0)
-    body = str(_last_post_body(mock_api, f"{BASE}/scripts/execute"))
-    assert "0" in body
-
-
-async def test_read_script_returns_content_and_title(mock_api, xenia) -> None:
-    mock_api.post(
-        f"{BASE}/scripts/read",
-        payload={"Content": "1;13;3 70 5000;27 45;17;7;", "Title": "My Shot"},
-    )
-    result = await xenia.read_script(17)
-    assert result["Content"] == "1;13;3 70 5000;27 45;17;7;"
-    assert result["Title"] == "My Shot"
-
-
-async def test_read_script_zero_pads_id(mock_api, xenia) -> None:
-    mock_api.post(f"{BASE}/scripts/read", payload={})
-    await xenia.read_script(5)
-    body = str(_last_post_body(mock_api, f"{BASE}/scripts/read"))
-    assert "005" in body
-
-
-async def test_read_script_three_digit_id(mock_api, xenia) -> None:
-    mock_api.post(f"{BASE}/scripts/read", payload={})
-    await xenia.read_script(123)
-    body = str(_last_post_body(mock_api, f"{BASE}/scripts/read"))
-    assert "123" in body
-
-
-async def test_create_script_sends_name_and_instruction(mock_api, xenia) -> None:
-    mock_api.post(f"{BASE}/scripts/create", status=200)
-    await xenia.create_script("My Espresso", "1;13;27 40;7;")
-    body = str(_last_post_body(mock_api, f"{BASE}/scripts/create"))
-    assert "My Espresso" in body
-    assert "1;13;27 40;7;" in body
-
-
-async def test_update_script_uses_edit_enabled(mock_api, xenia) -> None:
-    mock_api.post(f"{BASE}/scripts/create", status=200)
-    await xenia.update_script(5, "Name", "1;7;")
-    body = str(_last_post_body(mock_api, f"{BASE}/scripts/create"))
-    assert "Enabled" in body
-    assert "5" in body
-
-
-async def test_non_json_body_raises_client_error(mock_api, xenia) -> None:
-    mock_api.get(f"{BASE}/overview", status=200, body="<html></html>")
-    with pytest.raises(ClientError):
-        await xenia.get_overview()
-
-
-async def test_get_switches_returns_dict(mock_api, xenia) -> None:
-    mock_api.get(
-        f"{BASE}/switches",
-        payload={"SWITCH_SET_LEFT_LEFT_0": 1, "SWITCH_SET_LEFT_LEFT_1": 2},
-    )
-    assert await xenia.get_switches() == {
-        "SWITCH_SET_LEFT_LEFT_0": 1,
-        "SWITCH_SET_LEFT_LEFT_1": 2,
-    }
-
-
-async def test_set_switch_sends_only_switch_assignments(mock_api, xenia) -> None:
-    mock_api.get(
-        f"{BASE}/switches",
-        payload={
+    assert mock_xenia_api.bodies("post", "scripts/read") == [
+        f'{{"FILE_NAME":"{file_name}"}}'
+    ]
+
+
+async def test_set_switch_sends_only_switch_assignments(
+    xenia: Xenia, mock_xenia_api: MockXeniaApi
+) -> None:
+    """Assigning a switch posts all assignments, but none of the other settings."""
+    mock_xenia_api.override(
+        "get",
+        "switches",
+        json={
             "SWITCH_SET_LEFT_LEFT_0": 1,
             "SWITCH_SET_RIGHT_RIGHT_1": 2,
             "MA_BEVERAGE_WEIGHT_DBL_INT_SCALE": 36,
@@ -513,94 +146,48 @@ async def test_set_switch_sends_only_switch_assignments(mock_api, xenia) -> None
             "VIEW": 0,
         },
     )
-    mock_api.post(f"{BASE}/switches", status=200)
     await xenia.set_switch("SWITCH_SET_LEFT_LEFT_0", 99)
-    body = json.loads(_last_post_body(mock_api, f"{BASE}/switches"))
-    assert body == {"SWITCH_SET_LEFT_LEFT_0": "99", "SWITCH_SET_RIGHT_RIGHT_1": "2"}
-
-
-# ===========================================================================
-# All endpoints raise ClientResponseError on HTTP errors
-# ===========================================================================
+    [body] = mock_xenia_api.bodies("post", "switches")
+    assert json.loads(body) == {
+        "SWITCH_SET_LEFT_LEFT_0": "99",
+        "SWITCH_SET_RIGHT_RIGHT_1": "2",
+    }
 
 
 @pytest.mark.parametrize(
-    ("method", "path", "kwargs", "callable_attr", "args"),
+    ("method", "path", "call"),
     [
-        ("get", "overview", {}, "get_overview", ()),
-        ("get", "overview_single", {}, "get_overview_single", ()),
-        ("get", "machine", {}, "get_machine", ()),
-        ("get", "scripts/list", {}, "get_scripts", ()),
-        ("get", "switches", {}, "get_switches", ()),
-        ("post", "scripts/execute", {}, "execute_script", (1,)),
-        ("get", "scripts/stop", {}, "stop_script", ()),
-        ("post", "scripts/read", {}, "read_script", (1,)),
-        ("post", "scripts/create", {}, "create_script", ("name", "instr")),
-        ("post", "scripts/create", {}, "update_script", (1, "name", "instr")),
+        ("get", "overview", lambda x: x.get_overview()),
+        ("get", "overview_single", lambda x: x.get_overview_single()),
+        ("get", "machine", lambda x: x.get_machine()),
+        ("get", "scripts/list", lambda x: x.get_scripts()),
+        ("get", "switches", lambda x: x.get_switches()),
+        ("get", "scripts/stop", lambda x: x.stop_script()),
+        ("post", "scripts/execute", lambda x: x.execute_script(1)),
+        ("post", "scripts/read", lambda x: x.read_script(1)),
+        ("post", "scripts/create", lambda x: x.create_script("name", "instr")),
+        ("post", "toggle/sb", lambda x: x.sb_turn_on()),
     ],
 )
-async def test_http_500_raises(
-    mock_api, xenia, method, path, kwargs, callable_attr, args
+@pytest.mark.parametrize("status", [301, 500])
+async def test_error_status_raises(
+    xenia: Xenia,
+    mock_xenia_api: MockXeniaApi,
+    method: str,
+    path: str,
+    call,
+    status: int,
 ) -> None:
-    register = getattr(mock_api, method)
-    register(f"{BASE}/{path}", status=500)
+    """Error statuses raise, and so do redirects, which the firmware sends for unknown paths."""
+    mock_xenia_api.override(method, path, status=status, headers={"Location": "/"})
     with pytest.raises(ClientResponseError):
-        await getattr(xenia, callable_attr)(*args)
+        await call(xenia)
 
 
-# ===========================================================================
-# Endpoint URL verification — one parametrized test instead of 10
-# ===========================================================================
-
-
-@pytest.mark.parametrize(
-    ("callable_attr", "args", "expected_path", "http_method"),
-    [
-        ("device_connected", (), "overview", "get"),
-        ("get_overview", (), "overview", "get"),
-        ("get_overview_single", (), "overview_single", "get"),
-        ("get_machine", (), "machine", "get"),
-        ("get_scripts", (), "scripts/list", "get"),
-        ("get_switches", (), "switches", "get"),
-        ("machine_turn_on", (), "machine/control", "post"),
-        ("machine_turn_off", (), "machine/control", "post"),
-        ("machine_set_eco", (), "machine/control", "post"),
-        ("sb_turn_on", (), "toggle/sb", "post"),
-        ("sb_turn_off", (), "toggle/sb", "post"),
-        ("set_bg_set_temp", (90.0,), "inc_dec", "post"),
-        ("set_bb_set_temp", (130.0,), "inc_dec_bb", "post"),
-        ("execute_script", (1,), "scripts/execute", "post"),
-        ("stop_script", (), "scripts/stop", "get"),
-        ("read_script", (1,), "scripts/read", "post"),
-        ("create_script", ("n", "i"), "scripts/create", "post"),
-        ("update_script", (1, "n", "i"), "scripts/create", "post"),
-    ],
-)
-async def test_method_hits_expected_url(
-    mock_api, xenia, callable_attr, args, expected_path, http_method
+async def test_invalid_json_raises_client_error(
+    xenia: Xenia, mock_xenia_api: MockXeniaApi
 ) -> None:
-    url = f"{BASE}/{expected_path}"
-    register = getattr(mock_api, http_method)
-    # Default payload covers both GET-returning-json and POST-returning-status
-    register(url, payload={"index_list": [], "title_list": []}, status=200)
-    await getattr(xenia, callable_attr)(*args)
-    key = (http_method.upper(), _yarl(url))
-    assert key in mock_api.requests, f"{callable_attr} did not hit {url}"
-
-
-# ===========================================================================
-# Helpers
-# ===========================================================================
-
-
-def _yarl(url: str) -> URL:
-    """Aioresponses keys requests by yarl.URL, not str."""
-    return URL(url)
-
-
-def _last_post_body(mock_api, url: str):
-    """Return the `data=` body of the most recent POST to `url`."""
-    key = ("POST", _yarl(url))
-    calls = mock_api.requests.get(key)
-    assert calls, f"No POST to {url} was made"
-    return calls[-1].kwargs.get("data")
+    """A body that is not JSON raises a ClientError like a failed request."""
+    mock_xenia_api.override("get", "overview", text="<html></html>")
+    with pytest.raises(ClientError):
+        await xenia.get_overview()

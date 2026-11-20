@@ -6,7 +6,7 @@
     ]),
     'area_id': None,
     'capabilities': dict({
-      'event_types': list([
+      <EventEntityCapabilityAttribute.EVENT_TYPES: 'event_types'>: list([
         'shot_completed',
       ]),
     }),
@@ -36,7 +36,7 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'shot_tracker',
-    'unique_id': 'xenia_home_shot_tracker_xenia.local',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_shot_tracker',
     'unit_of_measurement': None,
   })
 # ---

@@ -1,65 +1,67 @@
 # Quality scale
 
-Tracks compliance with the [Home Assistant integration quality scale](https://developers.home-assistant.io/docs/core/integration-quality-scale). A box is only checked once a rule has been verified against its official documentation.
+Tracks compliance with the [Home Assistant integration quality scale](https://contributors.home-assistant.io/core/quality-scale/). A box is only checked once a rule has been verified against its official documentation. Exempt rules name the reason the rule gives for the exemption.
 
 ## Bronze
 - [x] `action-setup` - Service actions are registered in async_setup
-- [ ] `appropriate-polling` - If it's a polling integration, set an appropriate polling interval
-- [ ] `brands` - Has branding assets available for the integration
+- [x] `appropriate-polling` - If it's a polling integration, set an appropriate polling interval
+- [ ] `brands` - Has branding assets available for the integration. The icon ships in `brand/`, which Home Assistant and HACS use for custom integrations; the rule asks for the brands repository, which only takes core integrations.
 - [x] `common-modules` - Place common patterns in common modules
-- [ ] `config-flow-test-coverage` - Full test coverage for the config flow
-- [ ] `config-flow` - Integration needs to be able to be set up via the UI
-    - [ ] Uses `data_description` to give context to fields
+- [x] `config-flow-test-coverage` - Full test coverage for the config flow
+- [x] `config-flow` - Integration needs to be able to be set up via the UI
+    - [x] Uses `data_description` to give context to fields
     - [x] Uses `ConfigEntry.data` and `ConfigEntry.options` correctly
-- [x] `dependency-transparency` - Dependency transparency
+- [x] `dependency-transparency` - Exempt: the integration has no external dependencies.
 - [x] `docs-actions` - The documentation describes the provided service actions that can be used
+- [x] `docs-conditions` - Exempt: the integration provides no conditions.
 - [x] `docs-high-level-description` - The documentation includes a high-level description of the integration brand, product, or service
 - [x] `docs-installation-instructions` - The documentation provides step-by-step installation instructions for the integration, including, if needed, prerequisites
 - [x] `docs-removal-instructions` - The documentation provides removal instructions
+- [x] `docs-triggers` - Exempt: the integration provides no triggers.
 - [x] `entity-event-setup` - Entity events are subscribed in the correct lifecycle methods
 - [x] `entity-unique-id` - Entities have a unique ID
 - [x] `has-entity-name` - Entities use has_entity_name = True
 - [x] `runtime-data` - Use ConfigEntry.runtime_data to store runtime data
 - [x] `test-before-configure` - Test a connection in the config flow
 - [x] `test-before-setup` - Check during integration initialization if we are able to set it up correctly
-- [ ] `unique-config-entry` - Don't allow the same device or service to be able to be set up twice
+- [x] `unique-config-entry` - Don't allow the same device or service to be able to be set up twice
 
 ## Silver
-- [ ] `action-exceptions` - Service actions raise exceptions when encountering failures
-- [ ] `config-entry-unloading` - Support config entry unloading
-- [ ] `docs-configuration-parameters` - The documentation describes all integration configuration options
-- [ ] `docs-installation-parameters` - The documentation describes all integration installation parameters
-- [ ] `entity-unavailable` - Mark entity unavailable if appropriate
-- [ ] `integration-owner` - Has an integration owner
-- [ ] `log-when-unavailable` - If internet/device/service is unavailable, log once when unavailable and once when back connected
-- [ ] `parallel-updates` - Number of parallel updates is specified
-- [ ] `reauthentication-flow` - Reauthentication needs to be available via the UI
+- [x] `action-exceptions` - Service actions raise exceptions when encountering failures
+- [x] `config-entry-unloading` - Support config entry unloading
+- [x] `docs-configuration-parameters` - The documentation describes all integration configuration options
+- [x] `docs-installation-parameters` - The documentation describes all integration installation parameters
+- [x] `entity-unavailable` - Mark entity unavailable if appropriate
+- [x] `integration-owner` - Has an integration owner
+- [x] `log-when-unavailable` - If internet/device/service is unavailable, log once when unavailable and once when back connected
+- [x] `parallel-updates` - Number of parallel updates is specified
+- [x] `reauthentication-flow` - Exempt: the machine needs no authentication.
 - [x] `test-coverage` - Above 95% test coverage for all integration modules
 
 ## Gold
-- [ ] `devices` - The integration creates devices
-- [ ] `diagnostics` - Implements diagnostics
+- [x] `devices` - The integration creates devices
+- [x] `diagnostics` - Implements diagnostics
 - [ ] `discovery-update-info` - Integration uses discovery info to update network information
-- [ ] `discovery` - Devices can be discovered
-- [ ] `docs-data-update` - The documentation describes how data is updated
-- [ ] `docs-examples` - The documentation provides automation examples the user can use.
-- [ ] `docs-known-limitations` - The documentation describes known limitations of the integration (not to be confused with bugs)
-- [ ] `docs-supported-devices` - The documentation describes known supported / unsupported devices
-- [ ] `docs-supported-functions` - The documentation describes the supported functionality, including entities, and platforms
-- [ ] `docs-troubleshooting` - The documentation provides troubleshooting information
-- [ ] `docs-use-cases` - The documentation describes use cases to illustrate how this integration can be used
-- [ ] `dynamic-devices` - Devices added after integration setup
-- [ ] `entity-category` - Entities are assigned an appropriate EntityCategory
-- [ ] `entity-device-class` - Entities use device classes where possible
-- [ ] `entity-disabled-by-default` - Integration disables less popular (or noisy) entities
-- [ ] `entity-translations` - Entities have translated names
-- [ ] `exception-translations` - Exception messages are translatable
+- [ ] `discovery` - Devices can be discovered. No zeroconf service or DHCP hostname of the machine is known yet.
+- [x] `docs-data-update` - The documentation describes how data is updated
+- [x] `docs-examples` - The documentation provides automation examples the user can use.
+- [x] `docs-known-limitations` - The documentation describes known limitations of the integration (not to be confused with bugs)
+- [x] `docs-supported-devices` - The documentation describes known supported / unsupported devices
+- [x] `docs-supported-functions` - The documentation describes the supported functionality, including entities, and platforms
+- [x] `docs-troubleshooting` - The documentation provides troubleshooting information
+- [x] `docs-use-cases` - The documentation describes use cases to illustrate how this integration can be used
+- [x] `dynamic-devices` - Exempt: one fixed device per config entry.
+- [x] `entity-category` - Entities are assigned an appropriate EntityCategory
+- [x] `entity-device-class` - Entities use device classes where possible
+- [x] `entity-disabled-by-default` - Integration disables less popular (or noisy) entities
+- [x] `entity-translations` - Entities have translated names
+- [x] `exception-translations` - Exception messages are translatable
 - [x] `icon-translations` - Entities implement icon translations
-- [ ] `reconfiguration-flow` - Integrations should have a reconfigure flow
-- [ ] `repair-issues` - Repair issues and repair flows are used when user intervention is needed
-- [ ] `stale-devices` - Stale devices are removed
+- [x] `reconfiguration-flow` - Integrations should have a reconfigure flow
+- [x] `repair-issues` - Repair issues and repair flows are used when user intervention is needed
+- [x] `stale-devices` - Exempt: one fixed device per config entry.
 
 ## Platinum
-- [ ] `async-dependency` - Dependency is async
-- [ ] `inject-websession` - The integration dependency supports passing in a websession
-- [ ] `strict-typing` - Strict typing
+- [x] `async-dependency` - Exempt: the integration has no external dependencies.
+- [x] `inject-websession` - The machine client takes the session Home Assistant provides
+- [ ] `strict-typing` - Strict typing. mypy checks the integration with the strict settings of Home Assistant Core; the rule also asks for a listing in core's `.strict-typing`, which a custom integration cannot have.

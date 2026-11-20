@@ -1,207 +1,167 @@
-"""Tests for select.py — power-on-behavior, script, and switch-config selects."""
+"""Tests for the power on behavior, script and switch selects."""
 
-from datetime import timedelta
-
-from homeassistant.core import State
+from homeassistant.components.select import (
+    DOMAIN as SELECT_DOMAIN,
+    SERVICE_SELECT_OPTION,
+)
+from homeassistant.const import ATTR_ENTITY_ID, ATTR_OPTION, STATE_UNAVAILABLE
+from homeassistant.core import HomeAssistant, State
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import entity_registry as er
 import pytest
 from pytest_homeassistant_custom_component.common import (
-    async_fire_time_changed,
+    MockConfigEntry,
     mock_restore_cache,
 )
+from syrupy.assertion import SnapshotAssertion
 
-from custom_components.xenia_home.const import CONF_POWER_ON_BEHAVIOR, PowerOnBehavior
+from tests import setup_integration
+from tests.conftest import MockXeniaApi
+
+pytestmark = pytest.mark.usefixtures("entity_registry_enabled_by_default")
 
 POWER_ON_BEHAVIOR = "select.xenia_espresso_machine_power_on_behavior"
 SCRIPT = "select.xenia_espresso_machine_script"
 SWITCH_LEFT_SHORT = "select.xenia_espresso_machine_left_switch_left_short"
+SWITCH_RIGHT_LONG = "select.xenia_espresso_machine_right_switch_right_long"
+
+
+async def _select(hass: HomeAssistant, entity_id: str, option: str) -> None:
+    await hass.services.async_call(
+        SELECT_DOMAIN,
+        SERVICE_SELECT_OPTION,
+        {ATTR_ENTITY_ID: entity_id, ATTR_OPTION: option},
+        blocking=True,
+    )
 
 
 async def test_select_entities_snapshot(
-    hass, init_integration, snapshot, entity_registry
-):
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    snapshot: SnapshotAssertion,
+    entity_registry: er.EntityRegistry,
+) -> None:
+    """The selects match the snapshot."""
     entity_ids = sorted(
         e.entity_id
-        for e in entity_registry.entities.values()
-        if e.platform == "xenia_home" and e.domain == "select"
+        for e in er.async_entries_for_config_entry(
+            entity_registry, init_integration.entry_id
+        )
+        if e.domain == SELECT_DOMAIN
     )
-    # 1 (power on behavior) + 1 (script) + 6 (switch configs) = 8
     assert len(entity_ids) == 8
     for entity_id in entity_ids:
-        state = hass.states.get(entity_id)
-        registry_entry = entity_registry.async_get(entity_id)
-        assert state == snapshot(name=f"{entity_id}-state")
-        assert registry_entry == snapshot(name=f"{entity_id}-registry")
+        assert hass.states.get(entity_id) == snapshot(name=f"{entity_id}-state")
+        assert entity_registry.async_get(entity_id) == snapshot(
+            name=f"{entity_id}-registry"
+        )
 
 
-# ===========================================================================
-# PowerOnBehaviorSelect
-# ===========================================================================
+async def test_power_on_behavior_defaults_to_steam_off(
+    hass: HomeAssistant, init_integration: MockConfigEntry
+) -> None:
+    """Without a stored choice the steam boiler stays off on power on."""
+    assert hass.states.get(POWER_ON_BEHAVIOR).state == "steam_off"
 
 
-async def test_power_on_behavior_defaults_to_steam_off(hass, init_integration):
-    state = hass.states.get(POWER_ON_BEHAVIOR)
-    assert state.state == PowerOnBehavior.STEAM_OFF.value
+async def test_power_on_behavior_is_kept_across_reloads(
+    hass: HomeAssistant, init_integration: MockConfigEntry
+) -> None:
+    """The choice is a local preference that survives a reload."""
+    await _select(hass, POWER_ON_BEHAVIOR, "steam_on")
+    assert hass.states.get(POWER_ON_BEHAVIOR).state == "steam_on"
 
-
-async def test_power_on_behavior_option_is_migrated_and_removed(
-    hass,
-    enable_custom_integrations,
-    mock_xenia_api,
-    mock_config_entry_factory_with_options,
-):
-    entry = mock_config_entry_factory_with_options(
-        {CONF_POWER_ON_BEHAVIOR: PowerOnBehavior.STEAM_ON.value}
-    )
-    mock_xenia_api.register()
-    entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.config_entries.async_reload(init_integration.entry_id)
     await hass.async_block_till_done()
-    assert hass.states.get(POWER_ON_BEHAVIOR).state == PowerOnBehavior.STEAM_ON.value
-    assert CONF_POWER_ON_BEHAVIOR not in entry.options
+    assert hass.states.get(POWER_ON_BEHAVIOR).state == "steam_on"
 
 
-async def test_power_on_behavior_select_does_not_reload_the_entry(
-    hass, init_integration
-):
-    runtime_data = init_integration.runtime_data
-    await hass.services.async_call(
-        "select",
-        "select_option",
-        {"entity_id": POWER_ON_BEHAVIOR, "option": PowerOnBehavior.STEAM_ON},
-        blocking=True,
-    )
-    await hass.async_block_till_done()
-    assert hass.states.get(POWER_ON_BEHAVIOR).state == PowerOnBehavior.STEAM_ON.value
-    assert init_integration.runtime_data is runtime_data
-
-
+@pytest.mark.parametrize(
+    ("restored", "expected"),
+    [
+        ("steam_on", "steam_on"),
+        (STATE_UNAVAILABLE, "steam_off"),
+    ],
+)
 async def test_power_on_behavior_is_restored_after_restart(
-    hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
-):
-    mock_restore_cache(
-        hass, (State(POWER_ON_BEHAVIOR, PowerOnBehavior.STEAM_ON.value),)
-    )
-    mock_xenia_api.register()
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    assert hass.states.get(POWER_ON_BEHAVIOR).state == PowerOnBehavior.STEAM_ON.value
-
-
-async def test_power_on_behavior_ignores_an_unusable_restored_state(
-    hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
-):
-    mock_restore_cache(hass, (State(POWER_ON_BEHAVIOR, "unavailable"),))
-    mock_xenia_api.register()
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-    assert hass.states.get(POWER_ON_BEHAVIOR).state == PowerOnBehavior.STEAM_OFF.value
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    restored: str,
+    expected: str,
+) -> None:
+    """The choice is restored after a restart; an unusable stored state is ignored."""
+    mock_restore_cache(hass, (State(POWER_ON_BEHAVIOR, restored),))
+    await setup_integration(hass, mock_config_entry)
+    assert hass.states.get(POWER_ON_BEHAVIOR).state == expected
 
 
 async def test_power_on_behavior_stays_available_without_machine(
-    hass, init_integration
-):
-    """The select is a local preference; an unreachable machine must not
-    make it unavailable, or a restart would store and restore that state."""
-    coordinator = init_integration.runtime_data.coordinator
-    coordinator.last_update_success = False
-    coordinator.async_update_listeners()
-    await hass.async_block_till_done()
-    assert hass.states.get(POWER_ON_BEHAVIOR).state == PowerOnBehavior.STEAM_OFF.value
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    poll,
+) -> None:
+    """An unreachable machine does not make the choice unavailable.
+
+    An unavailable state would be stored and restored after a restart.
+    """
+    mock_xenia_api.override("get", "overview", exc=TimeoutError())
+    await poll()
+    assert hass.states.get(SCRIPT).state == STATE_UNAVAILABLE
+    assert hass.states.get(POWER_ON_BEHAVIOR).state == "steam_off"
 
 
-async def test_power_on_behavior_survives_reload(hass, init_integration):
-    await hass.services.async_call(
-        "select",
-        "select_option",
-        {"entity_id": POWER_ON_BEHAVIOR, "option": PowerOnBehavior.STEAM_ON},
-        blocking=True,
-    )
-    await hass.config_entries.async_reload(init_integration.entry_id)
-    await hass.async_block_till_done()
-    assert hass.states.get(POWER_ON_BEHAVIOR).state == PowerOnBehavior.STEAM_ON.value
-
-
-async def test_power_on_behavior_invalid_option_raises(hass, init_integration):
-    # HA's select platform validates options before forwarding to the entity
+async def test_power_on_behavior_rejects_unknown_options(
+    hass: HomeAssistant, init_integration: MockConfigEntry
+) -> None:
+    """Only the listed options can be selected."""
     with pytest.raises(ServiceValidationError):
-        await hass.services.async_call(
-            "select",
-            "select_option",
-            {"entity_id": POWER_ON_BEHAVIOR, "option": "garbage"},
-            blocking=True,
-        )
+        await _select(hass, POWER_ON_BEHAVIOR, "garbage")
 
 
-# ===========================================================================
-# ScriptSelect — selecting changes config_coordinator.selected_script_id
-# ===========================================================================
-
-
-async def test_script_select_options_include_builtin_and_user_scripts(
-    hass, init_integration
-):
+async def test_script_select(
+    hass: HomeAssistant, init_integration: MockConfigEntry
+) -> None:
+    """The script select offers all scripts and shows the selected one."""
     state = hass.states.get(SCRIPT)
-    options = state.attributes.get("options", [])
-    assert "None" in options
-    assert "Espresso" in options
-    assert "MyShot" in options  # from default SCRIPTS_PAYLOAD
+    assert state.attributes["options"] == [
+        "None",
+        "Espresso",
+        "Espresso endless",
+        "MyShot",
+        "Lungo",
+    ]
+    assert state.state == "unknown"
+
+    await _select(hass, SCRIPT, "Lungo")
+    assert hass.states.get(SCRIPT).state == "Lungo"
 
 
-async def test_script_select_sets_selected_script_id(hass, init_integration):
-    await hass.services.async_call(
-        "select",
-        "select_option",
-        {"entity_id": SCRIPT, "option": "MyShot"},
-        blocking=True,
-    )
-    await hass.async_block_till_done()
-    assert init_integration.runtime_data.config_coordinator.selected_script_id == 10
+async def test_switch_select_shows_the_assigned_script(
+    hass: HomeAssistant, init_integration: MockConfigEntry
+) -> None:
+    """A switch shows its script; a switch without assignment shows "None"."""
+    assert hass.states.get(SWITCH_LEFT_SHORT).state == "Espresso"
+    assert hass.states.get(SWITCH_RIGHT_LONG).state == "None"
 
 
-# ===========================================================================
-# SwitchConfigSelect — selecting calls Xenia.set_switch
-# ===========================================================================
+async def test_switch_select_assigns_a_script(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+) -> None:
+    """Selecting a script assigns it on the machine and reads the result back."""
+    mock_xenia_api.set_switches({"SWITCH_SET_LEFT_LEFT_0": 10})
+    await _select(hass, SWITCH_LEFT_SHORT, "MyShot")
+    assert mock_xenia_api.bodies("post", "switches") == [
+        '{"SWITCH_SET_LEFT_LEFT_0":"10"}'
+    ]
+    assert hass.states.get(SWITCH_LEFT_SHORT).state == "MyShot"
 
 
-async def test_switch_config_select_assigns_script_via_xenia(
-    hass, init_integration, mock_xenia_api
-):
-    mock_xenia_api.expect_set_switch()
-    await hass.services.async_call(
-        "select",
-        "select_option",
-        {"entity_id": SWITCH_LEFT_SHORT, "option": "MyShot"},
-        blocking=True,
-    )
-    await hass.async_block_till_done()
-    mock_xenia_api.assert_post_called_with("switches", "SWITCH_SET_LEFT_LEFT_0")
-    mock_xenia_api.assert_post_called_with("switches", "10")
-
-
-async def test_script_rename_reaches_the_select_without_a_reload(
-    hass, init_integration, mock_xenia_api, freezer
-):
-    mock_xenia_api.set_scripts({10: "MyShot renamed", 20: "Lungo"})
-    freezer.tick(timedelta(hours=1, seconds=1))
-    async_fire_time_changed(hass)
-    await hass.async_block_till_done()
-    options = hass.states.get(SCRIPT).attributes["options"]
-    assert "MyShot renamed" in options
-    assert "MyShot" not in options
-
-
-async def test_switch_config_select_raises_translated_error_when_machine_refuses(
-    hass, init_integration, mock_xenia_api
-):
-    mock_xenia_api.fail_post("switches")
+async def test_refused_switch_assignment_raises(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+) -> None:
+    """A refused assignment raises a translated error."""
+    mock_xenia_api.fail("post", "switches")
     with pytest.raises(HomeAssistantError) as exc_info:
-        await hass.services.async_call(
-            "select",
-            "select_option",
-            {"entity_id": SWITCH_LEFT_SHORT, "option": "MyShot"},
-            blocking=True,
-        )
+        await _select(hass, SWITCH_LEFT_SHORT, "MyShot")
     assert exc_info.value.translation_key == "write_failed"

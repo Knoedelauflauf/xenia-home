@@ -1,0 +1,32 @@
+# Extends the ruff rules for tests, copied from home-assistant/core.
+extend = "../pyproject.toml"
+
+[lint]
+
+extend-ignore = [
+    "B904", # Use raise from to specify exception cause
+    "N806",   # Variable {name} in function should be snake_case
+    "N815", # Variable {name} in class scope should not be mixedCase
+    "RUF018", # Avoid assignment expressions in assert statements
+    "DTZ011", # date.today() used: tests commonly use naive dates
+    "S107", # Possible hardcoded password assigned to function default
+    "SLF001", # Private member accessed: Tests do often test internals a lot
+]
+
+[lint.flake8-tidy-imports.banned-api]
+"async_timeout".msg = "use asyncio.timeout instead"
+"pytz".msg = "use zoneinfo instead"
+"voluptuous".msg = "use probatio instead"
+"syrupy.SnapshotAssertion".msg = "use syrupy.assertion.SnapshotAssertion instead"
+
+[lint.isort]
+force-sort-within-sections = true
+known-first-party = [
+    "custom_components",
+    "tests",
+]
+combine-as-imports = true
+split-on-trailing-comma = false
+forced-separate = [
+    "tests",
+]

@@ -6,7 +6,7 @@
     ]),
     'area_id': None,
     'capabilities': dict({
-      'options': list([
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -40,15 +40,15 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'switch_left_long',
-    'unique_id': 'xenia_home_SWITCH_SET_LEFT_LEFT_1_xenia.local',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_SWITCH_SET_LEFT_LEFT_1',
     'unit_of_measurement': None,
   })
 # ---
 # name: test_select_entities_snapshot[select.xenia_espresso_machine_left_switch_left_long-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Left switch left long',
-      'options': list([
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Left switch left long',
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -71,7 +71,7 @@
     ]),
     'area_id': None,
     'capabilities': dict({
-      'options': list([
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -105,15 +105,15 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'switch_left_short',
-    'unique_id': 'xenia_home_SWITCH_SET_LEFT_LEFT_0_xenia.local',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_SWITCH_SET_LEFT_LEFT_0',
     'unit_of_measurement': None,
   })
 # ---
 # name: test_select_entities_snapshot[select.xenia_espresso_machine_left_switch_left_short-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Left switch left short',
-      'options': list([
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Left switch left short',
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -136,7 +136,7 @@
     ]),
     'area_id': None,
     'capabilities': dict({
-      'options': list([
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'steam_on',
         'steam_off',
       ]),
@@ -167,15 +167,15 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'power_on_behavior',
-    'unique_id': 'xenia_home_power_on_behavior_xenia.local',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_power_on_behavior',
     'unit_of_measurement': None,
   })
 # ---
 # name: test_select_entities_snapshot[select.xenia_espresso_machine_power_on_behavior-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Power on behavior',
-      'options': list([
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Power on behavior',
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'steam_on',
         'steam_off',
       ]),
@@ -195,7 +195,7 @@
     ]),
     'area_id': None,
     'capabilities': dict({
-      'options': list([
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -229,15 +229,15 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'switch_right_left_long',
-    'unique_id': 'xenia_home_SWITCH_SET_RIGHT_LEFT_1_xenia.local',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_SWITCH_SET_RIGHT_LEFT_1',
     'unit_of_measurement': None,
   })
 # ---
 # name: test_select_entities_snapshot[select.xenia_espresso_machine_right_switch_left_long-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Right switch left long',
-      'options': list([
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Right switch left long',
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -260,7 +260,7 @@
     ]),
     'area_id': None,
     'capabilities': dict({
-      'options': list([
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -294,15 +294,15 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'switch_right_left_short',
-    'unique_id': 'xenia_home_SWITCH_SET_RIGHT_LEFT_0_xenia.local',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_SWITCH_SET_RIGHT_LEFT_0',
     'unit_of_measurement': None,
   })
 # ---
 # name: test_select_entities_snapshot[select.xenia_espresso_machine_right_switch_left_short-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Right switch left short',
-      'options': list([
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Right switch left short',
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -325,7 +325,7 @@
     ]),
     'area_id': None,
     'capabilities': dict({
-      'options': list([
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -359,15 +359,15 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'switch_right_right_long',
-    'unique_id': 'xenia_home_SWITCH_SET_RIGHT_RIGHT_1_xenia.local',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_SWITCH_SET_RIGHT_RIGHT_1',
     'unit_of_measurement': None,
   })
 # ---
 # name: test_select_entities_snapshot[select.xenia_espresso_machine_right_switch_right_long-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Right switch right long',
-      'options': list([
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Right switch right long',
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -390,7 +390,7 @@
     ]),
     'area_id': None,
     'capabilities': dict({
-      'options': list([
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -424,15 +424,15 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'switch_right_right_short',
-    'unique_id': 'xenia_home_SWITCH_SET_RIGHT_RIGHT_0_xenia.local',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_SWITCH_SET_RIGHT_RIGHT_0',
     'unit_of_measurement': None,
   })
 # ---
 # name: test_select_entities_snapshot[select.xenia_espresso_machine_right_switch_right_short-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Right switch right short',
-      'options': list([
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Right switch right short',
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -455,7 +455,7 @@
     ]),
     'area_id': None,
     'capabilities': dict({
-      'options': list([
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',
@@ -489,15 +489,15 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'script',
-    'unique_id': 'xenia_home_script_xenia.local',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_script',
     'unit_of_measurement': None,
   })
 # ---
 # name: test_select_entities_snapshot[select.xenia_espresso_machine_script-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Script',
-      'options': list([
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Script',
+      <SelectEntityCapabilityAttribute.OPTIONS: 'options'>: list([
         'None',
         'Espresso',
         'Espresso endless',

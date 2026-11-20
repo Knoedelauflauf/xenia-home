@@ -1,14 +1,16 @@
-"""Button platform for Xenia espresso machine."""
+"""Button platform for the Xenia espresso machine."""
+
+from typing import override
 
 from homeassistant.components.button import ButtonEntity
-from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import XENIA_DOMAIN
 from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
 from .entity import XeniaEntity
-from .errors import machine_write
+from .errors import async_write
 
 PARALLEL_UPDATES = 1
 
@@ -16,52 +18,49 @@ PARALLEL_UPDATES = 1
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: XeniaConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up Xenia button entities."""
+    """Set up the script buttons."""
     coordinator = entry.runtime_data.coordinator
     async_add_entities(
-        [
-            XeniaExecuteScriptButton(coordinator),
-            XeniaStopScriptButton(coordinator),
-        ]
+        [XeniaExecuteScriptButton(coordinator), XeniaStopScriptButton(coordinator)]
     )
 
 
 class XeniaExecuteScriptButton(XeniaEntity, ButtonEntity):
-    """Button to execute the selected script."""
+    """Run the script picked in the script select."""
 
     _attr_translation_key = "execute_script"
 
     def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
         """Initialize the button."""
         super().__init__(coordinator)
-        self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_execute_script_{coordinator.config_entry.data[CONF_HOST]}"
-        )
+        self._attr_unique_id = f"{self.machine_id}_execute_script"
 
+    @override
     async def async_press(self) -> None:
-        """Execute the selected script."""
-        config_coordinator = self.runtime_data.config_coordinator
-        selected_script_id = config_coordinator.selected_script_id
-        if selected_script_id is not None and selected_script_id > 0:
-            async with machine_write():
-                await self.coordinator.xenia.execute_script(selected_script_id)
+        """Run the selected script."""
+        script_id = self.runtime_data.selected_script_id
+        if not script_id:
+            raise ServiceValidationError(
+                translation_domain=XENIA_DOMAIN, translation_key="no_script_selected"
+            )
+        await async_write(
+            self.coordinator, self.coordinator.xenia.execute_script(script_id)
+        )
 
 
 class XeniaStopScriptButton(XeniaEntity, ButtonEntity):
-    """Button to stop the currently running script."""
+    """Stop the running script."""
 
     _attr_translation_key = "stop_script"
 
     def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
         """Initialize the button."""
         super().__init__(coordinator)
-        self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_stop_script_{coordinator.config_entry.data[CONF_HOST]}"
-        )
+        self._attr_unique_id = f"{self.machine_id}_stop_script"
 
+    @override
     async def async_press(self) -> None:
-        """Stop the currently running script."""
-        async with machine_write():
-            await self.coordinator.xenia.stop_script()
+        """Stop the running script."""
+        await async_write(self.coordinator, self.coordinator.xenia.stop_script())

@@ -3,19 +3,15 @@
 from dataclasses import dataclass
 from enum import IntEnum
 import json
-import logging
 from typing import Any
 
 from aiohttp import (
-    ClientError,
     ClientPayloadError,
     ClientResponse,
     ClientResponseError,
     ClientSession,
     ClientTimeout,
 )
-
-_LOGGER = logging.getLogger(__name__)
 
 
 class MachineControl(IntEnum):
@@ -24,13 +20,7 @@ class MachineControl(IntEnum):
     OFF = 0
     ON = 1
     ECO = 2
-    SB_OFF = 3
-    SB_ON = 4
     ON_SB_OFF = 5
-
-    def __str__(self):
-        """Return the member name for logging."""
-        return self.name
 
 
 class MachineStatus(IntEnum):
@@ -43,9 +33,10 @@ class MachineStatus(IntEnum):
     DRAINING = 4
     UNKNOWN = 99
 
-    def __str__(self):
-        """Return the member name for logging."""
-        return self.name
+
+ACTIVE_STATUSES = frozenset(
+    {MachineStatus.ON, MachineStatus.BREWING, MachineStatus.DRAINING}
+)
 
 
 class SteamBoilerStatus(IntEnum):
@@ -55,33 +46,29 @@ class SteamBoilerStatus(IntEnum):
     ON = 2
     UNKNOWN = 99
 
-    def __str__(self):
-        """Return the member name for logging."""
-        return self.name
-
 
 @dataclass
 class XeniaOverviewData:
     """Decoded payload of `/api/v2/overview`."""
 
-    ma_extractions: int
-    ma_operating_hours: int
+    ma_extractions: int | None
+    ma_operating_hours: int | None
     ma_status: MachineStatus
-    ma_clock: int
-    ma_cur_pwr: float
-    ma_max_pwr: int
-    ma_energy_total_kwh: float
-    bg_sens_temp_a: float
-    bg_level_pw_control: int
-    pu_sens_press: float
-    pu_level_pw_control: int
-    pu_set_level_pw_control: int
-    pu_sens_flow_meter_ml: float
-    sb_sens_press: float
-    bb_sens_temp_a: float
-    bb_level_pw_control: int
+    ma_clock: int | None
+    ma_cur_pwr: float | None
+    ma_max_pwr: int | None
+    ma_energy_total_kwh: float | None
+    bg_sens_temp_a: float | None
+    bg_level_pw_control: int | None
+    pu_sens_press: float | None
+    pu_level_pw_control: int | None
+    pu_set_level_pw_control: int | None
+    pu_sens_flow_meter_ml: float | None
+    sb_sens_press: float | None
+    bb_sens_temp_a: float | None
+    bb_level_pw_control: int | None
     sb_status: SteamBoilerStatus
-    scale_weight: float
+    scale_weight: float | None
     pu_sens_scale_rate: float | None
 
     @staticmethod
@@ -96,25 +83,25 @@ class XeniaOverviewData:
         except ValueError:
             sb_status_enum = SteamBoilerStatus.UNKNOWN
         return XeniaOverviewData(
-            ma_extractions=data.get("MA_EXTRACTIONS", 0),
-            ma_operating_hours=data.get("MA_OPERATING_HOURS", 0),
+            ma_extractions=_safe_int(data.get("MA_EXTRACTIONS")),
+            ma_operating_hours=_safe_int(data.get("MA_OPERATING_HOURS")),
             ma_status=machine_status_enum,
-            ma_clock=data.get("MA_CLOCK", 0),
-            ma_cur_pwr=float(data.get("MA_CUR_PWR", 0.0)),
-            ma_max_pwr=data.get("MA_MAX_PWR", 0),
-            ma_energy_total_kwh=float(data.get("MA_ENERGY_TOTAL_KWH", 0.0)),
-            bg_sens_temp_a=float(data.get("BG_SENS_TEMP_A", 0.0)),
-            bg_level_pw_control=data.get("BG_LEVEL_PW_CONTROL", 0),
-            pu_sens_press=float(data.get("PU_SENS_PRESS", 0.0)),
-            pu_level_pw_control=data.get("PU_LEVEL_PW_CONTROL", 0),
-            pu_set_level_pw_control=data.get("PU_SET_LEVEL_PW_CONTROL", 0),
-            pu_sens_flow_meter_ml=float(data.get("PU_SENS_FLOW_METER_ML", 0.0)),
-            sb_sens_press=float(data.get("SB_SENS_PRESS", 0.0)),
-            bb_sens_temp_a=float(data.get("BB_SENS_TEMP_A", 0.0)),
-            bb_level_pw_control=data.get("BB_LEVEL_PW_CONTROL", 0),
+            ma_clock=_safe_int(data.get("MA_CLOCK")),
+            ma_cur_pwr=_safe_float(data.get("MA_CUR_PWR")),
+            ma_max_pwr=_safe_int(data.get("MA_MAX_PWR")),
+            ma_energy_total_kwh=_safe_float(data.get("MA_ENERGY_TOTAL_KWH")),
+            bg_sens_temp_a=_safe_float(data.get("BG_SENS_TEMP_A")),
+            bg_level_pw_control=_safe_int(data.get("BG_LEVEL_PW_CONTROL")),
+            pu_sens_press=_safe_float(data.get("PU_SENS_PRESS")),
+            pu_level_pw_control=_safe_int(data.get("PU_LEVEL_PW_CONTROL")),
+            pu_set_level_pw_control=_safe_int(data.get("PU_SET_LEVEL_PW_CONTROL")),
+            pu_sens_flow_meter_ml=_safe_float(data.get("PU_SENS_FLOW_METER_ML")),
+            sb_sens_press=_safe_float(data.get("SB_SENS_PRESS")),
+            bb_sens_temp_a=_safe_float(data.get("BB_SENS_TEMP_A")),
+            bb_level_pw_control=_safe_int(data.get("BB_LEVEL_PW_CONTROL")),
             sb_status=sb_status_enum,
-            scale_weight=float(data.get("SCALE_WEIGHT", 0.0)),
-            pu_sens_scale_rate=_optional_float(data, "PU_SENS_SCALE_RATE"),
+            scale_weight=_safe_float(data.get("SCALE_WEIGHT")),
+            pu_sens_scale_rate=_safe_float(data.get("PU_SENS_SCALE_RATE")),
         )
 
 
@@ -122,29 +109,28 @@ class XeniaOverviewData:
 class XeniaOverviewSingleData:
     """Decoded payload of `/api/v2/overview_single`."""
 
-    bg_set_temp: float
-    pu_set_press: float
-    pu_sens_water_tank_level: int
-    sb_set_press: float
-    bb_set_temp: float
-    psp: int
+    bg_set_temp: float | None
+    pu_set_press: float | None
+    pu_sens_water_tank_level: int | None
+    sb_set_press: float | None
+    bb_set_temp: float | None
+    psp: int | None
     ma_mac: str
-    ma_extractions_start: int
+    ma_extractions_start: int | None
     pop_up: int | None
 
     @staticmethod
     def from_dict(data: dict) -> XeniaOverviewSingleData:
         """Build a `XeniaOverviewSingleData` from a raw API dict."""
         return XeniaOverviewSingleData(
-            bg_set_temp=float(data.get("BG_SET_TEMP", 0.0)),
-            pu_set_press=float(data.get("PU_SET_PRESS", 0.0)),
-            pu_sens_water_tank_level=int(data.get("PU_SENS_WATER_TANK_LEVEL", 0)),
-            sb_set_press=float(data.get("SB_SET_PRESS", 0.0)),
-            bb_set_temp=float(data.get("BB_SET_TEMP", 0.0)),
-            psp=int(data.get("PSP", 0)),
+            bg_set_temp=_safe_float(data.get("BG_SET_TEMP")),
+            pu_set_press=_safe_float(data.get("PU_SET_PRESS")),
+            pu_sens_water_tank_level=_safe_int(data.get("PU_SENS_WATER_TANK_LEVEL")),
+            sb_set_press=_safe_float(data.get("SB_SET_PRESS")),
+            bb_set_temp=_safe_float(data.get("BB_SET_TEMP")),
+            psp=_safe_int(data.get("PSP")),
             ma_mac=data.get("MA_MAC", ""),
-            ma_extractions_start=int(data.get("MA_EXTRACTIONS_START", 0)),
-            # pop up is optional
+            ma_extractions_start=_safe_int(data.get("MA_EXTRACTIONS_START")),
             pop_up=data.get("POP_UP"),
         )
 
@@ -186,19 +172,15 @@ class XeniaMachineData:
 
 
 def _safe_int(value: Any) -> int | None:
-    if value is None:
-        return None
     try:
         return int(value)
     except TypeError, ValueError:
         return None
 
 
-def _optional_float(data: dict, key: str) -> float | None:
-    if key not in data:
-        return None
+def _safe_float(value: Any) -> float | None:
     try:
-        return float(data[key])
+        return float(value)
     except TypeError, ValueError:
         return None
 
@@ -226,6 +208,21 @@ def _json(body: bytes) -> Any:
         raise ClientPayloadError(f"Invalid JSON from the machine: {err}") from err
 
 
+def _script_body(script_id: int | None, name: str, instruction: str) -> str:
+    return json.dumps(
+        {
+            "script_id": script_id,
+            "Edit": "Disabled" if script_id is None else "Enabled",
+            "switch": None,
+            "script": "none",
+            "name": name,
+            "instruction": instruction,
+        },
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+
+
 class Xenia:
     """Async HTTP client for the Xenia espresso machine local API (v2)."""
 
@@ -234,56 +231,51 @@ class Xenia:
         self._host = host
         self._session = session
 
-    async def device_connected(self) -> bool:
-        """Return True if the machine answered with an `MA_STATUS` payload."""
-        try:
-            json_data = await self._get_overview_raw()
-            if "MA_STATUS" in json_data:
-                return True
-        except (ClientError, OSError, TimeoutError) as e:
-            _LOGGER.info("Connection test failed: %s", e)
-            return False
-        return False
+    async def get_mac(self) -> str:
+        """Fetch the MAC address, which every firmware reports."""
+        payload = _json(await self._get("overview_single"))
+        if isinstance(payload, dict) and (mac := payload.get("MA_MAC")):
+            return str(mac)
+        raise ClientPayloadError("The machine reported no MAC address")
 
-    async def machine_turn_on(self, sb_on: bool = True):
+    async def machine_turn_on(self, sb_on: bool) -> None:
         """Turn the machine on, optionally suppressing the steam boiler."""
         if sb_on:
             await self._control_machine(MachineControl.ON)
         else:
             await self._control_machine(MachineControl.ON_SB_OFF)
 
-    async def machine_turn_off(self):
+    async def machine_turn_off(self) -> None:
         """Turn the machine off."""
         await self._control_machine(MachineControl.OFF)
 
-    async def machine_set_eco(self):
+    async def machine_set_eco(self) -> None:
         """Switch the machine into eco mode."""
         await self._control_machine(MachineControl.ECO)
 
-    async def sb_turn_on(self):
+    async def sb_turn_on(self) -> None:
         """Turn the steam boiler on."""
         await self._toggle_sb(True)
 
-    async def sb_turn_off(self):
+    async def sb_turn_off(self) -> None:
         """Turn the steam boiler off."""
         await self._toggle_sb(False)
 
+    def _url(self, path: str) -> str:
+        return f"http://{self._host}/api/v2/{path}"
+
     async def _get(self, path: str, timeout: int = 10) -> bytes:
-        url = f"http://{self._host}/api/v2/{path}"
         async with self._session.get(
-            url,
+            self._url(path),
             timeout=ClientTimeout(total=timeout),
             allow_redirects=False,
         ) as resp:
             _raise_for_status(resp)
             return await resp.read()
 
-    async def _get_overview_raw(self) -> dict[str, Any]:
-        return _json(await self._get("overview"))
-
     async def get_overview(self) -> XeniaOverviewData:
         """Fetch and decode the fast-changing overview payload."""
-        return XeniaOverviewData.from_dict(await self._get_overview_raw())
+        return XeniaOverviewData.from_dict(_json(await self._get("overview")))
 
     async def get_overview_single(self) -> XeniaOverviewSingleData:
         """Fetch and decode the setpoint / configuration overview payload."""
@@ -296,12 +288,10 @@ class Xenia:
         return XeniaMachineData.from_dict(_json(await self._get("machine")))
 
     async def _post(self, path: str, data: str, timeout: int = 5) -> bytes:
-        url = f"http://{self._host}/api/v2/{path}"
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
         async with self._session.post(
-            url,
+            self._url(path),
             data=data,
-            headers=headers,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
             timeout=ClientTimeout(total=timeout),
             allow_redirects=False,
         ) as resp:
@@ -327,7 +317,7 @@ class Xenia:
         await self._post("inc_dec_bb", data)
 
     async def get_scripts(self) -> dict[int, str]:
-        """Get available scripts as {id: title} dict."""
+        """Return the scripts as {id: title}."""
         data = _json(await self._get("scripts/list"))
         index_list = data.get("index_list", [])
         title_list = data.get("title_list", [])
@@ -343,42 +333,34 @@ class Xenia:
         await self._get("scripts/stop")
 
     async def get_switches(self) -> dict[str, int]:
-        """Get switch-to-script mappings."""
-        return _json(await self._get("switches"))
+        """Return the switch settings, including the switch-to-script assignments."""
+        switches: dict[str, int] = _json(await self._get("switches"))
+        return switches
 
     async def read_script(self, script_id: int) -> dict[str, str]:
-        """Read a script's content by ID.
-
-        Returns dict with 'Content' (instruction) and 'Title' keys.
-        """
+        """Return a script as {"Content": instruction, "Title": title}."""
         file_name = f"{script_id:03d}"
         data = f'{{"FILE_NAME":"{file_name}"}}'
-        return _json(await self._post("scripts/read", data, timeout=10))
+        script: dict[str, str] = _json(
+            await self._post("scripts/read", data, timeout=10)
+        )
+        return script
 
     async def create_script(self, name: str, instruction: str) -> None:
         """Create a new script on the machine."""
-        data = (
-            '{"script_id":null,"Edit":"Disabled","switch":null,'
-            f'"script":"none","name":"{name}","instruction":"{instruction}"}}'
-        )
-        await self._post("scripts/create", data)
+        await self._post("scripts/create", _script_body(None, name, instruction))
 
     async def update_script(self, script_id: int, name: str, instruction: str) -> None:
         """Update an existing script on the machine."""
-        data = (
-            f'{{"script_id":{script_id},"Edit":"Enabled","switch":null,'
-            f'"script":"none","name":"{name}","instruction":"{instruction}"}}'
-        )
-        await self._post("scripts/create", data)
+        await self._post("scripts/create", _script_body(script_id, name, instruction))
 
     async def set_switch(self, switch_key: str, script_id: int) -> None:
-        """Set a switch to trigger a specific script."""
+        """Assign a script to a switch."""
         current = {
             k: v
             for k, v in (await self.get_switches()).items()
             if k.startswith("SWITCH_SET_")
         }
         current[switch_key] = script_id
-        # Convert all values to strings as per API format
         data = "{" + ",".join(f'"{k}":"{v}"' for k, v in current.items()) + "}"
         await self._post("switches", data)

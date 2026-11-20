@@ -14,7 +14,7 @@
         },
         "script_name": {
           "name": "Skriptname",
-          "description": "Der Name des auszuführenden Skripts. Wird ignoriert, wenn eine Skript-ID angegeben ist."
+          "description": "Der Name des auszuführenden Skripts, wie ihn die Skriptauswahl zeigt. Wird ignoriert, wenn eine Skript-ID angegeben ist."
         }
       }
     }
@@ -26,23 +26,30 @@
         "description": "Gib den Hostnamen oder die IP-Adresse deiner Xenia Espressomaschine ein",
         "data": {
           "host": "Host"
+        },
+        "data_description": {
+          "host": "Der Hostname oder die IP-Adresse der Maschine, zum Beispiel xenia.local."
         }
       },
-      "reconfigure_confirm": {
+      "reconfigure": {
         "title": "Xenia Espressomaschine neu konfigurieren",
         "description": "Aktualisiere den Hostnamen oder die IP-Adresse für {name}",
         "data": {
           "host": "Host"
+        },
+        "data_description": {
+          "host": "Der Hostname oder die IP-Adresse der Maschine, zum Beispiel xenia.local."
         }
       }
     },
     "error": {
-      "cannot_connect": "Verbindung zur Espressomaschine fehlgeschlagen. Bitte überprüfe die Host-Adresse und stelle sicher, dass das Gerät eingeschaltet und im Netzwerk erreichbar ist.",
-      "unknown": "Ein unerwarteter Fehler ist aufgetreten"
+      "cannot_connect": "Verbindung zur Espressomaschine fehlgeschlagen. Bitte überprüfe die Host-Adresse und stelle sicher, dass das Gerät eingeschaltet und im Netzwerk erreichbar ist."
     },
     "abort": {
       "already_configured": "Diese Espressomaschine ist bereits konfiguriert",
-      "reconfigure_successful": "Neukonfiguration erfolgreich"
+      "already_in_progress": "Die Einrichtung dieser Espressomaschine läuft bereits",
+      "reconfigure_successful": "Die Neukonfiguration war erfolgreich",
+      "unique_id_mismatch": "Dieser Host gehört zu einer anderen Espressomaschine. Füge sie stattdessen als neue Maschine hinzu."
     }
   },
   "options": {
@@ -51,6 +58,9 @@
         "title": "Xenia Optionen",
         "data": {
           "weight_management_enabled": "Gewichtssteuerung aktivieren"
+        },
+        "data_description": {
+          "weight_management_enabled": "Fügt eine Zahlen-Entität hinzu, die das Zielgewicht eines Skripts auf der Maschine setzt."
         }
       },
       "select_script": {
@@ -58,6 +68,9 @@
         "description": "Wähle ein vorhandenes Skript mit Zielgewicht oder erstelle ein neues",
         "data": {
           "managed_script_id": "Skript"
+        },
+        "data_description": {
+          "managed_script_id": "Es werden nur Skripte mit Zielgewicht angezeigt."
         }
       },
       "configure_weight": {
@@ -67,11 +80,21 @@
           "weight_min": "Mindestgewicht (g)",
           "weight_max": "Maximalgewicht (g)",
           "weight_step": "Schrittweite (g)"
+        },
+        "data_description": {
+          "weight_min": "Das kleinste Zielgewicht, das die Zahlen-Entität anbietet.",
+          "weight_max": "Das größte Zielgewicht, das die Zahlen-Entität anbietet.",
+          "weight_step": "Die Schrittweite der Zahlen-Entität."
         }
       }
     },
     "abort": {
-      "cannot_connect": "Verbindung zur Espressomaschine fehlgeschlagen"
+      "cannot_connect": "Verbindung zur Espressomaschine fehlgeschlagen",
+      "script_not_created": "Das Skript wurde angelegt, aber die Maschine listet es nicht."
+    },
+    "error": {
+      "weight_max_not_above_min": "Muss über dem Mindestgewicht liegen.",
+      "weight_step_not_positive": "Muss größer als 0 sein."
     }
   },
   "entity": {
@@ -185,8 +208,12 @@
     "event": {
       "shot_tracker": {
         "name": "Bezugstracker",
-        "state": {
-          "shot_completed": "Bezug abgeschlossen"
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "shot_completed": "Bezug abgeschlossen"
+            }
+          }
         }
       }
     }
@@ -199,16 +226,35 @@
       "message": "Entweder script_id oder script_name ist erforderlich."
     },
     "script_not_found": {
-      "message": "Das Skript '{script_name}' wurde auf der Maschine nicht gefunden."
+      "message": "Das Skript {script_name} wurde auf der Maschine nicht gefunden."
     },
     "update_failed": {
       "message": "Das Abrufen der Daten von der Xenia Espressomaschine ist fehlgeschlagen: {error}"
     },
-    "entry_not_loaded": {
-      "message": "Der Xenia-Konfigurationseintrag ist nicht geladen."
+    "managed_script_missing": {
+      "message": "Das verwaltete Skript {script_id} existiert auf der Maschine nicht mehr. Wähle in den Optionen der Gewichtssteuerung ein anderes Skript."
     },
-    "multiple_entries": {
-      "message": "Es sind mehrere Xenia-Maschinen eingerichtet. Gib config_entry_id an, um eine auszuwählen."
+    "managed_script_unreadable": {
+      "message": "Das verwaltete Skript {script_id} enthält Befehle, die Home Assistant nicht lesen kann. Sein Zielgewicht lässt sich deshalb nicht ändern."
+    },
+    "duplicate_machine": {
+      "message": "Diese Espressomaschine ist bereits als {title} eingerichtet. Lösche diesen doppelten Eintrag."
+    },
+    "no_script_selected": {
+      "message": "Wähle zuerst ein Skript in der Skriptauswahl."
+    }
+  },
+  "selector": {
+    "managed_script_id": {
+      "options": {
+        "create_new": "Neues Skript anlegen (HA Espresso)"
+      }
+    }
+  },
+  "issues": {
+    "managed_script_missing": {
+      "title": "Verwaltetes Skript von {title} wurde gelöscht",
+      "description": "Das Skript {script_id}, dessen Zielgewicht {title} verwaltet, existiert auf der Maschine nicht mehr, daher ist sein Zielgewicht nicht verfügbar. Öffne die Optionen der Integration und wähle ein anderes Skript oder schalte die Gewichtssteuerung aus; danach verschwindet dieser Hinweis."
     }
   }
 }

@@ -1,329 +1,416 @@
-"""Tests for config_flow.py — config and options flows."""
+"""Tests for the config and options flows."""
 
-from unittest.mock import patch
-
-from homeassistant import config_entries, data_entry_flow
+from homeassistant.config_entries import SOURCE_USER, ConfigEntryState
+from homeassistant.const import CONF_HOST
+from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers import entity_registry as er
 import pytest
-import yarl
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.xenia_home.config_flow import CREATE_NEW_SCRIPT
-from custom_components.xenia_home.const import (
-    CONF_MANAGED_SCRIPT_ID,
-    CONF_WEIGHT_MANAGEMENT_ENABLED,
-    CONF_WEIGHT_MAX,
-    CONF_WEIGHT_MIN,
-    CONF_WEIGHT_STEP,
-    DEFAULT_SCRIPT_NAME,
-    XENIA_DOMAIN,
-)
+from custom_components.xenia_home.const import DEFAULT_SCRIPT_NAME, XENIA_DOMAIN
+
 from tests.conftest import MockXeniaApi
 
-# ===========================================================================
-# Config flow — user step
-# ===========================================================================
+WEIGHT_SETTINGS = {"weight_min": 20.0, "weight_max": 45.0, "weight_step": 0.1}
 
 
-async def test_user_step_shows_form_initially(
-    hass, enable_custom_integrations, mock_xenia_api
-):
-    mock_xenia_api.register()
+async def test_user_flow_creates_entry(
+    hass: HomeAssistant, mock_xenia_api: MockXeniaApi
+) -> None:
+    """The machine is added under its host and keyed on its MAC address."""
     result = await hass.config_entries.flow.async_init(
-        XENIA_DOMAIN, context={"source": config_entries.SOURCE_USER}
+        XENIA_DOMAIN, context={"source": SOURCE_USER}
     )
-    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "user"
 
-
-async def test_user_step_creates_entry_on_successful_connection(
-    hass, enable_custom_integrations, mock_xenia_api
-):
-    mock_xenia_api.register()
-    result = await hass.config_entries.flow.async_init(
-        XENIA_DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], user_input={"host": "xenia.local"}
+        result["flow_id"], {CONF_HOST: " xenia.local "}
     )
-    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
-    assert result["data"] == {"host": "xenia.local"}
-
-
-async def test_user_step_aborts_when_already_configured(
-    hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
-):
-    mock_xenia_api.register()
-    mock_config_entry.add_to_hass(hass)
-    result = await hass.config_entries.flow.async_init(
-        XENIA_DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], user_input={"host": "xenia.local"}
-    )
-    assert result["type"] == data_entry_flow.FlowResultType.ABORT
-    assert result["reason"] == "already_configured"
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "xenia.local"
+    assert result["data"] == {CONF_HOST: "xenia.local"}
+    assert result["result"].unique_id == "aa:bb:cc:dd:ee:ff"
 
 
 @pytest.mark.parametrize(
-    "exception",
-    [TimeoutError("timeout"), OSError("refused")],
+    "fault",
+    [
+        {"exc": TimeoutError()},
+        {"exc": OSError("refused")},
+        {"json": {"NOT_A_XENIA": 1}},
+    ],
 )
-async def test_user_step_shows_cannot_connect_on_network_error(
-    hass, enable_custom_integrations, mock_xenia_api, exception
-):
-    # Make the GET /overview to bad.host raise
-    mock_xenia_api._mock.get(
-        "http://bad.host/api/v2/overview", exception=exception, repeat=True
-    )
+async def test_user_flow_recovers_from_cannot_connect(
+    hass: HomeAssistant,
+    mock_xenia_api: MockXeniaApi,
+    fault: dict,
+) -> None:
+    """An unreachable host or another device shows an error until the host works."""
+    mock_xenia_api.for_host("bad.host").override("get", "overview_single", **fault)
     result = await hass.config_entries.flow.async_init(
-        XENIA_DOMAIN, context={"source": config_entries.SOURCE_USER}
+        XENIA_DOMAIN, context={"source": SOURCE_USER}
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], user_input={"host": "bad.host"}
+        result["flow_id"], {CONF_HOST: "bad.host"}
     )
-    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "cannot_connect"}
 
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_HOST: "xenia.local"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["result"].unique_id == "aa:bb:cc:dd:ee:ff"
 
-# ===========================================================================
-# Config flow — reconfigure step
-# ===========================================================================
 
-
-async def test_reconfigure_updates_host_on_success(
-    hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
-):
-    mock_xenia_api.register()
+async def test_user_flow_aborts_when_already_configured(
+    hass: HomeAssistant,
+    mock_xenia_api: MockXeniaApi,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """A machine can only be added once."""
     mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
+    result = await hass.config_entries.flow.async_init(
+        XENIA_DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_HOST: "xenia.local"}
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
 
-    MockXeniaApi(mock_xenia_api._mock, host="new.host").register()
 
-    result = await mock_config_entry.start_reconfigure_flow(hass)
-    with patch.object(
-        hass.config_entries, "async_reload", wraps=hass.config_entries.async_reload
-    ) as reload:
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], user_input={"host": "  new.host  "}
+async def test_user_flow_updates_the_host_of_a_known_machine(
+    hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """Adding a machine again under a new host moves the existing entry there."""
+    new_machine = mock_xenia_api.for_host("192.168.1.20")
+    entities = {
+        e.unique_id: e.entity_id
+        for e in er.async_entries_for_config_entry(
+            entity_registry, init_integration.entry_id
         )
-        await hass.async_block_till_done()
-    assert result["type"] == data_entry_flow.FlowResultType.ABORT
-    assert result["reason"] == "reconfigure_successful"
-    assert mock_config_entry.data["host"] == "new.host"
-    reload.assert_called_once_with(mock_config_entry.entry_id)
-    assert mock_config_entry.state is config_entries.ConfigEntryState.LOADED
-    assert (
-        "GET",
-        yarl.URL("http://new.host/api/v2/overview"),
-    ) in mock_xenia_api._mock.requests
+    }
 
-
-async def test_reconfigure_shows_error_on_connection_failure(
-    hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
-):
-    mock_xenia_api.register()
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    result = await hass.config_entries.flow.async_init(
+        XENIA_DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_HOST: "192.168.1.20"}
+    )
     await hass.async_block_till_done()
 
-    mock_xenia_api._mock.get(
-        "http://bad.host/api/v2/overview",
-        exception=OSError("refused"),
-        repeat=True,
-    )
-    result = await mock_config_entry.start_reconfigure_flow(hass)
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert hass.config_entries.async_entries(XENIA_DOMAIN) == [init_integration]
+    assert init_integration.data == {CONF_HOST: "192.168.1.20"}
+    assert init_integration.state is ConfigEntryState.LOADED
+    assert new_machine.bodies("get", "overview")
+    assert {
+        e.unique_id: e.entity_id
+        for e in er.async_entries_for_config_entry(
+            entity_registry, init_integration.entry_id
+        )
+    } == entities
+
+
+async def test_reconfigure_changes_host_and_keeps_entities(
+    hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """A new host reloads the entry; devices and entities stay the same."""
+    new_machine = mock_xenia_api.for_host("new.host")
+    entities = {
+        e.unique_id: e.entity_id
+        for e in er.async_entries_for_config_entry(
+            entity_registry, init_integration.entry_id
+        )
+    }
+
+    result = await init_integration.start_reconfigure_flow(hass)
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], user_input={"host": "bad.host"}
+        result["flow_id"], {CONF_HOST: "  new.host  "}
     )
-    assert result["type"] == data_entry_flow.FlowResultType.FORM
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert init_integration.data == {CONF_HOST: "new.host"}
+    assert init_integration.state is ConfigEntryState.LOADED
+    assert new_machine.bodies("get", "overview_single")
+    assert {
+        e.unique_id: e.entity_id
+        for e in er.async_entries_for_config_entry(
+            entity_registry, init_integration.entry_id
+        )
+    } == entities
+
+
+async def test_reconfigure_recovers_from_cannot_connect(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+) -> None:
+    """An unreachable host shows an error and leaves the entry unchanged."""
+    mock_xenia_api.for_host("bad.host").override(
+        "get", "overview_single", exc=OSError()
+    )
+    mock_xenia_api.for_host("new.host")
+    result = await init_integration.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_HOST: "bad.host"}
+    )
+    assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "cannot_connect"}
+    assert init_integration.data == {CONF_HOST: "xenia.local"}
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_HOST: "new.host"}
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
 
 
-# ===========================================================================
-# Options flow — init step (toggle gates)
-# ===========================================================================
+async def test_reconfigure_rejects_another_machine(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+) -> None:
+    """A host that answers with another machine leaves the entry unchanged."""
+    mock_xenia_api.for_host("other.host").set_overview_single(
+        MA_MAC="11:22:33:44:55:66"
+    )
+    result = await init_integration.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_HOST: "other.host"}
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "unique_id_mismatch"
+    assert init_integration.data == {CONF_HOST: "xenia.local"}
+    assert init_integration.unique_id == "aa:bb:cc:dd:ee:ff"
 
 
-async def test_options_init_shows_form_when_no_input(hass, init_integration):
-    result = await hass.config_entries.options.async_init(init_integration.entry_id)
-    assert result["type"] == data_entry_flow.FlowResultType.FORM
+async def _start_weight_options(hass: HomeAssistant, entry: MockConfigEntry) -> dict:
+    result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["step_id"] == "init"
-
-
-async def test_options_disable_weight_creates_entry(hass, init_integration):
-    result = await hass.config_entries.options.async_init(init_integration.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_WEIGHT_MANAGEMENT_ENABLED: False,
-        },
-    )
-    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_WEIGHT_MANAGEMENT_ENABLED] is False
-    assert result["data"][CONF_MANAGED_SCRIPT_ID] is None
-
-
-# ===========================================================================
-# Options flow — select_script step
-# ===========================================================================
-
-
-async def test_options_select_script_shows_weight_scripts_only(
-    hass, init_integration, mock_xenia_api
-):
-    # The flow re-reads scripts on entry to select_script via Xenia.get_scripts
-    # and Xenia.read_script. Register them.
-    mock_xenia_api._mock.get(
-        mock_xenia_api._url("scripts/list"),
-        payload={"index_list": [10, 20], "title_list": ["WithWeight", "NoWeight"]},
-        repeat=True,
-    )
-    # Two POSTs to /scripts/read — registrations are popped FIFO
-    mock_xenia_api._mock.post(
-        mock_xenia_api._url("scripts/read"),
-        payload={"Content": "1;13;27 45;7;", "Title": "WithWeight"},
-    )
-    mock_xenia_api._mock.post(
-        mock_xenia_api._url("scripts/read"),
-        payload={"Content": "1;13;7;", "Title": "NoWeight"},
+    return await hass.config_entries.options.async_configure(
+        result["flow_id"], {"weight_management_enabled": True}
     )
 
-    result = await hass.config_entries.options.async_init(init_integration.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_WEIGHT_MANAGEMENT_ENABLED: True,
-        },
-    )
-    assert result["type"] == data_entry_flow.FlowResultType.FORM
+
+async def test_options_enable_weight_management(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+) -> None:
+    """Picking a weight script and a range adds the weight target number."""
+    mock_xenia_api.set_script(10, "1;13;27 45;7;", "MyShot")
+    result = await _start_weight_options(hass, init_integration)
     assert result["step_id"] == "select_script"
 
-
-async def test_options_select_existing_script_proceeds_to_configure_weight(
-    hass, init_integration, mock_xenia_api
-):
-    mock_xenia_api._mock.post(
-        mock_xenia_api._url("scripts/read"),
-        payload={"Content": "1;13;27 45;7;", "Title": "MyShot"},
-        repeat=True,
-    )
-    result = await hass.config_entries.options.async_init(init_integration.entry_id)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_WEIGHT_MANAGEMENT_ENABLED: True,
-        },
+        result["flow_id"], {"managed_script_id": "10"}
     )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={CONF_MANAGED_SCRIPT_ID: "10"}
-    )
-    assert result["type"] == data_entry_flow.FlowResultType.FORM
     assert result["step_id"] == "configure_weight"
-
-
-async def test_options_create_new_script_calls_api(
-    hass, enable_custom_integrations, mock_xenia_api, mock_config_entry
-):
-    # scripts/list must return DEFAULT_SCRIPT_NAME after create_script is called.
-    # Set this before register() so the repeat=True response is correct from
-    # the start — aioresponses ignores later registrations when repeat=True
-    # is already in effect for a URL.
-    mock_xenia_api.set_scripts({25: DEFAULT_SCRIPT_NAME})
-    mock_xenia_api.register()
-    mock_xenia_api.expect_create_script()
-    mock_xenia_api._mock.post(
-        mock_xenia_api._url("scripts/read"),
-        payload={"Content": "1;13;27 45;7;", "Title": "MyShot"},
-        repeat=True,
+    assert {str(key): key.default() for key in result["data_schema"].schema} == {
+        "weight_min": 25.0,
+        "weight_max": 50.0,
+        "weight_step": 0.5,
+    }
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], WEIGHT_SETTINGS
     )
-
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_WEIGHT_MANAGEMENT_ENABLED: True,
-        },
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert init_integration.options == {
+        "weight_management_enabled": True,
+        "managed_script_id": 10,
+        **WEIGHT_SETTINGS,
+    }
+    state = hass.states.get("number.xenia_espresso_machine_script_weight_target")
+    assert state is not None
+    assert float(state.state) == 45.0
+
+
+async def test_options_offer_only_scripts_with_a_weight_target(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+) -> None:
+    """Scripts without a weight command, or unreadable ones, are not offered."""
+    mock_xenia_api.set_scripts(
+        {10: "WithWeight", 20: "NoWeight", 30: "Unreadable", 40: "Malformed"}
     )
+    mock_xenia_api.set_script(10, "1;13;27 45;7;", "WithWeight")
+    mock_xenia_api.set_script(20, "1;13;7;", "NoWeight")
+    mock_xenia_api.set_script(40, "1;x;27 45;7;", "Malformed")
+    result = await _start_weight_options(hass, init_integration)
+
+    selector = result["data_schema"].schema["managed_script_id"]
+    assert selector.config["options"] == [
+        {"value": "create_new", "label": DEFAULT_SCRIPT_NAME},
+        {"value": "10", "label": "WithWeight"},
+    ]
+
+
+async def test_options_create_new_script(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+) -> None:
+    """A new weight script is created on the machine and managed."""
+    result = await _start_weight_options(hass, init_integration)
+    mock_xenia_api.set_scripts({25: DEFAULT_SCRIPT_NAME})
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={CONF_MANAGED_SCRIPT_ID: CREATE_NEW_SCRIPT}
+        result["flow_id"], {"managed_script_id": "create_new"}
     )
-    assert result["type"] == data_entry_flow.FlowResultType.FORM
     assert result["step_id"] == "configure_weight"
-    mock_xenia_api.assert_post_called_with("scripts/create", DEFAULT_SCRIPT_NAME)
+    assert mock_xenia_api.bodies("post", "scripts/create") == [
+        '{"script_id":null,"Edit":"Disabled","switch":null,"script":"none",'
+        '"name":"HA Espresso","instruction":"1;13;3 70 5000;12 5000;27 40;17;7;"}'
+    ]
 
-
-# ===========================================================================
-# Options flow — configure_weight step
-# ===========================================================================
-
-
-async def test_options_configure_weight_creates_entry(
-    hass, init_integration, mock_xenia_api
-):
-    mock_xenia_api._mock.post(
-        mock_xenia_api._url("scripts/read"),
-        payload={"Content": "1;13;27 45;7;", "Title": "MyShot"},
-        repeat=True,
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], WEIGHT_SETTINGS
     )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert init_integration.options["managed_script_id"] == 25
+
+
+async def test_options_create_new_script_next_to_one_of_the_same_name(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+) -> None:
+    """A script of the default name that existed before is not taken over."""
+    mock_xenia_api.set_scripts({12: DEFAULT_SCRIPT_NAME})
+    result = await _start_weight_options(hass, init_integration)
+    mock_xenia_api.set_scripts({12: DEFAULT_SCRIPT_NAME, 26: DEFAULT_SCRIPT_NAME})
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"managed_script_id": "create_new"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], WEIGHT_SETTINGS
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert init_integration.options["managed_script_id"] == 26
+
+
+@pytest.mark.parametrize(
+    ("settings", "errors"),
+    [
+        (
+            {"weight_min": 50.0, "weight_max": 25.0, "weight_step": 0.5},
+            {"weight_max": "weight_max_not_above_min"},
+        ),
+        (
+            {"weight_min": 30.0, "weight_max": 30.0, "weight_step": 0.0},
+            {
+                "weight_max": "weight_max_not_above_min",
+                "weight_step": "weight_step_not_positive",
+            },
+        ),
+    ],
+)
+async def test_options_reject_an_unusable_weight_range(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    settings: dict[str, float],
+    errors: dict[str, str],
+) -> None:
+    """An empty range or a step of zero is shown as an error and can be fixed."""
+    mock_xenia_api.set_script(10, "1;13;27 45;7;", "MyShot")
+    result = await _start_weight_options(hass, init_integration)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"managed_script_id": "10"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], settings
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == errors
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], WEIGHT_SETTINGS
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert init_integration.options == {
+        "weight_management_enabled": True,
+        "managed_script_id": 10,
+        **WEIGHT_SETTINGS,
+    }
+
+
+async def test_options_abort_when_created_script_is_missing(
+    hass: HomeAssistant, init_integration: MockConfigEntry
+) -> None:
+    """The flow aborts when the machine does not list the created script."""
+    result = await _start_weight_options(hass, init_integration)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"managed_script_id": "create_new"}
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "script_not_created"
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "choice"),
+    [
+        ("get", "scripts/list", None),
+        ("post", "scripts/create", "create_new"),
+    ],
+)
+async def test_options_abort_when_machine_unreachable(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    method: str,
+    path: str,
+    choice: str | None,
+) -> None:
+    """A failed request to the machine aborts the flow."""
     result = await hass.config_entries.options.async_init(init_integration.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_WEIGHT_MANAGEMENT_ENABLED: True,
-        },
+    if choice is not None:
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"weight_management_enabled": True}
+        )
+    mock_xenia_api.fail(method, path)
+    user_input = (
+        {"weight_management_enabled": True}
+        if choice is None
+        else {"managed_script_id": choice}
     )
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={CONF_MANAGED_SCRIPT_ID: "10"}
+        result["flow_id"], user_input
     )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_WEIGHT_MIN: 20.0,
-            CONF_WEIGHT_MAX: 45.0,
-            CONF_WEIGHT_STEP: 0.1,
-        },
-    )
-    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
-    data = result["data"]
-    assert data[CONF_WEIGHT_MANAGEMENT_ENABLED] is True
-    assert data[CONF_MANAGED_SCRIPT_ID] == 10
-    assert data[CONF_WEIGHT_MIN] == 20.0
-    assert data[CONF_WEIGHT_MAX] == 45.0
-    assert data[CONF_WEIGHT_STEP] == 0.1
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "cannot_connect"
 
 
-# ===========================================================================
-# Full end-to-end: weight
-# ===========================================================================
+async def test_options_disable_weight_management(
+    hass: HomeAssistant,
+    mock_xenia_api: MockXeniaApi,
+    mock_config_entry_factory_with_options,
+) -> None:
+    """Turning weight management off removes the weight target number."""
+    mock_xenia_api.set_script(10, "1;13;27 45;7;", "MyShot")
+    entry = mock_config_entry_factory_with_options(
+        {"weight_management_enabled": True, "managed_script_id": 10}
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    weight = "number.xenia_espresso_machine_script_weight_target"
+    assert hass.states.get(weight) is not None
 
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"weight_management_enabled": False}
+    )
+    await hass.async_block_till_done()
 
-async def test_options_full_flow_weight(hass, init_integration, mock_xenia_api):
-    mock_xenia_api._mock.post(
-        mock_xenia_api._url("scripts/read"),
-        payload={"Content": "1;13;27 45;7;", "Title": "MyShot"},
-        repeat=True,
-    )
-    result = await hass.config_entries.options.async_init(init_integration.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={CONF_WEIGHT_MANAGEMENT_ENABLED: True},
-    )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], user_input={CONF_MANAGED_SCRIPT_ID: "10"}
-    )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_WEIGHT_MIN: 25.0,
-            CONF_WEIGHT_MAX: 50.0,
-            CONF_WEIGHT_STEP: 0.5,
-        },
-    )
-    assert result["type"] == data_entry_flow.FlowResultType.CREATE_ENTRY
-    data = result["data"]
-    assert data[CONF_MANAGED_SCRIPT_ID] == 10
-    assert data[CONF_WEIGHT_MIN] == 25.0
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options == {
+        "weight_management_enabled": False,
+        "managed_script_id": None,
+    }
+    assert hass.states.get(weight) is None

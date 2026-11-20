@@ -37,15 +37,21 @@ class XeniaShotStore:
         self._chunks: dict[str, dict[str, Any]] = {}
         self._chunk_stores: dict[str, Store[dict[str, Any]]] = {}
         self._lock = asyncio.Lock()
+        self._read_only = False
 
     async def async_load(self) -> None:
         """Load the index; a corrupt file must never block integration setup."""
         try:
             data = await self._index_store.async_load()
-            if data is None:
-                data = await self._relocate_flat_layout()
         except HomeAssistantError as err:
-            _LOGGER.error("Shot history unreadable, starting empty: %s", err)
+            # Writing now would replace the index of every stored shot.
+            _LOGGER.error(
+                "Shot history %s unreadable, no shots are stored until it can be "
+                "read or is deleted: %s",
+                self._index_store.path,
+                err,
+            )
+            self._read_only = True
             return
         if data is None:
             return
@@ -56,41 +62,15 @@ class XeniaShotStore:
             return
         self._index = data
 
-    def _flat_store(self, suffix: str) -> Store[dict[str, Any]]:
-        # Key layout used up to v0.7.0-beta.1.
-        return Store(
-            self._hass, STORAGE_VERSION, f"{XENIA_DOMAIN}.{self._entry_id}.{suffix}"
-        )
-
-    async def _relocate_flat_layout(self) -> dict[str, Any] | None:
-        flat_index_store = self._flat_store("shots_index")
-        index = await flat_index_store.async_load()
-        if index is None:
-            return None
-        if not isinstance(index.get("shots"), list):
-            _LOGGER.error(
-                "Flat shot index %s is malformed, left in place", flat_index_store.path
-            )
-            return None
-        for month in {s["month"] for s in index["shots"]}:
-            flat_chunk_store = self._flat_store(f"shots_{month}")
-            chunk = await flat_chunk_store.async_load()
-            if chunk is None:
-                # Already moved by an interrupted run; keep the relocated file.
-                continue
-            await self._chunk_store(month).async_save(chunk)
-            await flat_chunk_store.async_remove()
-        await self._index_store.async_save(index)
-        await flat_index_store.async_remove()
-        return index
-
     @property
     def migrated(self) -> bool:
         """Whether the one-time recorder import has already run."""
-        return self._index["migrated"]
+        return self._read_only or self._index["migrated"]
 
     async def async_set_migrated(self) -> None:
         """Mark the one-time recorder import as done."""
+        if self._read_only:
+            return
         async with self._lock:
             self._index["migrated"] = True
             await self._index_store.async_save(self._index)
@@ -107,11 +87,7 @@ class XeniaShotStore:
 
     async def _load_chunk(self, month: str) -> dict[str, Any]:
         if month not in self._chunks:
-            try:
-                loaded = await self._chunk_store(month).async_load() or {}
-            except HomeAssistantError as err:
-                _LOGGER.error("Shot chunk unreadable, treating as empty: %s", err)
-                loaded = {}
+            loaded = await self._chunk_store(month).async_load() or {}
             # A concurrent add for the same month may have already populated
             # this from a fresh save; keep that winner instead of overwriting
             # it with our (now stale) pre-add snapshot.
@@ -133,10 +109,19 @@ class XeniaShotStore:
         if month is None:
             _LOGGER.warning("Ignoring shot with unparseable start_time: %s", shot_id)
             return
+        if self._read_only:
+            _LOGGER.error("Shot %s not stored, the shot history is unreadable", shot_id)
+            return
         async with self._lock:
             if any(s["shot_id"] == shot_id for s in self._index["shots"]):
                 return
-            chunk = await self._load_chunk(month)
+            try:
+                chunk = await self._load_chunk(month)
+            except HomeAssistantError as err:
+                _LOGGER.error(
+                    "Shot %s not stored, its month is unreadable: %s", shot_id, err
+                )
+                return
             chunk[shot_id] = payload
             weights = payload.get("weights") or []
             self._index["shots"].append(
@@ -168,13 +153,20 @@ class XeniaShotStore:
             month = self._month(shot_id)
             if month is None or month not in known_months:
                 continue
-            payload = (await self._load_chunk(month)).get(shot_id)
+            try:
+                payload = (await self._load_chunk(month)).get(shot_id)
+            except HomeAssistantError as err:
+                _LOGGER.error("Shot %s unreadable: %s", shot_id, err)
+                continue
             if payload is not None:
                 result.append({**payload, "shot_id": shot_id})
         return result
 
     async def async_delete_shot(self, shot_id: str) -> bool:
-        """Delete a shot by id; return whether it existed."""
+        """Delete a shot by id; return whether it existed.
+
+        Raises HomeAssistantError while the shot's month cannot be read.
+        """
         month = self._month(shot_id)
         if month is None:
             return False
@@ -183,8 +175,8 @@ class XeniaShotStore:
             remaining = [s for s in shots if s["shot_id"] != shot_id]
             if len(remaining) == len(shots):
                 return False
-            self._index["shots"] = remaining
             chunk = await self._load_chunk(month)
+            self._index["shots"] = remaining
             chunk.pop(shot_id, None)
             if chunk:
                 await self._chunk_store(month).async_save(chunk)

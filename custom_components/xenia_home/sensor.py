@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Final
+from typing import Final, override
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -12,7 +12,6 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
-    CONF_HOST,
     EntityCategory,
     UnitOfElectricCurrent,
     UnitOfEnergy,
@@ -21,7 +20,7 @@ from homeassistant.const import (
     UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 
 from .coordinator import (
@@ -36,21 +35,10 @@ PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
-class XeniaEntityDescriptionMixinSensor:
-    """Mixin adding a value extractor to a sensor description."""
+class XeniaSensorEntityDescription(SensorEntityDescription):
+    """Describes a sensor of the live data."""
 
     value_fn: Callable[[XeniaCoordinatorData], StateType | datetime]
-
-
-@dataclass(frozen=True, kw_only=True)
-class XeniaSensorEntityDescription(
-    SensorEntityDescription, XeniaEntityDescriptionMixinSensor
-):
-    """Sensor description with dynamic entity-category and existence resolution."""
-
-    entity_category_fn: (
-        Callable[[XeniaCoordinatorData], EntityCategory | None] | None
-    ) = None
     exists_fn: Callable[[XeniaCoordinatorData], bool] = lambda data: True
 
 
@@ -93,6 +81,8 @@ SENSOR_TYPES: Final[tuple[XeniaSensorEntityDescription, ...]] = (
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         device_class=SensorDeviceClass.CURRENT,
         state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         value_fn=lambda data: data.overview.ma_cur_pwr,
     ),
     XeniaSensorEntityDescription(
@@ -107,6 +97,7 @@ SENSOR_TYPES: Final[tuple[XeniaSensorEntityDescription, ...]] = (
         key="extractions",
         translation_key="extractions",
         state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: data.overview.ma_extractions,
     ),
     XeniaSensorEntityDescription(
@@ -115,7 +106,12 @@ SENSOR_TYPES: Final[tuple[XeniaSensorEntityDescription, ...]] = (
         native_unit_of_measurement=UnitOfTime.HOURS,
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        value_fn=lambda data: data.overview.ma_operating_hours / 60,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: (
+            None
+            if (minutes := data.overview.ma_operating_hours) is None
+            else minutes / 60
+        ),
     ),
     XeniaSensorEntityDescription(
         key="scale_flow_rate",
@@ -152,9 +148,9 @@ SENSOR_TYPES: Final[tuple[XeniaSensorEntityDescription, ...]] = (
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: XeniaConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the Xenia sensor entities."""
+    """Set up the sensors the machine supports."""
     coordinator = entry.runtime_data.coordinator
     async_add_entities(
         XeniaSensor(coordinator, description)
@@ -164,7 +160,9 @@ async def async_setup_entry(
 
 
 class XeniaSensor(XeniaEntity, SensorEntity):
-    """A sensor backed by `value_fn` against the fast coordinator data."""
+    """Sensor of the live data."""
+
+    entity_description: XeniaSensorEntityDescription
 
     def __init__(
         self,
@@ -173,12 +171,11 @@ class XeniaSensor(XeniaEntity, SensorEntity):
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
-        self.entity_description: XeniaSensorEntityDescription = entity_description
-        self._attr_unique_id = (
-            f"{coordinator.config_entry.data[CONF_HOST]}_{entity_description.key}"
-        )
+        self.entity_description = entity_description
+        self._attr_unique_id = f"{self.machine_id}_{entity_description.key}"
 
     @property
+    @override
     def native_value(self) -> StateType | datetime:
         """Return the sensor value, or None for zeroed cumulative counters."""
         value = self.entity_description.value_fn(self.coordinator.data)
@@ -188,10 +185,3 @@ class XeniaSensor(XeniaEntity, SensorEntity):
         ):
             return None
         return value
-
-    @property
-    def entity_category(self) -> EntityCategory | None:
-        """Resolve the entity category dynamically if `entity_category_fn` is set."""
-        if self.entity_description.entity_category_fn is not None:
-            return self.entity_description.entity_category_fn(self.coordinator.data)
-        return super().entity_category

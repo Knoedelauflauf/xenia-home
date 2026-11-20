@@ -1,11 +1,14 @@
 """Data update coordinators for the Xenia espresso machine."""
 
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from collections import Counter
+from dataclasses import dataclass
+from datetime import datetime
 import logging
+from typing import override
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
@@ -13,12 +16,16 @@ from .const import (
     CONF_MANAGED_SCRIPT_ID,
     CONF_WEIGHT_MANAGEMENT_ENABLED,
     POLL_INTERVAL_ACTIVE,
+    POLL_INTERVAL_CONFIG,
+    POLL_INTERVAL_CONFIG_RETRY,
     POLL_INTERVAL_IDLE,
+    XENIA_DOMAIN,
     PowerOnBehavior,
 )
 from .errors import REQUEST_ERRORS, update_failed
 from .shot_store import XeniaShotStore
 from .xenia import (
+    ACTIVE_STATUSES,
     MachineStatus,
     Xenia,
     XeniaMachineData,
@@ -29,7 +36,7 @@ from .xenia import (
 _LOGGER = logging.getLogger(__name__)
 
 
-# Built-in scripts that are not returned by the API
+# Built-in scripts the script list leaves out.
 BUILTIN_SCRIPTS: dict[int, str] = {
     0: "None",
     1: "Espresso",
@@ -39,22 +46,22 @@ BUILTIN_SCRIPTS: dict[int, str] = {
 
 @dataclass
 class XeniaCoordinatorData:
-    """Data type for fast polling coordinator."""
+    """Live data of the machine."""
 
     overview: XeniaOverviewData
     overview_single: XeniaOverviewSingleData
-    shot_start_time: datetime | None = None
+    shot_start_time: datetime | None
 
 
 @dataclass
 class XeniaConfigData:
-    """Data type for config/slow data coordinator."""
+    """Slowly changing data of the machine."""
 
     machine: XeniaMachineData
-    scripts: dict[int, str] = field(default_factory=dict)
-    switches: dict[str, int] = field(default_factory=dict)
-    managed_script_instruction: str | None = None
-    managed_script_name: str | None = None
+    # Script titles, with the id added to titles several scripts share.
+    scripts: dict[int, str]
+    switches: dict[str, int]
+    managed_script_instruction: str | None
 
 
 @dataclass
@@ -65,13 +72,14 @@ class XeniaRuntimeData:
     config_coordinator: XeniaConfigCoordinator
     shot_store: XeniaShotStore
     power_on_behavior: PowerOnBehavior = PowerOnBehavior.STEAM_OFF
+    selected_script_id: int | None = None
 
 
 type XeniaConfigEntry = ConfigEntry[XeniaRuntimeData]
 
 
 class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
-    """Xenia device data update coordinator for fast polling."""
+    """Poll the live data, faster while the machine is on."""
 
     config_entry: XeniaConfigEntry
 
@@ -91,6 +99,7 @@ class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
         )
         self.xenia = xenia
 
+    @override
     async def _async_update_data(self) -> XeniaCoordinatorData:
         """Fetch data and adjust the polling interval based on machine state."""
         try:
@@ -99,14 +108,11 @@ class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
         except REQUEST_ERRORS as err:
             raise update_failed(err) from err
 
-        if overview.ma_status in (
-            MachineStatus.ON,
-            MachineStatus.BREWING,
-            MachineStatus.DRAINING,
-        ):
-            self.update_interval = POLL_INTERVAL_ACTIVE
-        else:
-            self.update_interval = POLL_INTERVAL_IDLE
+        self.update_interval = (
+            POLL_INTERVAL_ACTIVE
+            if overview.ma_status in ACTIVE_STATUSES
+            else POLL_INTERVAL_IDLE
+        )
 
         shot_start_time = None
         if overview.ma_status == MachineStatus.BREWING:
@@ -117,10 +123,9 @@ class XeniaDataUpdateCoordinator(DataUpdateCoordinator[XeniaCoordinatorData]):
 
 
 class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
-    """Xenia coordinator for config/slow data (scripts, switches, machine info)."""
+    """Poll the machine info, scripts, switches and managed script hourly."""
 
     config_entry: XeniaConfigEntry
-    selected_script_id: int | None = None
 
     def __init__(
         self,
@@ -133,12 +138,12 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
             hass,
             _LOGGER,
             name=f"{config_entry.entry_id}_config",
-            update_interval=timedelta(hours=1),
+            update_interval=POLL_INTERVAL_CONFIG,
             config_entry=config_entry,
         )
-        self.config_entry = config_entry
         self.xenia = xenia
 
+    @override
     async def _async_update_data(self) -> XeniaConfigData:
         """Fetch config data: machine info, scripts, switches, and managed script."""
         try:
@@ -146,37 +151,49 @@ class XeniaConfigCoordinator(DataUpdateCoordinator[XeniaConfigData]):
             user_scripts = await self.xenia.get_scripts()
             switches = await self.xenia.get_switches()
         except REQUEST_ERRORS as err:
+            self.update_interval = POLL_INTERVAL_CONFIG_RETRY
             raise update_failed(err) from err
-        scripts = {**BUILTIN_SCRIPTS, **user_scripts}
+        self.update_interval = POLL_INTERVAL_CONFIG
+        titles = {**BUILTIN_SCRIPTS, **user_scripts}
+        counts = Counter(titles.values())
+        scripts = {
+            script_id: title if counts[title] == 1 else f"{title} ({script_id})"
+            for script_id, title in titles.items()
+        }
 
         managed_instruction: str | None = None
-        managed_name: str | None = None
         options = self.config_entry.options
+        issue_id = f"managed_script_missing_{self.config_entry.entry_id}"
         if options.get(CONF_WEIGHT_MANAGEMENT_ENABLED):
-            script_id = options.get(CONF_MANAGED_SCRIPT_ID)
-            if script_id is not None:
-                try:
-                    script_data = await self.xenia.read_script(int(script_id))
-                except REQUEST_ERRORS as err:
-                    _LOGGER.warning(
-                        "Failed to read managed script %s: %s", script_id, err
+            script_id = options[CONF_MANAGED_SCRIPT_ID]
+            try:
+                script = await self.xenia.read_script(script_id)
+            except REQUEST_ERRORS as err:
+                _LOGGER.warning("Failed to read managed script %s: %s", script_id, err)
+                self.update_interval = POLL_INTERVAL_CONFIG_RETRY
+            else:
+                managed_instruction = script.get("Content") or None
+                if managed_instruction is None:
+                    ir.async_create_issue(
+                        self.hass,
+                        XENIA_DOMAIN,
+                        issue_id,
+                        is_fixable=False,
+                        severity=ir.IssueSeverity.WARNING,
+                        translation_key="managed_script_missing",
+                        translation_placeholders={
+                            "script_id": str(script_id),
+                            "title": self.config_entry.title,
+                        },
                     )
                 else:
-                    content = script_data.get("Content") or None
-                    title = script_data.get("Title") or None
-                    if content is None:
-                        _LOGGER.warning(
-                            "Managed script %s no longer exists on the machine; "
-                            "reconfigure weight management to pick another script",
-                            script_id,
-                        )
-                    managed_instruction = content
-                    managed_name = title
+                    ir.async_delete_issue(self.hass, XENIA_DOMAIN, issue_id)
+        else:
+            ir.async_delete_issue(self.hass, XENIA_DOMAIN, issue_id)
 
         return XeniaConfigData(
             machine=machine,
             scripts=scripts,
             switches=switches,
             managed_script_instruction=managed_instruction,
-            managed_script_name=managed_name,
         )

@@ -1,91 +1,138 @@
-"""Tests for button.py — execute script button."""
+"""Tests for the script buttons."""
 
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.components.button import DOMAIN as BUTTON_DOMAIN, SERVICE_PRESS
+from homeassistant.components.select import (
+    DOMAIN as SELECT_DOMAIN,
+    SERVICE_SELECT_OPTION,
+)
+from homeassistant.const import ATTR_ENTITY_ID, ATTR_OPTION
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import entity_registry as er
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+from syrupy.assertion import SnapshotAssertion
 
-BUTTON_ENTITY_ID = "button.xenia_espresso_machine_execute_script"
-STOP_BUTTON_ENTITY_ID = "button.xenia_espresso_machine_stop_script"
+from tests.conftest import MockXeniaApi
+
+EXECUTE = "button.xenia_espresso_machine_execute_script"
+STOP = "button.xenia_espresso_machine_stop_script"
+SCRIPT_SELECT = "select.xenia_espresso_machine_script"
+
+
+async def _press(hass: HomeAssistant, entity_id: str) -> None:
+    await hass.services.async_call(
+        BUTTON_DOMAIN, SERVICE_PRESS, {ATTR_ENTITY_ID: entity_id}, blocking=True
+    )
+
+
+async def _select_script(hass: HomeAssistant, title: str) -> None:
+    await hass.services.async_call(
+        SELECT_DOMAIN,
+        SERVICE_SELECT_OPTION,
+        {ATTR_ENTITY_ID: SCRIPT_SELECT, ATTR_OPTION: title},
+        blocking=True,
+    )
 
 
 async def test_button_entities_snapshot(
-    hass, init_integration, snapshot, entity_registry
-):
-    entity_ids = sorted(
-        e.entity_id
-        for e in entity_registry.entities.values()
-        if e.platform == "xenia_home" and e.domain == "button"
-    )
-    assert entity_ids
-    for entity_id in entity_ids:
-        state = hass.states.get(entity_id)
-        registry_entry = entity_registry.async_get(entity_id)
-        assert state == snapshot(name=f"{entity_id}-state")
-        assert registry_entry == snapshot(name=f"{entity_id}-registry")
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    snapshot: SnapshotAssertion,
+    entity_registry: er.EntityRegistry,
+) -> None:
+    """The button states and registry entries match the snapshot."""
+    for entity_id in (EXECUTE, STOP):
+        assert hass.states.get(entity_id) == snapshot(name=f"{entity_id}-state")
+        assert entity_registry.async_get(entity_id) == snapshot(
+            name=f"{entity_id}-registry"
+        )
 
 
-# ===========================================================================
-# press behavior depends on selected_script_id, which lives on
-# config_coordinator. We modify it directly after the integration is up.
-# ===========================================================================
+@pytest.mark.parametrize(("title", "script_id"), [("MyShot", 10), ("Espresso", 1)])
+async def test_execute_runs_the_selected_script(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    title: str,
+    script_id: int,
+) -> None:
+    """The execute button runs the script picked in the script select."""
+    await _select_script(hass, title)
+    await _press(hass, EXECUTE)
+    assert mock_xenia_api.bodies("post", "scripts/execute") == [f'{{"ID":{script_id}}}']
 
 
-async def _press_button(hass, entity_id: str = BUTTON_ENTITY_ID) -> None:
-    await hass.services.async_call(
-        "button", "press", {"entity_id": entity_id}, blocking=True
-    )
+@pytest.mark.parametrize("title", [None, "None"])
+async def test_execute_without_script_raises(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    title: str | None,
+) -> None:
+    """Without a selected script, or with "None", nothing runs and the error says why."""
+    if title is not None:
+        await _select_script(hass, title)
+    with pytest.raises(ServiceValidationError) as exc_info:
+        await _press(hass, EXECUTE)
+    assert exc_info.value.translation_key == "no_script_selected"
+    assert mock_xenia_api.bodies("post", "scripts/execute") == []
+
+
+async def test_scripts_sharing_a_name_are_told_apart(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+) -> None:
+    """A user script named like a built-in one is offered with its id and runs."""
+    mock_xenia_api.set_scripts({12: "Espresso"})
+    await hass.config_entries.async_reload(init_integration.entry_id)
     await hass.async_block_till_done()
+    options = hass.states.get(SCRIPT_SELECT).attributes["options"]
+    assert options == ["None", "Espresso (1)", "Espresso endless", "Espresso (12)"]
+
+    await _select_script(hass, "Espresso (12)")
+    await _press(hass, EXECUTE)
+    assert hass.states.get(SCRIPT_SELECT).state == "Espresso (12)"
+    assert mock_xenia_api.bodies("post", "scripts/execute") == ['{"ID":12}']
 
 
-async def test_button_press_executes_selected_script(
-    hass, init_integration, mock_xenia_api
-):
-    mock_xenia_api.expect_execute_script()
-    init_integration.runtime_data.config_coordinator.selected_script_id = 10
-    await _press_button(hass)
-    mock_xenia_api.assert_post_called_with("scripts/execute", "10")
+@pytest.mark.parametrize("entity_id", [EXECUTE, STOP])
+async def test_press_polls_the_machine(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    entity_id: str,
+) -> None:
+    """A pressed button is followed by a poll, so its effect shows right away."""
+    await _select_script(hass, "MyShot")
+    polls = len(mock_xenia_api.bodies("get", "overview"))
+    await _press(hass, entity_id)
+    await hass.async_block_till_done()
+    assert len(mock_xenia_api.bodies("get", "overview")) > polls
 
 
-@pytest.mark.parametrize("script_id", [None, 0, -1])
-async def test_button_press_noop_for_invalid_script_id(
-    hass, init_integration, mock_xenia_api, script_id
-):
-    mock_xenia_api.expect_execute_script()
-    init_integration.runtime_data.config_coordinator.selected_script_id = script_id
-    await _press_button(hass)
-    assert mock_xenia_api.post_count("scripts/execute") == 0
+async def test_stop_stops_the_script(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
+) -> None:
+    """The stop button stops the running script."""
+    await _press(hass, STOP)
+    assert len(mock_xenia_api.bodies("get", "scripts/stop")) == 1
 
 
-async def test_button_press_executes_builtin_script_id_one(
-    hass, init_integration, mock_xenia_api
-):
-    mock_xenia_api.expect_execute_script()
-    init_integration.runtime_data.config_coordinator.selected_script_id = 1
-    await _press_button(hass)
-    mock_xenia_api.assert_post_called_with("scripts/execute", "1")
-
-
-async def test_stop_button_press_calls_stop_script(
-    hass, init_integration, mock_xenia_api
-):
-    mock_xenia_api.expect_stop_script()
-    await _press_button(hass, STOP_BUTTON_ENTITY_ID)
-    assert mock_xenia_api.get_count("scripts/stop") == 1
-
-
-async def test_execute_button_raises_translated_error_when_machine_refuses(
-    hass, init_integration, mock_xenia_api
-):
-    mock_xenia_api.fail_post("scripts/execute")
-    init_integration.runtime_data.config_coordinator.selected_script_id = 10
+@pytest.mark.parametrize(
+    ("entity_id", "method", "path"),
+    [(EXECUTE, "post", "scripts/execute"), (STOP, "get", "scripts/stop")],
+)
+async def test_refused_press_raises_translated_error(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    entity_id: str,
+    method: str,
+    path: str,
+) -> None:
+    """A press the machine refuses raises a translated error."""
+    await _select_script(hass, "MyShot")
+    mock_xenia_api.fail(method, path)
     with pytest.raises(HomeAssistantError) as exc_info:
-        await _press_button(hass)
-    assert exc_info.value.translation_key == "write_failed"
-
-
-async def test_stop_button_raises_translated_error_when_machine_refuses(
-    hass, init_integration, mock_xenia_api
-):
-    mock_xenia_api.fail_get("scripts/stop")
-    with pytest.raises(HomeAssistantError) as exc_info:
-        await _press_button(hass, STOP_BUTTON_ENTITY_ID)
+        await _press(hass, entity_id)
     assert exc_info.value.translation_key == "write_failed"

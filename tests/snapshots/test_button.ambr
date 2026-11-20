@@ -32,14 +32,14 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'execute_script',
-    'unique_id': 'xenia_home_execute_script_xenia.local',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_execute_script',
     'unit_of_measurement': None,
   })
 # ---
 # name: test_button_entities_snapshot[button.xenia_espresso_machine_execute_script-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Execute script',
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Execute script',
     }),
     'context': <ANY>,
     'entity_id': 'button.xenia_espresso_machine_execute_script',
@@ -82,14 +82,14 @@
     'suggested_object_id': None,
     'supported_features': 0,
     'translation_key': 'stop_script',
-    'unique_id': 'xenia_home_stop_script_xenia.local',
+    'unique_id': 'aa:bb:cc:dd:ee:ff_stop_script',
     'unit_of_measurement': None,
   })
 # ---
 # name: test_button_entities_snapshot[button.xenia_espresso_machine_stop_script-state]
   StateSnapshot({
     'attributes': ReadOnlyDict({
-      'friendly_name': 'Xenia Espresso Machine Stop script',
+      <EntityStateAttribute.FRIENDLY_NAME: 'friendly_name'>: 'Xenia Espresso Machine Stop script',
     }),
     'context': <ANY>,
     'entity_id': 'button.xenia_espresso_machine_stop_script',

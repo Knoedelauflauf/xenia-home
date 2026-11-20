@@ -1,15 +1,16 @@
 """Switch platform for the Xenia espresso machine."""
 
-from homeassistant.components.switch import SwitchEntity
-from homeassistant.const import CONF_HOST
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from typing import Any, override
 
-from .const import XENIA_DOMAIN, PowerOnBehavior
+from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+
+from .const import PowerOnBehavior
 from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator
 from .entity import XeniaEntity
-from .errors import machine_write
-from .xenia import MachineStatus, SteamBoilerStatus
+from .errors import async_write
+from .xenia import ACTIVE_STATUSES, MachineStatus, SteamBoilerStatus
 
 PARALLEL_UPDATES = 1
 
@@ -17,129 +18,117 @@ PARALLEL_UPDATES = 1
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: XeniaConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the power, eco and steam-boiler switches."""
+    """Set up the power, eco and steam boiler switches."""
     coordinator = entry.runtime_data.coordinator
     async_add_entities(
         [
             XeniaPowerSwitch(coordinator),
             XeniaEcoSwitch(coordinator),
             XeniaSteamBoilerSwitch(coordinator),
-        ],
-        True,
+        ]
     )
 
 
-class XeniaPowerSwitch(XeniaEntity, SwitchEntity):
-    """Main on/off switch (honours the configured power-on behaviour)."""
+class XeniaSwitch(XeniaEntity, SwitchEntity):
+    """Switch that polls the machine after every write, even a failed one."""
 
     def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
-        """Initialize the power switch."""
+        """Initialize the switch."""
         super().__init__(coordinator)
-        self._attr_translation_key = "power"
-        self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_power_{coordinator.config_entry.data[CONF_HOST]}"
+        self._attr_unique_id = f"{self.machine_id}_{self.entity_description.key}"
+
+    async def _async_turn_machine_on(self) -> None:
+        steam_on = self.runtime_data.power_on_behavior is PowerOnBehavior.STEAM_ON
+        await async_write(
+            self.coordinator, self.coordinator.xenia.machine_turn_on(sb_on=steam_on)
         )
 
+
+class XeniaPowerSwitch(XeniaSwitch):
+    """Turn the machine on, honouring the power on behavior, or off."""
+
+    entity_description = SwitchEntityDescription(key="power", translation_key="power")
+
     @property
-    def is_on(self):
-        """Return True if the machine is in any heating-or-active state."""
-        ma_status = self.coordinator.data.overview.ma_status
-        return ma_status in [
-            MachineStatus.ON,
-            MachineStatus.BREWING,
-            MachineStatus.DRAINING,
-        ]
+    @override
+    def is_on(self) -> bool:
+        """Return whether the machine is on."""
+        return self.coordinator.data.overview.ma_status in ACTIVE_STATUSES
 
-    async def async_turn_on(self, **kwargs) -> None:
-        """Turn the machine on, respecting the configured power-on behaviour."""
-        sb_on = self.runtime_data.power_on_behavior == PowerOnBehavior.STEAM_ON
-        async with machine_write():
-            await self.coordinator.xenia.machine_turn_on(sb_on=sb_on)
-        await self.coordinator.async_request_refresh()
+    @override
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn the machine on."""
+        await self._async_turn_machine_on()
 
-    async def async_turn_off(self, **kwargs) -> None:
+    @override
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the machine off."""
-        async with machine_write():
-            await self.coordinator.xenia.machine_turn_off()
-        await self.coordinator.async_request_refresh()
+        await async_write(self.coordinator, self.coordinator.xenia.machine_turn_off())
 
 
-class XeniaEcoSwitch(XeniaEntity, SwitchEntity):
-    """Eco-mode switch."""
+class XeniaEcoSwitch(XeniaSwitch):
+    """Put the running machine into eco mode or back."""
 
-    def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
-        """Initialize the eco switch."""
-        super().__init__(coordinator)
-        self._attr_translation_key = "eco_mode"
-        self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_eco_mode_{coordinator.config_entry.data[CONF_HOST]}"
+    entity_description = SwitchEntityDescription(
+        key="eco_mode", translation_key="eco_mode"
+    )
+
+    @property
+    @override
+    def available(self) -> bool:
+        """Return whether the machine is on or in eco mode."""
+        status = self.coordinator.data.overview.ma_status
+        return super().available and (
+            status in ACTIVE_STATUSES or status is MachineStatus.ECO
         )
 
     @property
-    def available(self) -> bool:
-        """Available only when the machine is on (in any heating state)."""
-        return self.coordinator.data.overview.ma_status in [
-            MachineStatus.ON,
-            MachineStatus.BREWING,
-            MachineStatus.DRAINING,
-            MachineStatus.ECO,
-        ]
+    @override
+    def is_on(self) -> bool:
+        """Return whether the machine is in eco mode."""
+        return self.coordinator.data.overview.ma_status is MachineStatus.ECO
+
+    @override
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enter eco mode."""
+        await async_write(self.coordinator, self.coordinator.xenia.machine_set_eco())
+
+    @override
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Leave eco mode by turning the machine on."""
+        await self._async_turn_machine_on()
+
+
+class XeniaSteamBoilerSwitch(XeniaSwitch):
+    """Turn the steam boiler of the running machine on or off."""
+
+    entity_description = SwitchEntityDescription(
+        key="steam_boiler_power", translation_key="steam_boiler_power"
+    )
 
     @property
-    def is_on(self):
-        """Return True when the machine is currently in eco mode."""
-        return self.coordinator.data.overview.ma_status == MachineStatus.ECO
-
-    async def async_turn_on(self, **kwargs) -> None:
-        """Switch the machine into eco mode."""
-        async with machine_write():
-            await self.coordinator.xenia.machine_set_eco()
-        await self.coordinator.async_request_refresh()
-
-    async def async_turn_off(self, **kwargs) -> None:
-        """Leave eco mode by re-applying the configured power-on behaviour."""
-        sb_on = self.runtime_data.power_on_behavior == PowerOnBehavior.STEAM_ON
-        async with machine_write():
-            await self.coordinator.xenia.machine_turn_on(sb_on=sb_on)
-        await self.coordinator.async_request_refresh()
-
-
-class XeniaSteamBoilerSwitch(XeniaEntity, SwitchEntity):
-    """Steam-boiler on/off switch."""
-
-    def __init__(self, coordinator: XeniaDataUpdateCoordinator) -> None:
-        """Initialize the steam-boiler switch."""
-        super().__init__(coordinator)
-        self._attr_translation_key = "steam_boiler_power"
-        self._attr_unique_id = (
-            f"{XENIA_DOMAIN}_steam_boiler_power_"
-            f"{coordinator.config_entry.data[CONF_HOST]}"
+    @override
+    def available(self) -> bool:
+        """Return whether the machine is on."""
+        return (
+            super().available
+            and self.coordinator.data.overview.ma_status in ACTIVE_STATUSES
         )
 
     @property
-    def available(self) -> bool:
-        """Available only when the machine is on."""
-        return self.coordinator.data.overview.ma_status in [
-            MachineStatus.ON,
-            MachineStatus.BREWING,
-            MachineStatus.DRAINING,
-        ]
+    @override
+    def is_on(self) -> bool:
+        """Return whether the steam boiler is on."""
+        return self.coordinator.data.overview.sb_status is SteamBoilerStatus.ON
 
-    @property
-    def is_on(self):
-        """Return True when the steam boiler is on."""
-        return self.coordinator.data.overview.sb_status == SteamBoilerStatus.ON
-
-    async def async_turn_on(self, **kwargs) -> None:
+    @override
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the steam boiler on."""
-        async with machine_write():
-            await self.coordinator.xenia.sb_turn_on()
-        await self.coordinator.async_request_refresh()
+        await async_write(self.coordinator, self.coordinator.xenia.sb_turn_on())
 
-    async def async_turn_off(self, **kwargs) -> None:
+    @override
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the steam boiler off."""
-        async with machine_write():
-            await self.coordinator.xenia.sb_turn_off()
-        await self.coordinator.async_request_refresh()
+        await async_write(self.coordinator, self.coordinator.xenia.sb_turn_off())
