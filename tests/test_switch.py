@@ -202,7 +202,7 @@ async def test_commands(
 )
 async def test_refused_command_raises(
     hass: HomeAssistant,
-    init_integration: MockConfigEntry,
+    mock_config_entry: MockConfigEntry,
     mock_xenia_api: MockXeniaApi,
     freezer: FrozenDateTimeFactory,
     entity_id: str,
@@ -210,6 +210,9 @@ async def test_refused_command_raises(
     path: str,
 ) -> None:
     """A refused command raises a translated error and still polls the machine."""
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(mock_config_entry, pref_disable_polling=True)
+    await setup_integration(hass, mock_config_entry)
     mock_xenia_api.fail("post", path)
     polls = len(mock_xenia_api.bodies("get", "overview"))
     with pytest.raises(HomeAssistantError) as exc_info:
