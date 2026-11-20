@@ -82,6 +82,22 @@ async def test_execute_without_script_raises(
     assert mock_xenia_api.bodies("post", "scripts/execute") == []
 
 
+async def test_execute_of_a_deleted_script_raises(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A selected script deleted on the machine is not run."""
+    await _select_script(hass, "MyShot")
+    mock_xenia_api.set_scripts({})
+    await pass_seconds(hass, freezer, 3601)
+    with pytest.raises(ServiceValidationError) as exc_info:
+        await _press(hass, EXECUTE)
+    assert exc_info.value.translation_key == "no_script_selected"
+    assert mock_xenia_api.bodies("post", "scripts/execute") == []
+
+
 async def test_scripts_sharing_a_name_are_told_apart(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_xenia_api: MockXeniaApi
 ) -> None:
