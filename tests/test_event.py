@@ -196,6 +196,21 @@ async def test_sample_with_a_missing_value_is_skipped(
         assert len(shot[curve]) == len(shot["timestamps"])
 
 
+async def test_missing_weight_keeps_the_last_weight(
+    hass: HomeAssistant, init_integration: MockConfigEntry, poll
+) -> None:
+    """A poll without a weight repeats the last one instead of looking like a tare."""
+    await brew(poll, 12)
+    await poll(MA_STATUS=BREWING, SCALE_WEIGHT=None)
+    await poll(MA_STATUS=BREWING, SCALE_WEIGHT=19.5)
+    await end_brew(poll, weight=20.0)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert shot["weights"][0] == 1.5
+    assert shot["weights"][11:14] == [18.0, 18.0, 19.5]
+
+
 async def test_shot_without_a_complete_sample_is_dropped(
     hass: HomeAssistant,
     init_integration: MockConfigEntry,

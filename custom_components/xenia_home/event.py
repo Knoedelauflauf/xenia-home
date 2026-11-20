@@ -144,8 +144,10 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
         group_temp = overview.bg_sens_temp_a
         boiler_temp = overview.bb_sens_temp_a
         pressure = overview.pu_sens_press
-        # Shots are tracked without a scale too.
-        weight = overview.scale_weight or 0.0
+        weight = overview.scale_weight
+        if weight is None:
+            # A missing weight must neither drop the sample nor look like a tare.
+            weight = self._weights[-1] if self._weights else 0.0
         if (
             group_temp is None
             or boiler_temp is None
