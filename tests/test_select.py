@@ -170,3 +170,21 @@ async def test_refused_switch_assignment_raises(
     with pytest.raises(HomeAssistantError) as exc_info:
         await _select(hass, SWITCH_LEFT_SHORT, "MyShot")
     assert exc_info.value.translation_key == "write_failed"
+
+
+@pytest.mark.parametrize("entity_id", [SCRIPT, SWITCH_LEFT_SHORT])
+async def test_script_selects_are_unavailable_while_scripts_cannot_be_read(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
+    entity_id: str,
+) -> None:
+    """A failed read of the scripts leaves the script selects unavailable until it works."""
+    mock_xenia_api.fail("get", "scripts/list")
+    await pass_seconds(hass, freezer, 3601)
+    assert hass.states.get(entity_id).state == STATE_UNAVAILABLE
+
+    mock_xenia_api.restore("get", "scripts/list")
+    await pass_seconds(hass, freezer, 61)
+    assert hass.states.get(entity_id).state != STATE_UNAVAILABLE

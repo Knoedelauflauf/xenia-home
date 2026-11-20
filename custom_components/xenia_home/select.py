@@ -105,7 +105,26 @@ class PowerOnBehaviorSelect(XeniaEntity, SelectEntity, RestoreEntity):
         self.async_write_ha_state()
 
 
-class ScriptSelect(XeniaEntity, SelectEntity):
+class _XeniaScriptSelect(XeniaEntity, SelectEntity):
+    """Select one of the scripts on the machine."""
+
+    @property
+    @override
+    def available(self) -> bool:
+        """Return whether the scripts of the machine could be read."""
+        return (
+            super().available
+            and self.runtime_data.config_coordinator.last_update_success
+        )
+
+    @property
+    @override
+    def options(self) -> list[str]:
+        """Return the script titles."""
+        return list(self.runtime_data.config_coordinator.data.scripts.values())
+
+
+class ScriptSelect(_XeniaScriptSelect):
     """The script the execute button runs."""
 
     _attr_translation_key = "script"
@@ -114,12 +133,6 @@ class ScriptSelect(XeniaEntity, SelectEntity):
         """Initialize the select."""
         super().__init__(coordinator)
         self._attr_unique_id = f"{self.machine_id}_script"
-
-    @property
-    @override
-    def options(self) -> list[str]:
-        """Return the script titles."""
-        return list(self.runtime_data.config_coordinator.data.scripts.values())
 
     @property
     @override
@@ -139,7 +152,7 @@ class ScriptSelect(XeniaEntity, SelectEntity):
         self.async_write_ha_state()
 
 
-class SwitchConfigSelect(XeniaEntity, SelectEntity):
+class SwitchConfigSelect(_XeniaScriptSelect):
     """The script a switch on the machine runs."""
 
     _attr_entity_category = EntityCategory.CONFIG
@@ -154,12 +167,6 @@ class SwitchConfigSelect(XeniaEntity, SelectEntity):
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{self.machine_id}_{description.key}"
-
-    @property
-    @override
-    def options(self) -> list[str]:
-        """Return the script titles."""
-        return list(self.runtime_data.config_coordinator.data.scripts.values())
 
     @property
     @override
