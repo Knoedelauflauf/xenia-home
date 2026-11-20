@@ -57,8 +57,7 @@ WEIGHT_SELECTOR = NumberSelector(
 async def _async_get_machine_id(hass: HomeAssistant, host: str) -> str | None:
     try:
         mac = await Xenia(host, async_get_clientsession(hass)).get_mac()
-    except REQUEST_ERRORS as err:
-        _LOGGER.debug("Connection test failed: %s", err)
+    except REQUEST_ERRORS:
         return None
     return format_mac(mac)
 
