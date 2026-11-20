@@ -157,6 +157,7 @@ class XeniaConfigCoordinator(XeniaCoordinator[XeniaConfigData]):
     """Poll the machine info, scripts, switches and managed script hourly."""
 
     config_entry: XeniaConfigEntry
+    _managed_script_unreadable = False
 
     def __init__(
         self,
@@ -200,9 +201,14 @@ class XeniaConfigCoordinator(XeniaCoordinator[XeniaConfigData]):
             try:
                 script = await self.xenia.read_script(script_id)
             except REQUEST_ERRORS as err:
-                _LOGGER.warning("Failed to read managed script %s: %s", script_id, err)
+                if not self._managed_script_unreadable:
+                    _LOGGER.info("Failed to read managed script %s: %s", script_id, err)
+                    self._managed_script_unreadable = True
                 self.update_interval = POLL_INTERVAL_CONFIG_RETRY
             else:
+                if self._managed_script_unreadable:
+                    _LOGGER.info("Managed script %s can be read again", script_id)
+                    self._managed_script_unreadable = False
                 managed_instruction = script.get("Content") or None
                 if managed_instruction is None:
                     ir.async_create_issue(

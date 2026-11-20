@@ -217,6 +217,27 @@ async def test_unreadable_managed_script_only_affects_the_weight(
     assert hass.states.get(WEIGHT).state == "45.0"
 
 
+async def test_unreadable_managed_script_is_logged_once(
+    hass: HomeAssistant,
+    weight_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    freezer: FrozenDateTimeFactory,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A failing script read is logged once, however often it is retried, and once when it is back."""
+    mock_xenia_api.fail("post", "scripts/read")
+    await setup_integration(hass, weight_entry)
+    await pass_seconds(hass, freezer, 61)
+    await pass_seconds(hass, freezer, 61)
+    assert caplog.text.count("Failed to read managed script 17") == 1
+
+    mock_xenia_api.restore("post", "scripts/read")
+    mock_xenia_api.set_script(17, "1;13;27 45;7;", "My Shot")
+    await pass_seconds(hass, freezer, 61)
+    await pass_seconds(hass, freezer, 3601)
+    assert caplog.text.count("Managed script 17 can be read again") == 1
+
+
 async def test_deleted_managed_script_raises_a_repair_issue(
     hass: HomeAssistant,
     weight_entry: MockConfigEntry,
