@@ -6,6 +6,7 @@
   "codeowners": ["@knoedelauflauf"],
   "config_flow": true,
   "dependencies": ["websocket_api"],
+  "dhcp": [{ "registered_devices": true }],
   "documentation": "https://github.com/Knoedelauflauf/xenia-home",
   "integration_type": "device",
   "iot_class": "local_polling",

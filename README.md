@@ -74,7 +74,9 @@ created, so an invalid host fails fast during setup. The host can be
 changed later from the integration's **…** menu under **Reconfigure**.
 The machine is recognized by its MAC address: adding it again under a new
 host updates the host of the existing entry, and **Reconfigure** only
-accepts a host that answers as the same machine.
+accepts a host that answers as the same machine. When a machine set up by
+IP address gets a new one, Home Assistant picks it up from the machine's
+DHCP request; a hostname is kept.
 
 ### Options
 
@@ -348,9 +350,9 @@ so it keeps it.
 ### All entities are unavailable
 
 Home Assistant cannot reach the machine anymore, usually because it got a
-new IP address or is unplugged. If the address changed, use **Reconfigure**
-on the integration entry and enter the new one; entities, history and
-automations stay.
+new IP address or is unplugged. If the address changed and Home Assistant
+did not pick it up from DHCP, use **Reconfigure** on the integration entry
+and enter the new one; entities, history and automations stay.
 
 ### The entry fails with "already set up as"
 
@@ -361,9 +363,10 @@ keeps working.
 ### The script weight target is unavailable
 
 The managed script was deleted on the machine, or could not be read. A
-repair issue under **Settings → System → Repairs** says which one. Open
-**Configure** on the integration entry and pick another script, or turn
-weight management off.
+deleted script raises a repair issue under **Settings → System → Repairs**;
+open **Configure** on the integration entry and pick another script, or
+turn weight management off. A script that could not be read is read again
+every minute, and the failure is logged once.
 
 ## Removing the integration
 

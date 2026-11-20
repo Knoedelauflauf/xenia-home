@@ -11,8 +11,8 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.device_registry import format_mac
 from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
@@ -21,6 +21,8 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
 )
+from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
+from homeassistant.util.network import is_ip_address
 import probatio
 
 from .const import (
@@ -59,7 +61,7 @@ async def _async_get_machine_id(hass: HomeAssistant, host: str) -> str | None:
         mac = await Xenia(host, async_get_clientsession(hass)).get_mac()
     except REQUEST_ERRORS:
         return None
-    return format_mac(mac)
+    return dr.format_mac(mac)
 
 
 class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
@@ -93,6 +95,45 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
             step_id="user",
             data_schema=self.add_suggested_values_to_schema(HOST_SCHEMA, user_input),
             errors=errors,
+        )
+
+    @override
+    async def async_step_dhcp(
+        self, discovery_info: DhcpServiceInfo
+    ) -> ConfigFlowResult:
+        """Follow a machine set up by IP address to its new address."""
+        machine_id = dr.format_mac(discovery_info.macaddress)
+        entry = await self.async_set_unique_id(machine_id) or self._entry_of_device(
+            machine_id
+        )
+        if entry is None:
+            return self.async_abort(reason="unknown")
+        host = entry.data[CONF_HOST]
+        # A host name resolves to the new address on its own.
+        if is_ip_address(host) and host != discovery_info.ip:
+            if entry.minor_version < MAC_MINOR_VERSION:
+                # Its ids still hold the old host, which is about to change.
+                await async_migrate_to_mac(self.hass, entry, machine_id)
+            self.hass.config_entries.async_update_entry(
+                entry, data={**entry.data, CONF_HOST: discovery_info.ip}
+            )
+            self.hass.config_entries.async_schedule_reload(entry.entry_id)
+        return self.async_abort(reason="already_configured")
+
+    def _entry_of_device(self, machine_id: str) -> ConfigEntry | None:
+        """Return the entry of an earlier release, still keyed on its host."""
+        device = dr.async_get(self.hass).async_get_device(
+            connections={(dr.CONNECTION_NETWORK_MAC, machine_id)}
+        )
+        if device is None:
+            return None
+        return next(
+            (
+                entry
+                for entry in self._async_current_entries()
+                if entry.entry_id in device.config_entries
+            ),
+            None,
         )
 
     async def async_step_reconfigure(

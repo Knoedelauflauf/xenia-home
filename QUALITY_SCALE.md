@@ -11,7 +11,7 @@ Tracks compliance with the [Home Assistant integration quality scale](https://co
 - [x] `config-flow` - Integration needs to be able to be set up via the UI
     - [x] Uses `data_description` to give context to fields
     - [x] Uses `ConfigEntry.data` and `ConfigEntry.options` correctly
-- [x] `dependency-transparency` - Exempt: the integration has no external dependencies.
+- [x] `dependency-transparency` - Exempt: the integration has no external dependency.
 - [x] `docs-actions` - The documentation describes the provided service actions that can be used
 - [x] `docs-conditions` - Exempt: the integration provides no conditions.
 - [x] `docs-high-level-description` - The documentation includes a high-level description of the integration brand, product, or service
@@ -33,7 +33,7 @@ Tracks compliance with the [Home Assistant integration quality scale](https://co
 - [x] `docs-installation-parameters` - The documentation describes all integration installation parameters
 - [x] `entity-unavailable` - Mark entity unavailable if appropriate
 - [x] `integration-owner` - Has an integration owner
-- [x] `log-when-unavailable` - If internet/device/service is unavailable, log once when unavailable and once when back connected
+- [x] `log-when-unavailable` - If internet/device/service is unavailable, log once when unavailable and once when back connected. The coordinators log through Home Assistant; a managed script that cannot be read is logged once and once when it is back.
 - [x] `parallel-updates` - Number of parallel updates is specified
 - [x] `reauthentication-flow` - Exempt: the machine needs no authentication.
 - [x] `test-coverage` - Above 95% test coverage for all integration modules
@@ -41,15 +41,15 @@ Tracks compliance with the [Home Assistant integration quality scale](https://co
 ## Gold
 - [x] `devices` - The integration creates devices
 - [x] `diagnostics` - Implements diagnostics
-- [ ] `discovery-update-info` - Integration uses discovery info to update network information
-- [ ] `discovery` - Devices can be discovered. No zeroconf service or DHCP hostname of the machine is known yet.
+- [x] `discovery-update-info` - Integration uses discovery info to update network information. DHCP of a registered machine updates a host given as IP address; a host name is kept, since it resolves to the new address.
+- [ ] `discovery` - Devices can be discovered. DHCP only follows machines set up already; whether the machine announces an mDNS service has not been checked yet.
 - [x] `docs-data-update` - The documentation describes how data is updated
-- [x] `docs-examples` - The documentation provides automation examples the user can use.
+- [ ] `docs-examples` - The documentation provides automation examples the user can use. There are the shot timer blueprint and the scale tare automation; common cases like heating up on a schedule or turning off after idling are missing.
 - [x] `docs-known-limitations` - The documentation describes known limitations of the integration (not to be confused with bugs)
-- [x] `docs-supported-devices` - The documentation describes known supported / unsupported devices
+- [ ] `docs-supported-devices` - The documentation describes known supported / unsupported devices. The README names the tested DBL but not how to recognize API v2 or which firmware is needed.
 - [x] `docs-supported-functions` - The documentation describes the supported functionality, including entities, and platforms
 - [x] `docs-troubleshooting` - The documentation provides troubleshooting information
-- [x] `docs-use-cases` - The documentation describes use cases to illustrate how this integration can be used
+- [ ] `docs-use-cases` - The documentation describes use cases to illustrate how this integration can be used. The introduction lists features; a section with use cases is missing.
 - [x] `dynamic-devices` - Exempt: one fixed device per config entry.
 - [x] `entity-category` - Entities are assigned an appropriate EntityCategory
 - [x] `entity-device-class` - Entities use device classes where possible
@@ -62,6 +62,6 @@ Tracks compliance with the [Home Assistant integration quality scale](https://co
 - [x] `stale-devices` - Exempt: one fixed device per config entry.
 
 ## Platinum
-- [x] `async-dependency` - Exempt: the integration has no external dependencies.
+- [x] `async-dependency` - Exempt: the integration has no external dependency; the in-tree client is async throughout (aiohttp).
 - [x] `inject-websession` - The machine client takes the session Home Assistant provides
 - [ ] `strict-typing` - Strict typing. mypy checks the integration with the strict settings of Home Assistant Core; the rule also asks for a listing in core's `.strict-typing`, which a custom integration cannot have.

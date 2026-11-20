@@ -1,10 +1,11 @@
 """Tests for the config and options flows."""
 
-from homeassistant.config_entries import SOURCE_USER, ConfigEntryState
+from homeassistant.config_entries import SOURCE_DHCP, SOURCE_USER, ConfigEntryState
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -117,6 +118,100 @@ async def test_user_flow_updates_the_host_of_a_known_machine(
             entity_registry, init_integration.entry_id
         )
     } == entities
+
+
+def _dhcp(mac: str = "aabbccddeeff") -> DhcpServiceInfo:
+    return DhcpServiceInfo(ip="192.168.1.20", hostname="xenia", macaddress=mac)
+
+
+async def test_dhcp_moves_a_machine_to_its_new_address(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+) -> None:
+    """A machine set up by IP address follows its new address from DHCP."""
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_config_entry, data={CONF_HOST: "192.168.1.10"}
+    )
+    result = await hass.config_entries.flow.async_init(
+        XENIA_DOMAIN, context={"source": SOURCE_DHCP}, data=_dhcp()
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert mock_config_entry.data == {CONF_HOST: "192.168.1.20"}
+
+
+async def test_dhcp_keeps_a_host_name(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+) -> None:
+    """A machine set up by host name keeps it; the name resolves to the new address."""
+    mock_config_entry.add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        XENIA_DOMAIN, context={"source": SOURCE_DHCP}, data=_dhcp()
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert mock_config_entry.data == {CONF_HOST: "xenia.local"}
+
+
+async def test_dhcp_moves_an_entry_of_an_earlier_release(
+    hass: HomeAssistant,
+    device_registry: dr.DeviceRegistry,
+    entity_registry: er.EntityRegistry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """An entry still keyed on its old IP address follows the machine and keeps its entities."""
+    mock_xenia_api.for_host("192.168.1.20")
+    entry = MockConfigEntry(
+        domain=XENIA_DOMAIN,
+        title="192.168.1.10",
+        unique_id="192.168.1.10",
+        minor_version=1,
+        data={CONF_HOST: "192.168.1.10"},
+    )
+    entry.add_to_hass(hass)
+    device = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(XENIA_DOMAIN, "192.168.1.10")},
+        connections={(dr.CONNECTION_NETWORK_MAC, "AA:BB:CC:DD:EE:FF")},
+    )
+    entity_registry.async_get_or_create(
+        "sensor",
+        XENIA_DOMAIN,
+        "192.168.1.10_brew_group_temperature",
+        config_entry=entry,
+        device_id=device.id,
+        suggested_object_id="group_temp",
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        XENIA_DOMAIN, context={"source": SOURCE_DHCP}, data=_dhcp()
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert entry.data == {CONF_HOST: "192.168.1.20"}
+    assert entry.unique_id == "aa:bb:cc:dd:ee:ff"
+    assert entry.state is ConfigEntryState.LOADED
+    assert (
+        entity_registry.async_get_entity_id(
+            "sensor", XENIA_DOMAIN, "aa:bb:cc:dd:ee:ff_brew_group_temperature"
+        )
+        == "sensor.group_temp"
+    )
+
+
+async def test_dhcp_of_an_unknown_machine_aborts(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+) -> None:
+    """DHCP never adds a machine; it only follows the ones set up already."""
+    mock_config_entry.add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        XENIA_DOMAIN, context={"source": SOURCE_DHCP}, data=_dhcp("112233445566")
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "unknown"
+    assert hass.config_entries.async_entries(XENIA_DOMAIN) == [mock_config_entry]
 
 
 async def test_reconfigure_changes_host_and_keeps_entities(

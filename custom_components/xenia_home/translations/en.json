@@ -49,7 +49,8 @@
       "already_configured": "This espresso machine is already configured",
       "already_in_progress": "The configuration of this espresso machine is already in progress",
       "reconfigure_successful": "Reconfiguration was successful",
-      "unique_id_mismatch": "This host belongs to a different espresso machine. Add it as a new machine instead."
+      "unique_id_mismatch": "This host belongs to a different espresso machine. Add it as a new machine instead.",
+      "unknown": "Unexpected error"
     }
   },
   "options": {
