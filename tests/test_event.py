@@ -202,13 +202,32 @@ async def test_shot_without_a_complete_sample_is_dropped(
     hass_ws_client: WebSocketGenerator,
     poll,
 ) -> None:
-    """A shot without a single complete sample, like one without a scale, is not stored."""
+    """A shot in which every poll lacks a curve value is not stored."""
     for _ in range(14):
-        await poll(MA_STATUS=BREWING, SCALE_WEIGHT=None)
-    await end_brew(poll, weight=None)
+        await poll(MA_STATUS=BREWING, PU_SENS_PRESS=None)
+    for _ in range(3):
+        await poll(MA_STATUS=ON, PU_SENS_PRESS=None)
 
     assert _shot(hass) is None
     assert await listed_shots(hass, hass_ws_client) == []
+
+
+async def test_shot_without_scale_weight_is_stored(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    poll,
+) -> None:
+    """A machine that reports no scale weight still records its shots, at 0 g."""
+    for _ in range(14):
+        await poll(MA_STATUS=BREWING, SCALE_WEIGHT=None)
+    for _ in range(3):
+        await poll(MA_STATUS=ON, SCALE_WEIGHT=None)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert set(shot["weights"]) == {0.0}
+    assert len(await listed_shots(hass, hass_ws_client)) == 1
 
 
 async def test_overdue_afterflow_adds_no_sample(
