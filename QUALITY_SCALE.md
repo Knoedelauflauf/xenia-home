@@ -11,7 +11,7 @@ Tracks compliance with the [Home Assistant integration quality scale](https://co
 - [x] `config-flow` - Integration needs to be able to be set up via the UI
     - [x] Uses `data_description` to give context to fields
     - [x] Uses `ConfigEntry.data` and `ConfigEntry.options` correctly
-- [ ] `dependency-transparency` - Dependency transparency. The machine client lives in `xenia.py` instead of a published library, which the rule asks for.
+- [x] `dependency-transparency` - Exempt: the integration has no external dependency.
 - [x] `docs-actions` - The documentation describes the provided service actions that can be used
 - [x] `docs-conditions` - Exempt: the integration provides no conditions.
 - [x] `docs-high-level-description` - The documentation includes a high-level description of the integration brand, product, or service
