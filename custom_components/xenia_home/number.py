@@ -32,13 +32,12 @@ from .const import (
 from .coordinator import (
     XeniaConfigCoordinator,
     XeniaConfigEntry,
-    XeniaCoordinatorData,
-    XeniaDataUpdateCoordinator,
+    XeniaOverviewSingleCoordinator,
 )
 from .entity import XeniaEntity, build_device_info, machine_id
 from .errors import async_write, machine_write
 from .script_parser import get_weight_target, set_weight_target
-from .xenia import Xenia
+from .xenia import Xenia, XeniaOverviewSingleData
 
 PARALLEL_UPDATES = 1
 
@@ -47,7 +46,7 @@ PARALLEL_UPDATES = 1
 class XeniaNumberEntityDescription(NumberEntityDescription):
     """Describes a setpoint of the machine."""
 
-    value_fn: Callable[[XeniaCoordinatorData], float | None]
+    value_fn: Callable[[XeniaOverviewSingleData], float | None]
     set_fn: Callable[[Xenia, float], Coroutine[Any, Any, None]]
 
 
@@ -58,7 +57,7 @@ NUMBER_TYPES: Final[tuple[XeniaNumberEntityDescription, ...]] = (
         device_class=NumberDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data: data.overview_single.bg_set_temp,
+        value_fn=lambda data: data.bg_set_temp,
         set_fn=Xenia.set_bg_set_temp,
         native_min_value=60,
         native_max_value=96,
@@ -70,7 +69,7 @@ NUMBER_TYPES: Final[tuple[XeniaNumberEntityDescription, ...]] = (
         device_class=NumberDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         entity_category=EntityCategory.CONFIG,
-        value_fn=lambda data: data.overview_single.bb_set_temp,
+        value_fn=lambda data: data.bb_set_temp,
         set_fn=Xenia.set_bb_set_temp,
         native_min_value=60,
         native_max_value=96,
@@ -85,7 +84,7 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the setpoints and, with weight management, the weight target."""
-    coordinator = entry.runtime_data.coordinator
+    coordinator = entry.runtime_data.overview_single_coordinator
     entities: list[NumberEntity] = [
         XeniaNumber(coordinator, description) for description in NUMBER_TYPES
     ]
@@ -105,14 +104,14 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class XeniaNumber(XeniaEntity, NumberEntity):
+class XeniaNumber(XeniaEntity[XeniaOverviewSingleCoordinator], NumberEntity):
     """Setpoint of the machine."""
 
     entity_description: XeniaNumberEntityDescription
 
     def __init__(
         self,
-        coordinator: XeniaDataUpdateCoordinator,
+        coordinator: XeniaOverviewSingleCoordinator,
         entity_description: XeniaNumberEntityDescription,
     ) -> None:
         """Initialize the setpoint."""

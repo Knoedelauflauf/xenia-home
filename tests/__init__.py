@@ -5,9 +5,11 @@ from typing import TYPE_CHECKING, Any
 
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
+    async_fire_time_changed_exact,
 )
 from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
@@ -31,6 +33,17 @@ async def pass_seconds(
     freezer.tick(timedelta(seconds=seconds))
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
+
+
+async def run_for(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, seconds: float
+) -> None:
+    """Let `seconds` pass in small steps, running each timer when it is due."""
+    end = dt_util.utcnow() + timedelta(seconds=seconds)
+    while dt_util.utcnow() < end:
+        freezer.tick(0.01)
+        async_fire_time_changed_exact(hass)
+        await hass.async_block_till_done()
 
 
 async def setup_second_machine(

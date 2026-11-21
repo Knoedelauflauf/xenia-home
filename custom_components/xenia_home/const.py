@@ -33,6 +33,7 @@ COMMAND_REFRESH_DELAY = timedelta(seconds=1)
 # Active: on, brewing, or draining. Idle: eco or off.
 POLL_INTERVAL_ACTIVE = timedelta(seconds=1)
 POLL_INTERVAL_IDLE = timedelta(seconds=5)
+POLL_INTERVAL_OVERVIEW_SINGLE = timedelta(seconds=10)
 POLL_INTERVAL_CONFIG = timedelta(hours=1)
 POLL_INTERVAL_CONFIG_RETRY = timedelta(minutes=1)
 

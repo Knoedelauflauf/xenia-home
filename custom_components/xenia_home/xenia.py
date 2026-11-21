@@ -1,5 +1,6 @@
 """HTTP API client and data classes for the Xenia espresso machine."""
 
+import asyncio
 from dataclasses import dataclass
 from enum import IntEnum
 import json
@@ -218,6 +219,8 @@ class Xenia:
         """Bind the client to a host and a shared aiohttp session."""
         self._host = host
         self._session = session
+        # The machine answers one request at a time.
+        self._lock = asyncio.Lock()
 
     async def get_mac(self) -> str:
         """Fetch the MAC address, which every firmware reports."""
@@ -252,11 +255,14 @@ class Xenia:
         return f"http://{self._host}/api/v2/{path}"
 
     async def _get(self, path: str, timeout: int = 10) -> bytes:
-        async with self._session.get(
-            self._url(path),
-            timeout=ClientTimeout(total=timeout),
-            allow_redirects=False,
-        ) as resp:
+        async with (
+            self._lock,
+            self._session.get(
+                self._url(path),
+                timeout=ClientTimeout(total=timeout),
+                allow_redirects=False,
+            ) as resp,
+        ):
             _raise_for_status(resp)
             return await resp.read()
 
@@ -275,13 +281,16 @@ class Xenia:
         return XeniaMachineData.from_dict(_json(await self._get("machine")))
 
     async def _post(self, path: str, data: str, timeout: int = 5) -> bytes:
-        async with self._session.post(
-            self._url(path),
-            data=data,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            timeout=ClientTimeout(total=timeout),
-            allow_redirects=False,
-        ) as resp:
+        async with (
+            self._lock,
+            self._session.post(
+                self._url(path),
+                data=data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=ClientTimeout(total=timeout),
+                allow_redirects=False,
+            ) as resp,
+        ):
             _raise_for_status(resp)
             return await resp.read()
 

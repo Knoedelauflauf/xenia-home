@@ -314,15 +314,21 @@ For visualizing shot tracking data, check out [xenia-home-card](https://github.c
 The integration polls the machine over the local network. It reads the live
 values once per second while the machine is on or brewing and every five
 seconds while it is in eco mode or off; the one second interval sets the
-time resolution of shot tracking. Every command is followed by a poll one
+time resolution of shot tracking. The set temperatures and the water tank
+level are read every ten seconds. Every command is followed by a poll one
 second later, since the machine reports its effect only then. Firmware
 versions, scripts, switch assignments and the managed script are read once
-per hour, and again after a minute when that read fails.
+per hour, and again after a minute when that read fails. The machine answers
+one request at a time, so reads, commands and the options dialog send their
+requests one after another.
 
 To poll at a different rate, disable **Polling for updates** in the entry's
 system options and call `homeassistant.update_entity` from an automation.
-The script and switch names are then refreshed only after a command that
-changes them, or when the entry is reloaded.
+An update of a live value reads only the live values; the set temperatures
+and the water tank level are read when the automation updates one of them
+or after a temperature is set. The script and switch names are then
+refreshed only after a command that changes them, or when the entry is
+reloaded.
 
 ## Known limitations
 

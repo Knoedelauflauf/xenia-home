@@ -1,13 +1,18 @@
 """Base entity for the Xenia espresso machine."""
 
-from typing import override
+from typing import Any, override
 
 from homeassistant.core import callback
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import XENIA_DOMAIN
-from .coordinator import XeniaConfigEntry, XeniaDataUpdateCoordinator, XeniaRuntimeData
+from .coordinator import (
+    XeniaConfigEntry,
+    XeniaCoordinator,
+    XeniaDataUpdateCoordinator,
+    XeniaRuntimeData,
+)
 from .xenia import XeniaMachineData
 
 
@@ -39,8 +44,10 @@ def build_device_info(entry: XeniaConfigEntry, machine: XeniaMachineData) -> Dev
     )
 
 
-class XeniaEntity(CoordinatorEntity[XeniaDataUpdateCoordinator]):
-    """Entity of the machine, updated by both coordinators."""
+class XeniaEntity[CoordinatorT: XeniaCoordinator[Any] = XeniaDataUpdateCoordinator](
+    CoordinatorEntity[CoordinatorT]
+):
+    """Entity of the machine, also updated by the config coordinator."""
 
     _attr_has_entity_name = True
 

@@ -17,12 +17,11 @@ async def async_get_config_entry_diagnostics(
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
     runtime = entry.runtime_data
-    data = runtime.coordinator.data
     return async_redact_data(
         {
             "entry": {"data": dict(entry.data), "options": dict(entry.options)},
-            "overview": asdict(data.overview),
-            "overview_single": asdict(data.overview_single),
+            "overview": asdict(runtime.coordinator.data.overview),
+            "overview_single": asdict(runtime.overview_single_coordinator.data),
             "config": asdict(runtime.config_coordinator.data),
             "power_on_behavior": runtime.power_on_behavior,
             "shot_count": len(runtime.shot_store.list_shots()),

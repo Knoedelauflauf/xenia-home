@@ -48,19 +48,20 @@ Optional only; ruff and mypy are the canonical local checks.
 
 ## Project-specific architecture
 
-### Dual coordinator pattern
+### Coordinators
 
-Two `DataUpdateCoordinator` instances are stored in `entry.runtime_data` as `XeniaRuntimeData`:
+Three coordinators, all `XeniaCoordinator` subclasses, are stored in `entry.runtime_data` as `XeniaRuntimeData`:
 
-- **`XeniaDataUpdateCoordinator`**: polls `/api/v2/overview` and `/api/v2/overview_single` every second while the machine is on, brewing or draining, and every five seconds otherwise (`POLL_INTERVAL_*` in `const.py`). After a command, `async_write` has the coordinator that holds the written value poll again one second later (`COMMAND_REFRESH_DELAY`), since the machine reports the new state only then.
+- **`XeniaDataUpdateCoordinator`**: polls `/api/v2/overview` every second while the machine is on, brewing or draining, and every five seconds otherwise (`POLL_INTERVAL_*` in `const.py`). After a command, `async_write` has a coordinator poll again one second later (`COMMAND_REFRESH_DELAY`), since the machine reports the new state only then: the config coordinator for switch assignments and the weight target, the overview_single coordinator for setpoints, the live coordinator for everything else.
+- **`XeniaOverviewSingleCoordinator`**: polls `/api/v2/overview_single` (setpoints, water tank level) every ten seconds (`POLL_INTERVAL_OVERVIEW_SINGLE`).
 - **`XeniaConfigCoordinator`**: polls `/api/v2/machine`, `/api/v2/scripts/list`, `/api/v2/switches` and the optionally configured managed weight script every hour.
 
-`XeniaEntity` listens to both. An update of the config coordinator only rewrites the entity state; logic that runs per live sample, like the shot tracker in `event.py`, must stay in `_handle_coordinator_update`, which only the live coordinator calls.
+`XeniaEntity` is bound to the coordinator that holds its data, the live one unless given another (`XeniaEntity[XeniaOverviewSingleCoordinator]` for the water tank and the setpoints), and also listens to the config coordinator; its availability follows its own coordinator. An update of the config coordinator only rewrites the entity state; logic that runs per live sample, like the shot tracker in `event.py`, must stay in `_handle_coordinator_update` of an entity bound to the live coordinator.
 
 In any `XeniaEntity` subclass:
 
 ```python
-self.coordinator.data  # XeniaCoordinatorData (live)
+self.coordinator.data  # XeniaCoordinatorData (live) or XeniaOverviewSingleData
 self.runtime_data.config_coordinator.data  # XeniaConfigData (slow)
 ```
 
@@ -76,19 +77,19 @@ self._attr_unique_id = f"{self.machine_id}_{description.key}"
 
 ### Device client
 
-`xenia.py` is an inlined async HTTP client. Keeping it in-tree avoids the dependency-transparency burden for an API only this integration speaks. All HTTP calls use `ClientTimeout(total=N)` (never a bare `int`).
+`xenia.py` is an inlined async HTTP client. Keeping it in-tree avoids the dependency-transparency burden for an API only this integration speaks. All HTTP calls use `ClientTimeout(total=N)` (never a bare `int`). The machine answers one request at a time, so every request of a loaded entry holds its client's `asyncio.Lock`, the options flow included; only the config flow's single MAC lookup uses a client of its own. The coordinators poll on their own timers, and a live poll waits for the requests queued before it. `test_requests_to_the_machine_never_overlap` in `tests/test_coordinator.py` holds this.
 
 ## Project-specific test fixtures
 
 | Fixture | Purpose |
 |---|---|
-| `mock_xenia_api` | Autouse fake machine on `xenia.local`, built on `aioclient_mock`, answering like firmware 4.255; `use_old_firmware` switches to firmware before 4.159. Setters (`set_overview`, `set_scripts`, `set_script`, ...) change the answers at any time; write endpoints accept every request, an unknown script reads as empty fields and an unknown path redirects, as on the machine. `override`, `fail` and `restore` change single endpoints, `bodies` inspects the requests. `for_host` adds a second machine. |
+| `mock_xenia_api` | Autouse fake machine on `xenia.local`, built on `aioclient_mock`, answering like firmware 4.255; `use_old_firmware` switches to firmware before 4.159. Setters (`set_overview`, `set_scripts`, `set_script`, ...) change the answers at any time; write endpoints accept every request, an unknown script reads as empty fields and an unknown path redirects, as on the machine. `override`, `fail` and `restore` change single endpoints, `answer_slowly` lets the requests to a path take frozen time, during which another request counts as overlapping in `max_in_flight`, the most requests in flight at once. `bodies` and `times` return the bodies and arrival times of the requests. `for_host` adds a second machine. |
 | `mock_config_entry` | A `MockConfigEntry` for `xenia.local` without options. |
 | `mock_config_entry_factory_with_options` | Factory for a `MockConfigEntry` with the given options. |
 | `init_integration` | Sets up `mock_config_entry` and returns it. |
 | `poll` | Serves an overview and lets one second pass, so the live coordinator polls once while the machine is on. |
 
-`tests/__init__.py` holds `setup_integration`, `setup_second_machine`, `pass_seconds`, `ws_command`, `listed_shots` and `stored_shots` (shot history files in the format 0.7.0 wrote). Tests drive the machine through `mock_xenia_api` and time through `poll`, `pass_seconds` or `freezer`, and assert on states, registries, actions, events and the websocket API; they do not reach into coordinators, entities or `runtime_data`. Documented names (action fields, option keys, select options, API status values) are written out in tests rather than imported, so renaming one fails a test.
+`tests/__init__.py` holds `setup_integration`, `setup_second_machine`, `pass_seconds`, `run_for` (lets time pass in 10 ms steps, running each timer when due), `ws_command`, `listed_shots` and `stored_shots` (shot history files in the format 0.7.0 wrote). Tests drive the machine through `mock_xenia_api` and time through `poll`, `pass_seconds`, `run_for` or `freezer`, and assert on states, registries, actions, events and the websocket API; they do not reach into coordinators, entities or `runtime_data`. A test for behaviour faster than a poll interval waits less than that interval, so the regular poll cannot hide a missing early path. Documented names (action fields, option keys, select options, API status values) are written out in tests rather than imported, so renaming one fails a test.
 
 ## References
 

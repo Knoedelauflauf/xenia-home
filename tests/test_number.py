@@ -16,7 +16,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from syrupy.assertion import SnapshotAssertion
 
-from tests import pass_seconds, setup_integration
+from tests import pass_seconds, run_for, setup_integration
 from tests.conftest import MockXeniaApi
 
 BREW_GROUP = "number.xenia_espresso_machine_brewgroup_set_temperature"
@@ -95,22 +95,39 @@ async def test_set_temperature(
     assert hass.states.get(entity_id).state == "93.5"
 
 
+async def test_temperature_set_between_two_polls_shows_a_second_later(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """A setpoint written halfway between two live polls is read back a second later."""
+    polls = len(mock_xenia_api.bodies("get", "overview"))
+    while len(mock_xenia_api.bodies("get", "overview")) == polls:
+        await run_for(hass, freezer, 0.01)
+    await run_for(hass, freezer, 0.5)
+    await _set(hass, BREW_GROUP, 92.0)
+    await run_for(hass, freezer, 0.7)
+    mock_xenia_api.set_overview_single(BG_SET_TEMP=92.0)
+    await run_for(hass, freezer, 0.4)
+    assert hass.states.get(BREW_GROUP).state == "92.0"
+
+
 async def test_refused_temperature_raises_and_polls(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_xenia_api: MockXeniaApi,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """A refused setpoint raises a translated error and still polls the idle machine."""
-    mock_xenia_api.set_overview(MA_STATUS=0)
+    """A refused setpoint raises a translated error and still reads the setpoints."""
     await setup_integration(hass, mock_config_entry)
     mock_xenia_api.fail("post", "inc_dec")
-    polls = len(mock_xenia_api.bodies("get", "overview"))
+    polls = len(mock_xenia_api.bodies("get", "overview_single"))
     with pytest.raises(HomeAssistantError) as exc_info:
         await _set(hass, BREW_GROUP, 93.5)
     assert exc_info.value.translation_key == "write_failed"
     await pass_seconds(hass, freezer, 1)
-    assert len(mock_xenia_api.bodies("get", "overview")) > polls
+    assert len(mock_xenia_api.bodies("get", "overview_single")) > polls
 
 
 async def test_weight_target(
