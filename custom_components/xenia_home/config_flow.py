@@ -122,16 +122,13 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
 
     def _entry_of_device(self, machine_id: str) -> ConfigEntry | None:
         """Return the entry of an earlier release, still keyed on its host."""
-        device = dr.async_get(self.hass).async_get_device(
-            connections={(dr.CONNECTION_NETWORK_MAC, machine_id)}
-        )
-        if device is None:
-            return None
+        registry = dr.async_get(self.hass)
+        connection = (dr.CONNECTION_NETWORK_MAC, machine_id)
         return next(
             (
                 entry
                 for entry in self._async_current_entries()
-                if entry.entry_id in device.config_entries
+                if registry.async_get_device_by_connection(connection, entry.entry_id)
             ),
             None,
         )

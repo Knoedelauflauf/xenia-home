@@ -158,6 +158,7 @@ async def test_dhcp_moves_an_entry_of_an_earlier_release(
     device_registry: dr.DeviceRegistry,
     entity_registry: er.EntityRegistry,
     mock_xenia_api: MockXeniaApi,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """An entry still keyed on its old IP address follows the machine and keeps its entities."""
     mock_xenia_api.for_host("192.168.1.20")
@@ -199,6 +200,7 @@ async def test_dhcp_moves_an_entry_of_an_earlier_release(
         )
         == "sensor.group_temp"
     )
+    assert "deprecated" not in caplog.text
 
 
 async def test_dhcp_of_an_unknown_machine_aborts(
