@@ -158,6 +158,7 @@ async def test_dhcp_moves_an_entry_of_an_earlier_release(
     device_registry: dr.DeviceRegistry,
     entity_registry: er.EntityRegistry,
     mock_xenia_api: MockXeniaApi,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """An entry still keyed on its old IP address follows the machine and keeps its entities."""
     mock_xenia_api.for_host("192.168.1.20")
@@ -199,6 +200,7 @@ async def test_dhcp_moves_an_entry_of_an_earlier_release(
         )
         == "sensor.group_temp"
     )
+    assert "deprecated" not in caplog.text
 
 
 async def test_dhcp_of_an_unknown_machine_aborts(
@@ -329,6 +331,23 @@ async def test_options_enable_weight_management(
     state = hass.states.get("number.xenia_espresso_machine_script_weight_target")
     assert state is not None
     assert float(state.state) == 45.0
+
+
+async def test_options_read_scripts_while_the_machine_is_not_set_up(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """The options can be changed while setup waits for the machine to answer."""
+    mock_xenia_api.set_script(10, "1;13;27 45;7;", "MyShot")
+    mock_xenia_api.fail("get", "overview")
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    assert mock_config_entry.state is ConfigEntryState.SETUP_RETRY
+
+    result = await _start_weight_options(hass, mock_config_entry)
+    assert result["step_id"] == "select_script"
 
 
 async def test_options_offer_only_scripts_with_a_weight_target(

@@ -2,6 +2,7 @@
 
 import re
 
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 import pytest
@@ -9,7 +10,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 from syrupy.assertion import SnapshotAssertion
 
-from tests import listed_shots, ws_command
+from tests import listed_shots, run_for, ws_command
 from tests.conftest import MockXeniaApi
 
 TRACKER = "event.xenia_espresso_machine_shot_tracker"
@@ -158,6 +159,30 @@ async def test_brew_during_afterflow_completes_the_shot_and_starts_a_new_one(
     assert shot["weights"][0] == 1.5
     stored = await listed_shots(hass, hass_ws_client)
     assert [s["duration_seconds"] for s in stored] == [13.0, 16.0]
+
+
+async def test_slow_overview_single_costs_no_sample(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """A slow overview_single answer costs no shot sample and shifts none by a second."""
+    # freezer comes before init_integration, so setup already runs on frozen time.
+    mock_xenia_api.answer_slowly(freezer, "overview", 0.02)
+    mock_xenia_api.answer_slowly(freezer, "overview_single", 0.4)
+    mock_xenia_api.set_overview(MA_STATUS=BREWING, SCALE_WEIGHT=18.0)
+    await run_for(hass, freezer, 25)
+    mock_xenia_api.set_overview(MA_STATUS=ON, SCALE_WEIGHT=18.0)
+    await run_for(hass, freezer, 4)
+
+    shot = _shot(hass)
+    assert shot is not None
+    timestamps = shot["timestamps"]
+    assert len(timestamps) >= 26
+    assert timestamps == pytest.approx(
+        [float(s) for s in range(1, len(timestamps) + 1)], abs=0.45
+    )
 
 
 async def test_failed_poll_adds_no_sample(

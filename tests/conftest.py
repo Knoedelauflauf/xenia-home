@@ -1,9 +1,11 @@
 """Fixtures for the Xenia integration tests."""
 
+import asyncio
 from collections.abc import Awaitable, Callable, Generator
 from http import HTTPStatus
 import json
 import re
+import time
 from typing import Any
 from unittest.mock import Mock, patch
 
@@ -109,7 +111,10 @@ class MockXeniaApi:
         }
         self._script_files: dict[str, dict[str, str]] = {}
         self._overrides: dict[tuple[str, str], dict[str, Any]] = {}
-        self._calls: list[tuple[str, str, str]] = []
+        self._calls: list[tuple[str, str, str, float]] = []
+        self._in_flight = 0
+        self.max_in_flight = 0
+        self._answer_times: dict[str, tuple[FrozenDateTimeFactory, float]] = {}
         api = re.compile(rf"^http://{re.escape(host)}/api/v2/")
         for method in ("get", "post"):
             aioclient_mock.request(method, api, side_effect=self._respond)
@@ -187,14 +192,46 @@ class MockXeniaApi:
         """Answer `method` `path` with an internal server error from now on."""
         self.override(method, path, status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
+    def answer_slowly(
+        self, freezer: FrozenDateTimeFactory, path: str, seconds: float
+    ) -> None:
+        """Let each request to `path` take `seconds` of `freezer` time from now on.
+
+        Time passes for everything else while the machine answers, and a
+        request sent meanwhile is in flight at the same time, which
+        `max_in_flight` records.
+        """
+        self._answer_times[path] = (freezer, seconds)
+
     def bodies(self, method: str, path: str) -> list[str]:
         """Return the bodies of all `method` requests to `path`, oldest first."""
-        return [body for m, p, body in self._calls if (m, p) == (method, path)]
+        return [body for m, p, body, _ in self._calls if (m, p) == (method, path)]
+
+    def times(self, method: str, path: str) -> list[float]:
+        """Return when the `method` requests to `path` arrived, oldest first."""
+        return [sent for m, p, _, sent in self._calls if (m, p) == (method, path)]
 
     async def _respond(self, method: str, url: URL, data: Any) -> XeniaMockResponse:
         method = method.lower()
         path = url.path.removeprefix("/api/v2/")
-        self._calls.append((method, path, "" if data is None else str(data)))
+        self._calls.append(
+            (method, path, "" if data is None else str(data), time.monotonic())
+        )
+        self._in_flight += 1
+        self.max_in_flight = max(self.max_in_flight, self._in_flight)
+        try:
+            return await self._answer(method, path, url, data)
+        finally:
+            self._in_flight -= 1
+
+    async def _answer(
+        self, method: str, path: str, url: URL, data: Any
+    ) -> XeniaMockResponse:
+        if path in self._answer_times:
+            freezer, seconds = self._answer_times[path]
+            # The request leaves at an await, as a real one does.
+            await asyncio.sleep(0)
+            freezer.tick(seconds)
         if (method, path) in self._overrides:
             return XeniaMockResponse(method, url, **self._overrides[(method, path)])
         if method == "get" and path in self._payloads:

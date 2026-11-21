@@ -23,6 +23,7 @@ from .coordinator import (
     XeniaConfigCoordinator,
     XeniaConfigEntry,
     XeniaDataUpdateCoordinator,
+    XeniaOverviewSingleCoordinator,
     XeniaRuntimeData,
 )
 from .errors import REQUEST_ERRORS, describe_error
@@ -73,16 +74,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: XeniaConfigEntry) -> boo
     xenia = Xenia(entry.data[CONF_HOST], async_get_clientsession(hass))
 
     coordinator = XeniaDataUpdateCoordinator(hass, entry, xenia)
+    overview_single_coordinator = XeniaOverviewSingleCoordinator(hass, entry, xenia)
     config_coordinator = XeniaConfigCoordinator(hass, entry, xenia)
 
     await config_coordinator.async_config_entry_first_refresh()
     await coordinator.async_config_entry_first_refresh()
+    await overview_single_coordinator.async_config_entry_first_refresh()
 
     shot_store = XeniaShotStore(hass, entry.entry_id)
     await shot_store.async_load()
 
     entry.runtime_data = XeniaRuntimeData(
         coordinator=coordinator,
+        overview_single_coordinator=overview_single_coordinator,
         config_coordinator=config_coordinator,
         shot_store=shot_store,
     )

@@ -2,7 +2,7 @@
 
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 from typing import override
 
@@ -21,6 +21,7 @@ from .const import (
     POLL_INTERVAL_CONFIG,
     POLL_INTERVAL_CONFIG_RETRY,
     POLL_INTERVAL_IDLE,
+    POLL_INTERVAL_OVERVIEW_SINGLE,
     XENIA_DOMAIN,
     PowerOnBehavior,
 )
@@ -51,7 +52,6 @@ class XeniaCoordinatorData:
     """Live data of the machine."""
 
     overview: XeniaOverviewData
-    overview_single: XeniaOverviewSingleData
     shot_start_time: datetime | None
 
 
@@ -71,6 +71,7 @@ class XeniaRuntimeData:
     """Runtime data for the integration."""
 
     coordinator: XeniaDataUpdateCoordinator
+    overview_single_coordinator: XeniaOverviewSingleCoordinator
     config_coordinator: XeniaConfigCoordinator
     shot_store: XeniaShotStore
     power_on_behavior: PowerOnBehavior = PowerOnBehavior.STEAM_OFF
@@ -81,9 +82,28 @@ type XeniaConfigEntry = ConfigEntry[XeniaRuntimeData]
 
 
 class XeniaCoordinator[DataT](DataUpdateCoordinator[DataT]):
-    """Coordinator that polls again once the machine shows a command's effect."""
+    """Coordinator of a part of the machine data, polled again after a command."""
 
+    config_entry: XeniaConfigEntry
     _unsub_command_refresh: CALLBACK_TYPE | None = None
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config_entry: XeniaConfigEntry,
+        xenia: Xenia,
+        name: str,
+        update_interval: timedelta | None,
+    ) -> None:
+        """Initialize the coordinator."""
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{config_entry.entry_id}_{name}",
+            update_interval=update_interval,
+            config_entry=config_entry,
+        )
+        self.xenia = xenia
 
     @callback
     def async_refresh_after_command(self) -> None:
@@ -112,30 +132,20 @@ class XeniaCoordinator[DataT](DataUpdateCoordinator[DataT]):
 class XeniaDataUpdateCoordinator(XeniaCoordinator[XeniaCoordinatorData]):
     """Poll the live data, faster while the machine is on."""
 
-    config_entry: XeniaConfigEntry
-
     def __init__(
         self,
         hass: HomeAssistant,
         config_entry: XeniaConfigEntry,
         xenia: Xenia,
     ) -> None:
-        """Initialize the Xenia device coordinator."""
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=f"{config_entry.entry_id}_data",
-            update_interval=POLL_INTERVAL_IDLE,
-            config_entry=config_entry,
-        )
-        self.xenia = xenia
+        """Initialize the live coordinator."""
+        super().__init__(hass, config_entry, xenia, "data", POLL_INTERVAL_IDLE)
 
     @override
     async def _async_update_data(self) -> XeniaCoordinatorData:
         """Fetch data and adjust the polling interval based on machine state."""
         try:
             overview = await self.xenia.get_overview()
-            overview_single = await self.xenia.get_overview_single()
         except REQUEST_ERRORS as err:
             raise update_failed(err) from err
 
@@ -149,14 +159,39 @@ class XeniaDataUpdateCoordinator(XeniaCoordinator[XeniaCoordinatorData]):
         if overview.ma_status == MachineStatus.BREWING:
             previous = self.data.shot_start_time if self.data is not None else None
             shot_start_time = previous or dt_util.utcnow()
+        return XeniaCoordinatorData(overview, shot_start_time)
 
-        return XeniaCoordinatorData(overview, overview_single, shot_start_time)
+
+class XeniaOverviewSingleCoordinator(XeniaCoordinator[XeniaOverviewSingleData]):
+    """Poll the setpoints and the water tank level."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config_entry: XeniaConfigEntry,
+        xenia: Xenia,
+    ) -> None:
+        """Initialize the overview_single coordinator."""
+        super().__init__(
+            hass,
+            config_entry,
+            xenia,
+            "overview_single",
+            POLL_INTERVAL_OVERVIEW_SINGLE,
+        )
+
+    @override
+    async def _async_update_data(self) -> XeniaOverviewSingleData:
+        """Fetch the setpoints and the water tank level."""
+        try:
+            return await self.xenia.get_overview_single()
+        except REQUEST_ERRORS as err:
+            raise update_failed(err) from err
 
 
 class XeniaConfigCoordinator(XeniaCoordinator[XeniaConfigData]):
     """Poll the machine info, scripts, switches and managed script hourly."""
 
-    config_entry: XeniaConfigEntry
     _managed_script_unreadable = False
 
     def __init__(
@@ -165,15 +200,8 @@ class XeniaConfigCoordinator(XeniaCoordinator[XeniaConfigData]):
         config_entry: XeniaConfigEntry,
         xenia: Xenia,
     ) -> None:
-        """Initialize the Xenia config coordinator."""
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=f"{config_entry.entry_id}_config",
-            update_interval=POLL_INTERVAL_CONFIG,
-            config_entry=config_entry,
-        )
-        self.xenia = xenia
+        """Initialize the config coordinator."""
+        super().__init__(hass, config_entry, xenia, "config", POLL_INTERVAL_CONFIG)
 
     @override
     async def _async_update_data(self) -> XeniaConfigData:

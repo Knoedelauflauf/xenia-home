@@ -5,6 +5,7 @@ from typing import Any, override
 
 from homeassistant.config_entries import (
     ConfigEntry,
+    ConfigEntryState,
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlowWithReload,
@@ -39,6 +40,7 @@ from .const import (
     DEFAULT_WEIGHT_STEP,
     XENIA_DOMAIN,
 )
+from .coordinator import XeniaRuntimeData
 from .errors import REQUEST_ERRORS
 from .migration import MAC_MINOR_VERSION, async_migrate_to_mac
 from .script_parser import COMMAND_WEIGHT_TARGET, parse_instruction
@@ -122,16 +124,13 @@ class XeniaConfigFlow(ConfigFlow, domain=XENIA_DOMAIN):
 
     def _entry_of_device(self, machine_id: str) -> ConfigEntry | None:
         """Return the entry of an earlier release, still keyed on its host."""
-        device = dr.async_get(self.hass).async_get_device(
-            connections={(dr.CONNECTION_NETWORK_MAC, machine_id)}
-        )
-        if device is None:
-            return None
+        registry = dr.async_get(self.hass)
+        connection = (dr.CONNECTION_NETWORK_MAC, machine_id)
         return next(
             (
                 entry
                 for entry in self._async_current_entries()
-                if entry.entry_id in device.config_entries
+                if registry.async_get_device_by_connection(connection, entry.entry_id)
             ),
             None,
         )
@@ -179,6 +178,10 @@ class XeniaOptionsFlow(OptionsFlowWithReload):
         self._known_script_ids: set[int] = set()
 
     def _xenia(self) -> Xenia:
+        if self.config_entry.state is ConfigEntryState.LOADED:
+            # Its client's lock keeps these requests apart from the polls.
+            runtime_data: XeniaRuntimeData = self.config_entry.runtime_data
+            return runtime_data.coordinator.xenia
         return Xenia(
             self.config_entry.data[CONF_HOST], async_get_clientsession(self.hass)
         )

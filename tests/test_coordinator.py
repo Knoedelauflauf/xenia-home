@@ -1,9 +1,18 @@
 """Tests for polling the machine."""
 
+import asyncio
+from itertools import pairwise
+import logging
+
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import ATTR_ENTITY_ID, STATE_UNAVAILABLE
-from homeassistant.core import HomeAssistant
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    EVENT_STATE_CHANGED,
+    STATE_OFF,
+    STATE_UNAVAILABLE,
+)
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.setup import async_setup_component
 import pytest
@@ -11,10 +20,13 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.xenia_home.const import XENIA_DOMAIN
 
-from tests import pass_seconds, setup_integration
+from tests import pass_seconds, run_for, setup_integration
 from tests.conftest import MockXeniaApi
 
 TEMPERATURE = "sensor.xenia_espresso_machine_brewgroup_temperature"
+WATER_TANK = "binary_sensor.xenia_espresso_machine_water_tank_empty"
+BREW_GROUP_SETPOINT = "number.xenia_espresso_machine_brewgroup_set_temperature"
+STEAM_BOILER = "switch.xenia_espresso_machine_steam_boiler_power"
 SCRIPT_SELECT = "select.xenia_espresso_machine_script"
 WEIGHT = "number.xenia_espresso_machine_script_weight_target"
 
@@ -75,7 +87,7 @@ async def test_polling_can_be_left_to_automations(
     mock_xenia_api: MockXeniaApi,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """With polling disabled the machine is only read on homeassistant.update_entity."""
+    """With polling disabled the machine is only read on homeassistant.update_entity, each part through its own entities."""
     await async_setup_component(hass, "homeassistant", {})
     entry = MockConfigEntry(
         domain="xenia_home",
@@ -87,11 +99,14 @@ async def test_polling_can_be_left_to_automations(
     )
     await setup_integration(hass, entry)
     polls = len(mock_xenia_api.bodies("get", "overview"))
+    single_polls = len(mock_xenia_api.bodies("get", "overview_single"))
     for _ in range(10):
         await pass_seconds(hass, freezer, 1)
     assert len(mock_xenia_api.bodies("get", "overview")) == polls
+    assert len(mock_xenia_api.bodies("get", "overview_single")) == single_polls
 
     mock_xenia_api.set_overview(BG_SENS_TEMP_A=94.5)
+    mock_xenia_api.set_overview_single(PU_SENS_WATER_TANK_LEVEL=2)
     await hass.services.async_call(
         "homeassistant",
         "update_entity",
@@ -100,25 +115,205 @@ async def test_polling_can_be_left_to_automations(
     )
     assert len(mock_xenia_api.bodies("get", "overview")) == polls + 1
     assert hass.states.get(TEMPERATURE).state == "94.5"
+    assert len(mock_xenia_api.bodies("get", "overview_single")) == single_polls
+    assert hass.states.get(WATER_TANK).state == "off"
+
+    await hass.services.async_call(
+        "homeassistant",
+        "update_entity",
+        {ATTR_ENTITY_ID: WATER_TANK},
+        blocking=True,
+    )
+    assert len(mock_xenia_api.bodies("get", "overview_single")) == single_polls + 1
+    assert hass.states.get(WATER_TANK).state == "on"
 
 
-@pytest.mark.parametrize("path", ["overview", "overview_single"])
+@pytest.mark.parametrize("status", [1, 2])
+async def test_setpoints_and_water_tank_are_polled_every_ten_seconds(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    mock_config_entry: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    status: int,
+) -> None:
+    """overview_single is read every ten seconds, however long overview takes to answer."""
+    mock_xenia_api.set_overview(MA_STATUS=status)
+    mock_xenia_api.answer_slowly(freezer, "overview_single", 0.2)
+    await setup_integration(hass, mock_config_entry)
+    for answer_time in (0.02, 0.2, 0.1, 0.2, 0.02, 0.2, 0.1, 0.2, 0.02):
+        mock_xenia_api.answer_slowly(freezer, "overview", answer_time)
+        await run_for(hass, freezer, 5)
+
+    times = mock_xenia_api.times("get", "overview_single")
+    assert len(times) == 5
+    # The first poll after setup is scheduled when the entities subscribe.
+    assert [b - a for a, b in pairwise(times[1:])] == pytest.approx(
+        [10] * (len(times) - 2), abs=0.25
+    )
+
+
+async def _open_weight_options(hass: HomeAssistant, entry: MockConfigEntry) -> None:
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"weight_management_enabled": True}
+    )
+    assert result["step_id"] == "select_script"
+
+
+async def test_requests_to_the_machine_never_overlap(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """The machine answers one request at a time, so polls, commands and options wait for each other."""
+    await async_setup_component(hass, "homeassistant", {})
+    for path in (
+        "overview",
+        "overview_single",
+        "machine",
+        "scripts/list",
+        "inc_dec",
+        "toggle/sb",
+    ):
+        mock_xenia_api.answer_slowly(freezer, path, 0.1)
+    for _ in range(3):
+        await pass_seconds(hass, freezer, 10)
+    await pass_seconds(hass, freezer, 3600)
+    await asyncio.gather(
+        hass.services.async_call(
+            "number",
+            "set_value",
+            {ATTR_ENTITY_ID: BREW_GROUP_SETPOINT, "value": 92.0},
+            blocking=True,
+        ),
+        hass.services.async_call(
+            "switch", "turn_on", {ATTR_ENTITY_ID: STEAM_BOILER}, blocking=True
+        ),
+        hass.services.async_call(
+            "homeassistant",
+            "update_entity",
+            {ATTR_ENTITY_ID: [TEMPERATURE, WATER_TANK]},
+            blocking=True,
+        ),
+        _open_weight_options(hass, init_integration),
+    )
+    await pass_seconds(hass, freezer, 1)
+
+    assert mock_xenia_api.bodies("post", "inc_dec")
+    assert mock_xenia_api.bodies("post", "toggle/sb")
+    assert mock_xenia_api.max_in_flight == 1
+
+
 async def test_entities_are_unavailable_while_machine_does_not_answer(
     hass: HomeAssistant,
     init_integration: MockConfigEntry,
     mock_xenia_api: MockXeniaApi,
     freezer: FrozenDateTimeFactory,
-    path: str,
 ) -> None:
     """A failed poll makes the entities unavailable until the next good one."""
-    mock_xenia_api.override("get", path, exc=TimeoutError())
+    mock_xenia_api.override("get", "overview", exc=TimeoutError())
     await pass_seconds(hass, freezer, 1)
     assert hass.states.get(TEMPERATURE).state == STATE_UNAVAILABLE
 
-    mock_xenia_api.restore("get", path)
+    mock_xenia_api.restore("get", "overview")
     mock_xenia_api.set_overview(BG_SENS_TEMP_A=91.0)
     await pass_seconds(hass, freezer, 1)
     assert hass.states.get(TEMPERATURE).state == "91.0"
+
+
+async def test_offline_machine_is_logged_once_per_coordinator(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A machine that stops answering is logged once for the live values and once for the setpoints, and the same when it is back."""
+    caplog.set_level(logging.INFO, logger="custom_components.xenia_home")
+    for path in ("overview", "overview_single"):
+        mock_xenia_api.override("get", path, exc=TimeoutError())
+    for _ in range(25):
+        await pass_seconds(hass, freezer, 1)
+    for path in ("overview", "overview_single"):
+        mock_xenia_api.restore("get", path)
+    for _ in range(25):
+        await pass_seconds(hass, freezer, 1)
+
+    records = [r for r in caplog.records if r.name.startswith("custom_components")]
+    assert len([r for r in records if r.levelno >= logging.WARNING]) == 2
+    assert len([r for r in records if "recovered" in r.getMessage()]) == 2
+
+
+async def test_setpoints_and_water_tank_are_fresh_after_an_outage(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """After an outage they go from unavailable straight to fresh values."""
+    mock_xenia_api.set_overview_single(PU_SENS_WATER_TANK_LEVEL=2, BG_SET_TEMP=92.0)
+    await pass_seconds(hass, freezer, 10)
+    states: dict[str, list[str]] = {WATER_TANK: [], BREW_GROUP_SETPOINT: []}
+
+    @callback
+    def record(event: Event[EventStateChangedData]) -> None:
+        if (new_state := event.data["new_state"]) and new_state.entity_id in states:
+            states[new_state.entity_id].append(new_state.state)
+
+    hass.bus.async_listen(EVENT_STATE_CHANGED, record)
+    mock_xenia_api.answer_slowly(freezer, "overview_single", 0.3)
+    for path in ("overview", "overview_single"):
+        mock_xenia_api.override("get", path, exc=TimeoutError())
+    for _ in range(12):
+        await pass_seconds(hass, freezer, 1)
+    for path in ("overview", "overview_single"):
+        mock_xenia_api.restore("get", path)
+    mock_xenia_api.set_overview_single()
+    for _ in range(10):
+        await pass_seconds(hass, freezer, 1)
+    assert states == {
+        WATER_TANK: [STATE_UNAVAILABLE, STATE_OFF],
+        BREW_GROUP_SETPOINT: [STATE_UNAVAILABLE, "93.5"],
+    }
+
+
+@pytest.mark.parametrize(
+    "paths", [("overview_single",), ("overview", "overview_single")]
+)
+async def test_failing_overview_single_is_requested_every_ten_seconds(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    paths: tuple[str, ...],
+) -> None:
+    """A failing overview_single is retried at most once per ten seconds."""
+    polls = len(mock_xenia_api.bodies("get", "overview_single"))
+    for path in paths:
+        mock_xenia_api.fail("get", path)
+    for _ in range(30):
+        await pass_seconds(hass, freezer, 1)
+    assert len(mock_xenia_api.bodies("get", "overview_single")) - polls in (2, 3)
+
+
+async def test_failed_overview_single_only_affects_its_entities(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+) -> None:
+    """Without overview_single the water tank and setpoints are unavailable, nothing else."""
+    mock_xenia_api.override("get", "overview_single", exc=TimeoutError())
+    await pass_seconds(hass, freezer, 11)
+    assert hass.states.get(WATER_TANK).state == STATE_UNAVAILABLE
+    assert hass.states.get(BREW_GROUP_SETPOINT).state == STATE_UNAVAILABLE
+    assert hass.states.get(TEMPERATURE).state != STATE_UNAVAILABLE
+
+    mock_xenia_api.restore("get", "overview_single")
+    await pass_seconds(hass, freezer, 11)
+    assert hass.states.get(WATER_TANK).state == STATE_OFF
+    assert hass.states.get(BREW_GROUP_SETPOINT).state != STATE_UNAVAILABLE
 
 
 @pytest.mark.parametrize(
