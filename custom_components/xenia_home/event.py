@@ -91,29 +91,25 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
         is_currently_brewing = (
             self.coordinator.data.overview.ma_status is MachineStatus.BREWING
         )
+        if self._is_brewing and self.coordinator.data.brew_end_time is not None:
+            self._start_afterflow()
         if (
             is_currently_brewing
             and self.coordinator.data.shot_start_time != self._shot_start_time
         ):
-            if self._is_brewing:
-                # The last brew ended during an outage.
-                self._start_afterflow()
             if self._afterflow_until is not None:
                 self._complete_shot_tracking()
             self._start_shot_tracking()
         elif is_currently_brewing:
             self._collect_shot_data()
-        else:
-            if self._is_brewing:
-                self._start_afterflow()
-            if self._afterflow_until is not None:
-                if dt_util.utcnow() <= self._afterflow_until:
-                    self._collect_shot_data()
-                if (
-                    self._afterflow_until is not None
-                    and dt_util.utcnow() >= self._afterflow_until
-                ):
-                    self._complete_shot_tracking()
+        elif self._afterflow_until is not None:
+            if dt_util.utcnow() <= self._afterflow_until:
+                self._collect_shot_data()
+            if (
+                self._afterflow_until is not None
+                and dt_util.utcnow() >= self._afterflow_until
+            ):
+                self._complete_shot_tracking()
 
         self._is_brewing = is_currently_brewing
         self.async_write_ha_state()

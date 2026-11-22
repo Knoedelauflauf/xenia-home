@@ -338,8 +338,10 @@ reloaded.
 - A shot is timed from the moment Home Assistant first sees it brewing, at
   most one second late. A shot already running when the integration loads
   is timed from the load.
-- The machine stops the pump after at most 60 seconds, so no shot runs
-  longer.
+- The machine stops the pump after 60 seconds unless it is set to extreme
+  values. If the machine does not answer for a while during a shot, the
+  shot ends at its last answer that still showed brewing. Brewing seen again
+  more than 60 seconds after the shot start is then recorded as a new shot.
 - The power on behavior is kept by Home Assistant. Turning the machine on
   at the machine itself does not follow it.
 - Shots shorter than ten seconds, like flushes, are not tracked.
