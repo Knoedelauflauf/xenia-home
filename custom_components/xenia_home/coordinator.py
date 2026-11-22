@@ -10,13 +10,14 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_call_later
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import TimestampDataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
     COMMAND_REFRESH_DELAY,
     CONF_MANAGED_SCRIPT_ID,
     CONF_WEIGHT_MANAGEMENT_ENABLED,
+    MAX_BREW_TIME,
     POLL_INTERVAL_ACTIVE,
     POLL_INTERVAL_CONFIG,
     POLL_INTERVAL_CONFIG_RETRY,
@@ -53,6 +54,8 @@ class XeniaCoordinatorData:
 
     overview: XeniaOverviewData
     shot_start_time: datetime | None
+    # Set only by the poll that first sees the brew has ended.
+    brew_end_time: datetime | None
 
 
 @dataclass
@@ -81,7 +84,7 @@ class XeniaRuntimeData:
 type XeniaConfigEntry = ConfigEntry[XeniaRuntimeData]
 
 
-class XeniaCoordinator[DataT](DataUpdateCoordinator[DataT]):
+class XeniaCoordinator[DataT](TimestampDataUpdateCoordinator[DataT]):
     """Coordinator of a part of the machine data, polled again after a command."""
 
     config_entry: XeniaConfigEntry
@@ -155,11 +158,25 @@ class XeniaDataUpdateCoordinator(XeniaCoordinator[XeniaCoordinatorData]):
             else POLL_INTERVAL_IDLE
         )
 
-        shot_start_time = None
+        now = dt_util.utcnow()
+        previous = self.data.shot_start_time if self.data is not None else None
+        # last_update_success still holds the previous poll; if that one
+        # failed, the brew was last seen at the last answered poll.
+        last_seen = now if self.last_update_success else self.last_update_success_time
+        shot_start_time = brew_end_time = None
         if overview.ma_status == MachineStatus.BREWING:
-            previous = self.data.shot_start_time if self.data is not None else None
-            shot_start_time = previous or dt_util.utcnow()
-        return XeniaCoordinatorData(overview, shot_start_time)
+            if (
+                previous is not None
+                and not self.last_update_success
+                and now - previous > MAX_BREW_TIME
+            ):
+                # The brew from before the outage cannot have lasted this long.
+                brew_end_time = last_seen
+                previous = None
+            shot_start_time = previous or now
+        elif previous is not None:
+            brew_end_time = last_seen
+        return XeniaCoordinatorData(overview, shot_start_time, brew_end_time)
 
 
 class XeniaOverviewSingleCoordinator(XeniaCoordinator[XeniaOverviewSingleData]):

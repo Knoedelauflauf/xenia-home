@@ -206,6 +206,105 @@ async def test_failed_poll_adds_no_sample(
     assert len(shot["weights"]) == len(shot["timestamps"])
 
 
+async def test_outage_at_brew_end_is_not_part_of_the_shot(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    poll,
+) -> None:
+    """A brew that ends while the machine does not answer ends at its last brewing poll."""
+    await brew(poll, 12)
+    mock_xenia_api.override("get", "overview", exc=TimeoutError())
+    for _ in range(5):
+        await poll()
+    mock_xenia_api.restore("get", "overview")
+    await end_brew(poll, weight=20.0)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert shot["duration_seconds"] == 12.0
+    assert shot["timestamps"][-1] == 12.0
+
+
+async def test_machine_answering_within_the_afterflow_adds_a_sample(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    poll,
+) -> None:
+    """After a short outage at brew end, a poll within the afterflow is still recorded."""
+    await brew(poll, 12)
+    mock_xenia_api.override("get", "overview", exc=TimeoutError())
+    await poll()
+    mock_xenia_api.restore("get", "overview")
+    await end_brew(poll, weight=20.0)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert shot["duration_seconds"] == 12.0
+    assert shot["timestamps"][-1] == 14.0
+
+
+async def test_outage_while_brewing_is_part_of_the_shot(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_xenia_api: MockXeniaApi,
+    poll,
+) -> None:
+    """A brew that goes on after an outage ends when brewing stops, as usual."""
+    await brew(poll, 6)
+    mock_xenia_api.override("get", "overview", exc=TimeoutError())
+    for _ in range(3):
+        await poll()
+    mock_xenia_api.restore("get", "overview")
+    for second in range(10, 16):
+        await poll(MA_STATUS=BREWING, SCALE_WEIGHT=1.5 * second)
+    await end_brew(poll, weight=24.0)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert shot["duration_seconds"] == 16.0
+
+
+async def test_brew_after_a_long_outage_is_a_new_shot(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    hass_ws_client: WebSocketGenerator,
+    mock_xenia_api: MockXeniaApi,
+    poll,
+) -> None:
+    """Brewing seen more than 60 s after the shot start, past an outage, is a new brew.
+
+    The machine stops the pump after at most 60 s.
+    """
+    await brew(poll, 12)
+    mock_xenia_api.override("get", "overview", exc=TimeoutError())
+    for _ in range(61):
+        await poll()
+    mock_xenia_api.restore("get", "overview")
+    await brew(poll, 15)
+    await end_brew(poll, weight=24.0)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert shot["timestamps"][0] == 1.0
+    assert shot["weights"][0] == 1.5
+    stored = await listed_shots(hass, hass_ws_client)
+    assert [s["duration_seconds"] for s in stored] == [16.0, 12.0]
+
+
+async def test_long_brew_without_outage_stays_one_shot(
+    hass: HomeAssistant, init_integration: MockConfigEntry, poll
+) -> None:
+    """A brew longer than 60 s, as extreme machine settings allow, is not split."""
+    await brew(poll, 65)
+    await end_brew(poll, weight=98.0)
+
+    shot = _shot(hass)
+    assert shot is not None
+    assert shot["duration_seconds"] == 66.0
+
+
 async def test_sample_with_a_missing_value_is_skipped(
     hass: HomeAssistant, init_integration: MockConfigEntry, poll
 ) -> None:
