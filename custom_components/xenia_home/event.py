@@ -95,19 +95,19 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
             if self._afterflow_until is not None:
                 self._complete_shot_tracking()
             self._start_shot_tracking()
-        elif is_currently_brewing and self._is_brewing:
+        elif is_currently_brewing:
             self._collect_shot_data()
-        elif not is_currently_brewing and self._is_brewing:
-            self._start_afterflow()
-            self._collect_shot_data()
-        elif self._afterflow_until is not None:
-            if dt_util.utcnow() <= self._afterflow_until:
-                self._collect_shot_data()
-            if (
-                self._afterflow_until is not None
-                and dt_util.utcnow() >= self._afterflow_until
-            ):
-                self._complete_shot_tracking()
+        else:
+            if self._is_brewing:
+                self._start_afterflow()
+            if self._afterflow_until is not None:
+                if dt_util.utcnow() <= self._afterflow_until:
+                    self._collect_shot_data()
+                if (
+                    self._afterflow_until is not None
+                    and dt_util.utcnow() >= self._afterflow_until
+                ):
+                    self._complete_shot_tracking()
 
         self._is_brewing = is_currently_brewing
         self.async_write_ha_state()
@@ -125,7 +125,8 @@ class XeniaShotTracker(XeniaEntity, EventEntity):
 
     def _start_afterflow(self) -> None:
         """Keep recording for a moment after brewing to catch the drips."""
-        self._brew_end_time = dt_util.utcnow()
+        self._brew_end_time = self.coordinator.data.brew_end_time
+        assert self._brew_end_time is not None
         self._afterflow_until = self._brew_end_time + timedelta(
             seconds=self._afterflow_seconds
         )

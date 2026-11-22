@@ -10,7 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_call_later
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import TimestampDataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -53,6 +53,8 @@ class XeniaCoordinatorData:
 
     overview: XeniaOverviewData
     shot_start_time: datetime | None
+    # Set only by the poll that first sees the brew has ended.
+    brew_end_time: datetime | None
 
 
 @dataclass
@@ -81,7 +83,7 @@ class XeniaRuntimeData:
 type XeniaConfigEntry = ConfigEntry[XeniaRuntimeData]
 
 
-class XeniaCoordinator[DataT](DataUpdateCoordinator[DataT]):
+class XeniaCoordinator[DataT](TimestampDataUpdateCoordinator[DataT]):
     """Coordinator of a part of the machine data, polled again after a command."""
 
     config_entry: XeniaConfigEntry
@@ -155,11 +157,19 @@ class XeniaDataUpdateCoordinator(XeniaCoordinator[XeniaCoordinatorData]):
             else POLL_INTERVAL_IDLE
         )
 
-        shot_start_time = None
+        previous = self.data.shot_start_time if self.data is not None else None
+        shot_start_time = brew_end_time = None
         if overview.ma_status == MachineStatus.BREWING:
-            previous = self.data.shot_start_time if self.data is not None else None
             shot_start_time = previous or dt_util.utcnow()
-        return XeniaCoordinatorData(overview, shot_start_time)
+        elif previous is not None:
+            # last_update_success still holds the previous poll; if that one
+            # failed, the brew was last seen at the last answered poll.
+            brew_end_time = (
+                dt_util.utcnow()
+                if self.last_update_success
+                else self.last_update_success_time
+            )
+        return XeniaCoordinatorData(overview, shot_start_time, brew_end_time)
 
 
 class XeniaOverviewSingleCoordinator(XeniaCoordinator[XeniaOverviewSingleData]):
