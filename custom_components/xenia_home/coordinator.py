@@ -17,6 +17,7 @@ from .const import (
     COMMAND_REFRESH_DELAY,
     CONF_MANAGED_SCRIPT_ID,
     CONF_WEIGHT_MANAGEMENT_ENABLED,
+    MAX_BREW_TIME,
     POLL_INTERVAL_ACTIVE,
     POLL_INTERVAL_CONFIG,
     POLL_INTERVAL_CONFIG_RETRY,
@@ -157,18 +158,24 @@ class XeniaDataUpdateCoordinator(XeniaCoordinator[XeniaCoordinatorData]):
             else POLL_INTERVAL_IDLE
         )
 
+        now = dt_util.utcnow()
         previous = self.data.shot_start_time if self.data is not None else None
+        # last_update_success still holds the previous poll; if that one
+        # failed, the brew was last seen at the last answered poll.
+        last_seen = now if self.last_update_success else self.last_update_success_time
         shot_start_time = brew_end_time = None
         if overview.ma_status == MachineStatus.BREWING:
-            shot_start_time = previous or dt_util.utcnow()
+            if (
+                previous is not None
+                and not self.last_update_success
+                and now - previous > MAX_BREW_TIME
+            ):
+                # The brew from before the outage cannot have lasted this long.
+                brew_end_time = last_seen
+                previous = None
+            shot_start_time = previous or now
         elif previous is not None:
-            # last_update_success still holds the previous poll; if that one
-            # failed, the brew was last seen at the last answered poll.
-            brew_end_time = (
-                dt_util.utcnow()
-                if self.last_update_success
-                else self.last_update_success_time
-            )
+            brew_end_time = last_seen
         return XeniaCoordinatorData(overview, shot_start_time, brew_end_time)
 
 

@@ -36,6 +36,8 @@ POLL_INTERVAL_IDLE = timedelta(seconds=5)
 POLL_INTERVAL_OVERVIEW_SINGLE = timedelta(seconds=10)
 POLL_INTERVAL_CONFIG = timedelta(hours=1)
 POLL_INTERVAL_CONFIG_RETRY = timedelta(minutes=1)
+# The machine stops the pump after this time unless set to extreme values.
+MAX_BREW_TIME = timedelta(seconds=60)
 
 # Options of earlier releases, stripped at setup.
 REMOVED_OPTION_KEYS = (
