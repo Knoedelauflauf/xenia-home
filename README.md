@@ -76,7 +76,10 @@ The machine is recognized by its MAC address: adding it again under a new
 host updates the host of the existing entry, and **Reconfigure** only
 accepts a host that answers as the same machine. When a machine set up by
 IP address gets a new one, Home Assistant picks it up from the machine's
-DHCP request; a hostname is kept.
+DHCP request; a hostname is kept. Home Assistant sees that request only in
+the same network, or through a router integration that tracks the machine.
+If the machine is in another subnet, give it a fixed address or a hostname
+your router resolves.
 
 ### Options
 
@@ -281,9 +284,12 @@ with JavaScript's `new Date(...)`. A shot's `shot_id` is its `start_time`.
 Timestamp inputs (`after`/`before`) accept any ISO 8601 string; naive
 timestamps are interpreted in the Home Assistant server's local time zone.
 
+Every command takes an optional `entry_id`, only needed with several Xenia
+entries.
+
 **`xenia_home/shots/list`**: summaries, newest first, one entry per shot.
-Optional: `entry_id` (only needed with several Xenia entries), `after` /
-`before` (ISO timestamps, exclusive bounds on `start_time`), `limit`.
+Optional: `after` / `before` (ISO timestamps, exclusive bounds on
+`start_time`), `limit`.
 Result: `{"shots": [{"shot_id", "start_time", "brew_end_time",
 "duration_seconds", "final_weight_g"}, ...]}`. Paging, if ever needed, is
 keyset-style: pass the oldest received `start_time` as `before`.
@@ -296,14 +302,14 @@ Result: `{"shots": [...]}` in request order; each entry is the complete
 Admin users only, others get `unauthorized`. Errors with code `not_found` for
 unknown ids.
 
-All commands error with `not_found` (no or unknown entry) and
+All commands error with `not_found` when no matching entry is loaded, which
+includes an entry that is still waiting for the machine, and with
 `multiple_entries` (several entries loaded but no `entry_id` given);
 `shots/list` errors with `invalid_format` for unparseable `after`/`before`.
 
-Live data is unchanged: the `shot_completed` event still carries the full
-payload. Note for recorder-based consumers: from this version on, recorder
-rows of the event entity no longer contain the curve arrays, so switch to
-the commands above for history.
+The `shot_completed` event carries the full payload. Recorder rows of the
+event entity do not contain the curve arrays; use the commands above for
+history.
 
 ## Frontend card
 
